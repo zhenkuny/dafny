@@ -1730,8 +1730,8 @@ namespace Microsoft.Dafny {
       Contract.Requires(proc != null);
       Contract.Requires(sink != null && predef != null);
       Contract.Requires(iter.Body != null);
-      Contract.Requires(currentModule == null && codeContext == null && yieldCountVariable == null && _tmpIEs.Count == 0);
-      Contract.Ensures(currentModule == null && codeContext == null && yieldCountVariable == null && _tmpIEs.Count == 0);
+      Contract.Requires(currentModule == null && codeContext == null && yieldCountVariable == null && heapTracker == null && _tmpIEs.Count == 0);
+      Contract.Ensures(currentModule == null && codeContext == null && yieldCountVariable == null && heapTracker == null && _tmpIEs.Count == 0);
 
       currentModule = iter.Module;
       codeContext = iter;
@@ -1761,6 +1761,14 @@ namespace Microsoft.Dafny {
       yieldCountVariable.TypedIdent.WhereExpr = YieldCountAssumption(iter, etran);  // by doing this after setting "yieldCountVariable", the variable can be used by YieldCountAssumption
       localVariables.Add(yieldCountVariable);
       builder.Add(new Bpl.AssumeCmd(iter.tok, Bpl.Expr.Eq(new Bpl.IdentifierExpr(iter.tok, yieldCountVariable), Bpl.Expr.Literal(0))));
+
+      // Create a heapTracker variable, tracking heap states pre and post-calls.
+      Bpl.LocalVariable heapTrackerVariable = NewHeapTrackerVariable();
+      localVariables.Add(heapTrackerVariable);
+
+      // Start tracking the heap
+      builder.Add(NewHeapTrackerAssignment(etran));
+
       // add a variable $_OldIterHeap
       var oih = new Bpl.IdentifierExpr(iter.tok, "$_OldIterHeap", predef.HeapType);
       Bpl.Expr wh = BplAnd(
@@ -1772,7 +1780,7 @@ namespace Microsoft.Dafny {
       YieldHavoc(iter.tok, iter, builder, etran);
 
       // translate the body of the method
-      var stmts = TrStmt2StmtList(builder, iter.Body, localVariables, etran);
+      var stmts = TrStmt2StmtList(builder, iter.Body, localVariables, etran, NewHeapTrackerAssumption(iter.tok, etran));
 
       QKeyValue kv = etran.TrAttributes(iter.Attributes, null);
 
@@ -1782,7 +1790,26 @@ namespace Microsoft.Dafny {
       sink.AddTopLevelDeclaration(impl);
       
       yieldCountVariable = null;
+      heapTracker = null;
       Reset();
+    }
+
+    private Bpl.LocalVariable NewHeapTrackerVariable() {
+      Contract.Requires(heapTracker == null);
+      return BplLocalVar(CurrentIdGenerator.FreshId("$heapTracker#"), predef.HeapType, out heapTracker);
+    }
+
+    private Cmd NewHeapTrackerAssignment(ExpressionTranslator etran) {
+      Contract.Requires(etran != null);
+      return BplSimplestAssign(heapTracker, etran.HeapExpr);
+    }
+
+    private Bpl.Cmd NewHeapTrackerAssumption(IToken tok, ExpressionTranslator etran) {
+      Contract.Requires(tok != null);
+      Contract.Requires(etran != null);
+      Contract.Requires(codeContext != null);
+      Contract.Requires(heapTracker != null);
+      return new AssumeCmd(tok, HeapSameOrSucc(heapTracker, etran.HeapExpr, codeContext.IsGhost));
     }
 
     private void Reset()
@@ -2627,6 +2654,7 @@ namespace Microsoft.Dafny {
 
     ModuleDefinition currentModule = null;  // the name of the module whose members are currently being translated
     ICallable codeContext = null;  // the method/iterator whose implementation is currently being translated or the function whose specification is being checked for well-formedness
+    Bpl.Expr heapTracker; // Non-null when translating a method or an iterator; 
     Bpl.LocalVariable yieldCountVariable = null;  // non-null when an iterator body is being translated
     bool assertAsAssume = false; // generate assume statements instead of assert statements
     
@@ -2716,8 +2744,8 @@ namespace Microsoft.Dafny {
       Contract.Requires(proc != null);
       Contract.Requires(sink != null && predef != null);
       Contract.Requires(wellformednessProc || m.Body != null);
-      Contract.Requires(currentModule == null && codeContext == null && _tmpIEs.Count == 0);
-      Contract.Ensures(currentModule == null && codeContext == null && _tmpIEs.Count == 0);
+      Contract.Requires(currentModule == null && codeContext == null && heapTracker == null && _tmpIEs.Count == 0);
+      Contract.Ensures(currentModule == null && codeContext == null && heapTracker == null && _tmpIEs.Count == 0);
 
       currentModule = m.EnclosingClass.Module;
       codeContext = m;
@@ -2734,6 +2762,10 @@ namespace Microsoft.Dafny {
 
       Bpl.StmtList stmts;
       if (!wellformednessProc) {
+        // Create a heapTracker variable
+        Bpl.LocalVariable heapTrackerVariable = NewHeapTrackerVariable();
+        localVariables.Add(heapTrackerVariable);
+
         if (3 <= DafnyOptions.O.Induction && m.IsGhost && m.Mod.Expressions.Count == 0 && m.Outs.Count == 0 && !(m is FixpointLemma)) {
           var posts = new List<Expression>();
           m.Ens.ForEach(mfe => posts.Add(mfe.E));
@@ -2855,11 +2887,17 @@ namespace Microsoft.Dafny {
 #endif
           }
         }
+
+        // Start tracking the heap
+        builder.Add(NewHeapTrackerAssignment(etran));
+
         // translate the body of the method
         Contract.Assert(m.Body != null);  // follows from method precondition and the if guard
         // $_reverifyPost := false;
         builder.Add(Bpl.Cmd.SimpleAssign(m.tok, new Bpl.IdentifierExpr(m.tok, "$_reverifyPost", Bpl.Type.Bool), Bpl.Expr.False));
-        stmts = TrStmt2StmtList(builder, m.Body, localVariables, etran);
+        stmts = TrStmt2StmtList(builder, m.Body, localVariables, etran, NewHeapTrackerAssumption(m.tok, etran));
+
+        heapTracker = null;
       } else {
         // check well-formedness of the preconditions, and then assume each one of them
         foreach (MaybeFreeExpression p in m.Req) {
@@ -2894,7 +2932,7 @@ namespace Microsoft.Dafny {
           }
           builder.Add(new Bpl.HavocCmd(m.tok, outH));
         }
-        // mark the end of the modifles/out-parameter havocking with a CaptureState; make its location be the first ensures clause, if any (and just
+        // mark the end of the modifies/out-parameter havocking with a CaptureState; make its location be the first ensures clause, if any (and just
         // omit the CaptureState if there's no ensures clause)
         if (m.Ens.Count != 0) {
           builder.Add(CaptureState(m.Ens[0].E.tok, false, "post-state"));
@@ -6892,7 +6930,7 @@ namespace Microsoft.Dafny {
       return req;
     }
 
-    Bpl.StmtList TrStmt2StmtList(Bpl.StmtListBuilder builder, Statement block, List<Variable> locals, ExpressionTranslator etran)
+    Bpl.StmtList TrStmt2StmtList(Bpl.StmtListBuilder builder, Statement block, List<Variable> locals, ExpressionTranslator etran, Bpl.Cmd coda = null)
     {
       Contract.Requires(builder != null);
       Contract.Requires(block != null);
@@ -6902,6 +6940,11 @@ namespace Microsoft.Dafny {
       Contract.Ensures(Contract.Result<Bpl.StmtList>() != null);
 
       TrStmt(block, builder, locals, etran);
+
+      if (coda != null) {
+        builder.Add(coda);
+      }
+
       return builder.Collect(block.Tok);  // TODO: would be nice to have an end-curly location for "block"
     }
 
@@ -8507,6 +8550,9 @@ namespace Microsoft.Dafny {
     }
 
     void TrCallStmt(CallStmt s, Bpl.StmtListBuilder builder, List<Variable> locals, ExpressionTranslator etran, Bpl.Expr actualReceiver) {
+      Contract.Requires(codeContext != null);
+      Contract.Requires(heapTracker != null);
+
       List<AssignToLhs> lhsBuilders;
       List<Bpl.IdentifierExpr> bLhss;
       Bpl.Expr[] ignore1, ignore2;
@@ -8716,6 +8762,11 @@ namespace Microsoft.Dafny {
         }
       }
 
+      if (heapTracker != null) {
+        // Assume prerequisites of the frame axiom
+        builder.Add(NewHeapTrackerAssumption(tok, etran));
+      }
+
       builder.Add(new CommentCmd("ProcessCallStmt: Make the call"));
       // Make the call
       Bpl.CallCmd call = new Bpl.CallCmd(tok, MethodName(callee, kind), ins, outs);
@@ -8728,6 +8779,11 @@ namespace Microsoft.Dafny {
         call.IsFree = true;
       }
       builder.Add(call);
+
+      if (heapTracker != null) {
+        // Resume tracking the heap
+        builder.Add(NewHeapTrackerAssignment(etran));
+      }
 
       // Unbox results as needed
       for (int i = 0; i < Lhss.Count; i++) {
@@ -14021,10 +14077,10 @@ namespace Microsoft.Dafny {
       }
     }
 
-    Bpl.Expr HeapSameOrSucc(Bpl.Expr oldHeap, Bpl.Expr newHeap) {
+    Bpl.Expr HeapSameOrSucc(Bpl.Expr oldHeap, Bpl.Expr newHeap, bool ghost = false) {
       return Bpl.Expr.Or(
         Bpl.Expr.Eq(oldHeap, newHeap),
-        FunctionCall(newHeap.tok, BuiltinFunction.HeapSucc, null, oldHeap, newHeap));
+        FunctionCall(newHeap.tok, ghost ? BuiltinFunction.HeapSuccGhost : BuiltinFunction.HeapSucc, null, oldHeap, newHeap));
     }
 
     // Bpl-making-utilities

@@ -401,9 +401,9 @@ function $IsGoodHeap(Heap): bool;
 var $Heap: Heap where $IsGoodHeap($Heap);
 
 function $HeapSucc(Heap, Heap): bool;
-axiom (forall<alpha> h: Heap, r: ref, f: Field alpha, x: alpha :: { update(h, r, f, x) }
-  $IsGoodHeap(update(h, r, f, x)) ==>
-  $HeapSucc(h, update(h, r, f, x)));
+// axiom (forall<alpha> h: Heap, r: ref, f: Field alpha, x: alpha :: { update(h, r, f, x) }
+//   $IsGoodHeap(update(h, r, f, x)) ==>
+//   $HeapSucc(h, update(h, r, f, x)));
 axiom (forall a,b,c: Heap :: { $HeapSucc(a,b), $HeapSucc(b,c) }
   $HeapSucc(a,b) && $HeapSucc(b,c) ==> $HeapSucc(a,c));
 axiom (forall h: Heap, k: Heap :: { $HeapSucc(h,k) }
