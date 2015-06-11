@@ -2762,9 +2762,18 @@ namespace Microsoft.Dafny {
 
       Bpl.StmtList stmts;
       if (!wellformednessProc) {
-        // Create a heapTracker variable
-        Bpl.LocalVariable heapTrackerVariable = NewHeapTrackerVariable();
-        localVariables.Add(heapTrackerVariable);
+        // FIXME why do lemmas go through this path?
+        bool mCouldTouchTheHeap = (!m.IsGhost) || m.Mod.Expressions.Count > 0;
+
+        if (mCouldTouchTheHeap) {
+          // Create a heapTracker variable
+          // Console.WriteLine(m.Name + " could touch the heap.");
+          Bpl.LocalVariable heapTrackerVariable = NewHeapTrackerVariable();
+          localVariables.Add(heapTrackerVariable);
+        }
+        else if (CommandLineOptions.Clo.Trace) {
+          // Console.WriteLine(m.Name + " is Ghost and does not modify the heap: not tracking heap modifications.");
+        }
 
         if (3 <= DafnyOptions.O.Induction && m.IsGhost && m.Mod.Expressions.Count == 0 && m.Outs.Count == 0 && !(m is FixpointLemma)) {
           var posts = new List<Expression>();
@@ -2889,13 +2898,15 @@ namespace Microsoft.Dafny {
         }
 
         // Start tracking the heap
-        builder.Add(NewHeapTrackerAssignment(etran));
+        if (mCouldTouchTheHeap) {
+          builder.Add(NewHeapTrackerAssignment(etran));
+        }
 
         // translate the body of the method
         Contract.Assert(m.Body != null);  // follows from method precondition and the if guard
         // $_reverifyPost := false;
         builder.Add(Bpl.Cmd.SimpleAssign(m.tok, new Bpl.IdentifierExpr(m.tok, "$_reverifyPost", Bpl.Type.Bool), Bpl.Expr.False));
-        stmts = TrStmt2StmtList(builder, m.Body, localVariables, etran, NewHeapTrackerAssumption(m.tok, etran));
+        stmts = TrStmt2StmtList(builder, m.Body, localVariables, etran, mCouldTouchTheHeap ? NewHeapTrackerAssumption(m.tok, etran) : null);
 
         heapTracker = null;
       } else {
@@ -8551,7 +8562,6 @@ namespace Microsoft.Dafny {
 
     void TrCallStmt(CallStmt s, Bpl.StmtListBuilder builder, List<Variable> locals, ExpressionTranslator etran, Bpl.Expr actualReceiver) {
       Contract.Requires(codeContext != null);
-      Contract.Requires(heapTracker != null);
 
       List<AssignToLhs> lhsBuilders;
       List<Bpl.IdentifierExpr> bLhss;
