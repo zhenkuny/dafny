@@ -1763,8 +1763,7 @@ namespace Microsoft.Dafny {
       builder.Add(new Bpl.AssumeCmd(iter.tok, Bpl.Expr.Eq(new Bpl.IdentifierExpr(iter.tok, yieldCountVariable), Bpl.Expr.Literal(0))));
 
       // Create a heapTracker variable, tracking heap states pre and post-calls.
-      Bpl.LocalVariable heapTrackerVariable = NewHeapTrackerVariable();
-      localVariables.Add(heapTrackerVariable);
+      localVariables.Add(NewHeapTrackerVariable());
 
       // Start tracking the heap
       builder.Add(NewHeapTrackerAssignment(etran));
@@ -2762,18 +2761,8 @@ namespace Microsoft.Dafny {
 
       Bpl.StmtList stmts;
       if (!wellformednessProc) {
-        // FIXME why do lemmas go through this path?
-        bool mCouldTouchTheHeap = (!m.IsGhost) || m.Mod.Expressions.Count > 0;
-
-        if (mCouldTouchTheHeap) {
-          // Create a heapTracker variable
-          // Console.WriteLine(m.Name + " could touch the heap.");
-          Bpl.LocalVariable heapTrackerVariable = NewHeapTrackerVariable();
-          localVariables.Add(heapTrackerVariable);
-        }
-        else if (CommandLineOptions.Clo.Trace) {
-          // Console.WriteLine(m.Name + " is Ghost and does not modify the heap: not tracking heap modifications.");
-        }
+        // Create a heapTracker variable
+        localVariables.Add(NewHeapTrackerVariable());
 
         if (3 <= DafnyOptions.O.Induction && m.IsGhost && m.Mod.Expressions.Count == 0 && m.Outs.Count == 0 && !(m is FixpointLemma)) {
           var posts = new List<Expression>();
@@ -2898,15 +2887,13 @@ namespace Microsoft.Dafny {
         }
 
         // Start tracking the heap
-        if (mCouldTouchTheHeap) {
-          builder.Add(NewHeapTrackerAssignment(etran));
-        }
+        builder.Add(NewHeapTrackerAssignment(etran));
 
         // translate the body of the method
         Contract.Assert(m.Body != null);  // follows from method precondition and the if guard
         // $_reverifyPost := false;
         builder.Add(Bpl.Cmd.SimpleAssign(m.tok, new Bpl.IdentifierExpr(m.tok, "$_reverifyPost", Bpl.Type.Bool), Bpl.Expr.False));
-        stmts = TrStmt2StmtList(builder, m.Body, localVariables, etran, mCouldTouchTheHeap ? NewHeapTrackerAssumption(m.tok, etran) : null);
+        stmts = TrStmt2StmtList(builder, m.Body, localVariables, etran, NewHeapTrackerAssumption(m.tok, etran));
 
         heapTracker = null;
       } else {
@@ -5229,6 +5216,11 @@ namespace Microsoft.Dafny {
         var newOptions = options;
         var newEtran = etran;
         builder.Add(new Bpl.CommentCmd("Begin Comprehension WF check"));
+
+        if (heapTracker != null) {
+          builder.Add(NewHeapTrackerAssumption(expr.tok, etran));
+        }
+
         BplIfIf(e.tok, lam != null, null, builder, newBuilder => {
 
           if (lam != null) {
@@ -6970,6 +6962,11 @@ namespace Microsoft.Dafny {
         if (stmt is AssertStmt || DafnyOptions.O.DisallowSoundnessCheating) {
           AddComment(builder, stmt, "assert statement");
           PredicateStmt s = (PredicateStmt)stmt;
+
+          if (heapTracker != null) {
+            builder.Add(NewHeapTrackerAssumption(s.Tok, etran));
+          }
+
           TrStmt_CheckWellformed(s.Expr, builder, locals, etran, false);
           IToken enclosingToken = null;
           if (Attributes.Contains(stmt.Attributes, "prependAssertToken")) {
@@ -6989,6 +6986,10 @@ namespace Microsoft.Dafny {
             }
             builder.Add(new Bpl.AssumeCmd(stmt.Tok, etran.TrExpr(s.Expr)));
           }
+
+          //if (heapTracker != null) {
+          //  builder.Add(NewHeapTrackerAssignment(etran));
+          //}
         } else if (stmt is AssumeStmt) {
           AddComment(builder, stmt, "assume statement");
           AssumeStmt s = (AssumeStmt)stmt;
@@ -8356,6 +8357,11 @@ namespace Microsoft.Dafny {
       Contract.Requires(locals != null);
       Contract.Requires(etran != null);
 
+      if (heapTracker != null) {
+        builder.Add(NewHeapTrackerAssumption(s.Tok, etran));
+        builder.Add(NewHeapTrackerAssignment(etran)); // Could remove
+      }
+
       var suffix = CurrentIdGenerator.FreshId("loop#");
 
       var theDecreases = s.Decreases.Expressions;
@@ -8452,6 +8458,12 @@ namespace Microsoft.Dafny {
 
       Bpl.StmtListBuilder loopBodyBuilder = new Bpl.StmtListBuilder();
       loopBodyBuilder.Add(CaptureState(s.Tok, true, "after some loop iterations"));
+
+      if (heapTracker != null) {
+        // Could add: loopBodyBuilder.Add(NewHeapTrackerAssumption(s.Tok, etran));
+        loopBodyBuilder.Add(NewHeapTrackerAssignment(etran));
+      }
+
       // as the first thing inside the loop, generate:  if (!w) { CheckWellformed(inv); assume false; }
       invDefinednessBuilder.Add(new Bpl.AssumeCmd(s.Tok, Bpl.Expr.False));
       loopBodyBuilder.Add(new Bpl.IfCmd(s.Tok, Bpl.Expr.Not(w), invDefinednessBuilder.Collect(s.Tok), null, null));
@@ -8470,10 +8482,21 @@ namespace Microsoft.Dafny {
         if (Contract.Exists(theDecreases, e => e is WildcardExpr)) {
           // omit termination checking for this loop
           bodyTr(loopBodyBuilder, updatedFrameEtran);
+
+          if (heapTracker != null) {
+            // TODO which etran?
+            loopBodyBuilder.Add(NewHeapTrackerAssumption(s.Tok, etran));
+          }
         } else {
           List<Bpl.Expr> oldBfs = RecordDecreasesValue(theDecreases, loopBodyBuilder, locals, etran, "$decr$" + suffix);
           // time for the actual loop body
           bodyTr(loopBodyBuilder, updatedFrameEtran);
+
+          if (heapTracker != null) {
+            // TODO which etran?
+            loopBodyBuilder.Add(NewHeapTrackerAssumption(s.Tok, etran));
+          }
+
           // check definedness of decreases expressions
           var toks = new List<IToken>();
           var types = new List<Type>();
@@ -8502,6 +8525,7 @@ namespace Microsoft.Dafny {
       foreach (MaybeFreeExpression loopInv in s.Invariants) {
         loopBodyBuilder.Add(new Bpl.AssumeCmd(loopInv.E.tok, CanCallAssumption(loopInv.E, etran)));
       }
+
       Bpl.StmtList body = loopBodyBuilder.Collect(s.Tok);
 
       builder.Add(new Bpl.WhileCmd(s.Tok, Bpl.Expr.True, invariants, body));
