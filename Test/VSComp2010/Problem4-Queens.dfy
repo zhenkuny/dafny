@@ -86,6 +86,7 @@ method SearchAux(N: int, boardSoFar: seq<int>) returns (success: bool, newBoard:
     // Exhaustively try all possibilities for the new column, 'pos'.
     var n := 0;
     while (n < N)
+      invariant (forall k :: 0 <= k && k < |boardSoFar| ==> IsConsistent(boardSoFar, k));  // FIXME this should not be needed
       invariant n <= N;
       invariant (forall B: seq<int> ::
                   // For any board 'B' with 'N' queens, each placed in an existing row

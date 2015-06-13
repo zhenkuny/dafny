@@ -70,7 +70,7 @@ class UltraFilter<G(==)> {
     assert (M + C) * (M + D) == M + (C * D);
   }
 
-  method Lemma_H2(h: set<set<G>>, f: set<set<G>>, S: set<G>, M: set<G>)
+  lemma Lemma_H2(h: set<set<G>>, f: set<set<G>>, S: set<G>, M: set<G>)
     requires IsFilter(f, S);
     requires (forall X :: X in h <==> M + X in f);
     ensures S in h;
@@ -81,7 +81,7 @@ class UltraFilter<G(==)> {
     assert M + S == S;
   }
 
-  method Lemma_H3(h: set<set<G>>, f: set<set<G>>, S: set<G>, M: set<G>)
+  lemma Lemma_H3(h: set<set<G>>, f: set<set<G>>, S: set<G>, M: set<G>)
     requires IsFilter(f, S);
     requires (forall X :: X in h <==> M + X in f);
     requires M !in f;
