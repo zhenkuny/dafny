@@ -238,7 +238,7 @@ struct Tuple5 {
   T1 get_1() const { return t1; }
   T2 get_2() const { return t2; }
   T3 get_3() const { return t3; }
-  T3 get_4() const { return t4; }
+  T4 get_4() const { return t4; }
 };
 
 template <typename T0, typename T1, typename T2, typename T3, typename T4>
