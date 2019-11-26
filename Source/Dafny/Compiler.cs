@@ -169,6 +169,9 @@ namespace Microsoft.Dafny {
     protected virtual Type NativeForm(Type type) {
       return type;
     }
+    
+    // By default, don't emit anything. Children can do something language specific
+    protected virtual void EmitLineInfo(TextWriter wr, Bpl.IToken tok) { }
 
     protected abstract bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, bool isInParam, TextWriter wr);
     /// <summary>
@@ -1584,7 +1587,7 @@ namespace Microsoft.Dafny {
     void TrStmt(Statement stmt, TargetWriter wr) {
       Contract.Requires(stmt != null);
       Contract.Requires(wr != null);
-
+      EmitLineInfo(wr, stmt.Tok);
       if (stmt.IsGhost) {
         var v = new CheckHasNoAssumes_Visitor(this, wr);
         v.Visit(stmt);

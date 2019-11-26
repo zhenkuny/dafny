@@ -162,6 +162,7 @@ namespace Microsoft.Dafny {
 
 
     protected override IClassWriter CreateClass(string moduleName, string name, bool isExtern, string/*?*/ fullPrintName, List<TypeParameter>/*?*/ typeParameters, List<Type>/*?*/ superClasses, Bpl.IToken tok, TargetWriter wr) {
+      EmitLineInfo(wr, tok);
       if (isExtern || (superClasses != null && superClasses.Count > 0)) {
         throw NotSupported(String.Format("extern and/or traits in class {0}", name), tok);
       }
@@ -347,6 +348,8 @@ namespace Microsoft.Dafny {
         // Tuple types are declared once and for all in DafnyRuntime.h
         return;
       }
+      
+      EmitLineInfo(wr, dt.tok);
 
       this.datatypeDecls.Add(dt);
 
@@ -537,7 +540,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void DeclareNewtype(NewtypeDecl nt, TargetWriter wr) {    
-      
+      EmitLineInfo(wr, nt.tok);
       if (nt.NativeType != null) {
         if (nt.NativeType.Name != nt.Name) {
           string nt_name_def, literalSuffice_def;
@@ -582,6 +585,8 @@ namespace Microsoft.Dafny {
       if (sst.Name == "nat") {
         return;  // C++ does not support Nats
       }
+      
+      EmitLineInfo(wr, sst.tok);
 
       string templateDecl = "";
       if (sst.Var.Type is SeqType s) {
@@ -726,6 +731,7 @@ namespace Microsoft.Dafny {
       if (!createBody) {
         return null;
       }
+      EmitLineInfo(wr, tok);
 
       if (typeArgs.Count != 0) {        
         wr.WriteLine(DeclareTemplate(typeArgs));
@@ -1172,6 +1178,12 @@ namespace Microsoft.Dafny {
       // There are no companion classes for Cpp
       var t = TypeName(type, wr, tok, member, true);
       return t;
+    }
+
+    protected override void EmitLineInfo(TextWriter wr, Bpl.IToken tok) {
+      if (tok != null && tok.line > 0) {
+        wr.WriteLine("\n#line {0} \"{1}\"", tok.line, tok.filename);
+      }
     }
 
     // ----- Declarations -------------------------------------------------------------
