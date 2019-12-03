@@ -1,4 +1,3 @@
-/*
 newtype{:uint32iveType "uint"} uint32 = i:int | 0 <= i < 0x100000000
 
 method Test(name:string, b:bool) 
@@ -10,13 +9,11 @@ method Test(name:string, b:bool)
     print name, ": This is *** UNEXPECTED *** !!!!\n";
   }
 }
-*/
 
 datatype map_holder = map_holder(m:map<bool, bool>)
 
 method Basic() {
   var f:map_holder;
-  /*
   var s:map<uint32,uint32> := map[1 := 0, 2 := 1, 3 := 2, 4 := 3];
   var t:map<uint32,uint32> := map[1 := 0, 2 := 1, 3 := 2, 4 := 3];
 
@@ -40,7 +37,6 @@ method Basic() {
   Test("Keys membership 2", 2 in s_keys);
   Test("Keys membership 3", 3 in s_keys);
   Test("Keys membership 4", 4 in s_keys);
-  */
 }
 
 /*
