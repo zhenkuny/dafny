@@ -23,7 +23,13 @@ namespace Extern {
     }
     return ret;
   }
-  /*
+
+  class ExternClass {
+    public:
+    bool my_method0(uint64 a) { (void)a; return true; }
+    bool my_method1(uint64 c) { (void)c; return false; }
+  };
+/*
 class __default {
 
   public:
