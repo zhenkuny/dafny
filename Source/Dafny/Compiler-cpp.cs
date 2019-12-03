@@ -466,20 +466,20 @@ namespace Microsoft.Dafny {
           using (var wc = ws.NewNamedBlock("static {0} create_{1}({2})",
                                            DtT_protected, ctor.CompileName,
                                            DeclareFormals(ctor.Formals))) {
-            wc.WriteLine("{0}{1} result;", DtT_protected, TemplateMethod(dt.TypeArgs));
-            wc.WriteLine("result.tag = {0}::TAG_{1};", DtT_protected, ctor.CompileName);
+            wc.WriteLine("{0}{1} COMPILER_result;", DtT_protected, TemplateMethod(dt.TypeArgs));
+            wc.WriteLine("COMPILER_result.tag = {0}::TAG_{1};", DtT_protected, ctor.CompileName);
             foreach (Formal arg in ctor.Formals)
             {
               if (!arg.IsGhost) {
                 if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                   // This is a recursive destuctor, so we need to allocate space and copy the input in
-                  wc.WriteLine("result.v_{0}.{1} = make_shared<{2}>({1});", ctor.CompileName, arg.CompileName, DtT_protected);
+                  wc.WriteLine("COMPILER_result.v_{0}.{1} = make_shared<{2}>({1});", ctor.CompileName, arg.CompileName, DtT_protected);
                 } else {
-                  wc.WriteLine("result.v_{0}.{1} = {1};", ctor.CompileName, arg.CompileName);
+                  wc.WriteLine("COMPILER_result.v_{0}.{1} = {1};", ctor.CompileName, arg.CompileName);
                 }
               }
             }
-            wc.WriteLine("return result;");
+            wc.WriteLine("return COMPILER_result;");
           }
         }
 
@@ -1070,7 +1070,8 @@ namespace Microsoft.Dafny {
       } else if (xType is SeqType) {
         return string.Format("DafnySequence<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, true));
       } else if (xType is MapType) {
-        return "_dafny.Map.Empty";
+        var m = (MapType) xType;
+        return String.Format("DafnyMap<{0},{1}>::empty()", TypeName(m.Domain, wr, tok), TypeName(m.Range, wr, tok));
       }
 
       var udt = (UserDefinedType)xType;
