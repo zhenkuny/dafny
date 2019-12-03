@@ -649,7 +649,7 @@ struct DafnyMap {
     }
     
     
-    bool equals(DafnyMap<K,V> other) {
+    bool equals(const DafnyMap<K,V> other) const {
         if (map.size() != other.size()) { return false; }
         
         for (const auto& kv : map) {
@@ -668,7 +668,7 @@ struct DafnyMap {
 
 
 template <typename T, typename U>
-bool operator==(DafnyMap<T,U> &s0, DafnyMap<T,U> &s1) {
+bool operator==(const DafnyMap<T,U> &s0, const DafnyMap<T,U> &s1) {
     return s0.equals(s1);
 }
 
