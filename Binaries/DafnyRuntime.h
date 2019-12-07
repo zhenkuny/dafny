@@ -395,6 +395,11 @@ bool operator==(const DafnySequence<U> &s0, const DafnySequence<U> &s1) {
     return s0.equals(s1);
 }
 
+template <typename U>
+bool operator!=(const DafnySequence<U> &s0, const DafnySequence<U> &s1) {
+    return !s0.equals(s1);
+}
+
 inline ostream& operator<<(ostream& out, const DafnySequence<char>& val){
     for (auto const& c:val.seq) {
         out << c;
@@ -519,6 +524,11 @@ struct DafnySet {
 template <typename U>
 bool operator==(const DafnySet<U> &s0, const DafnySet<U> &s1) {
     return s0.equals(s1);
+}
+
+template <typename U>
+bool operator!=(const DafnySet<U> &s0, const DafnySet<U> &s1) {
+    return !s0.equals(s1);
 }
 
 template <typename U>
@@ -670,6 +680,11 @@ struct DafnyMap {
 template <typename T, typename U>
 bool operator==(const DafnyMap<T,U> &s0, const DafnyMap<T,U> &s1) {
     return s0.equals(s1);
+}
+
+template <typename T, typename U>
+bool operator!=(const DafnyMap<T,U> &s0, const DafnyMap<T,U> &s1) {
+    return !s0.equals(s1);
 }
 
 template <typename T, typename U>
