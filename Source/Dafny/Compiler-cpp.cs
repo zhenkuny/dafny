@@ -408,7 +408,7 @@ namespace Microsoft.Dafny {
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
-        wr.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));        
+        wr.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));        
       } else {
 
         // Create one struct for each constructor
@@ -430,8 +430,10 @@ namespace Microsoft.Dafny {
           
           // Overload the comparison operator
           wstruct.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", structName);
+
+          var preReturn = wstruct.Fork();
           wstruct.Write("\treturn true ");
-          
+          i = 0;
           foreach (Formal arg in ctor.Formals) {
             if (!arg.IsGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive destructor needs to use a pointer
@@ -442,6 +444,11 @@ namespace Microsoft.Dafny {
               i++;
             }
           }
+          
+          if (i == 0) { // Avoid a warning from the C++ compiler
+            preReturn.WriteLine("(void)left; (void) right;");
+          }
+          
           wstruct.WriteLine(";\n}");
           
           // Overload the not-comparison operator
