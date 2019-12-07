@@ -16,6 +16,21 @@ type Ex3Sub = d:Example3 | d.e.b witness Example3(Example1(42, true))
 datatype DtPointer = DtPointer(s:seq<uint32>)
 datatype DtPointerHolder = DtPointerHolder(e:DtPointer) | Other(f:bool)
 
+method Matcher(e:Example1) {
+  match e {
+    case Example1(u, b) => print u, b;
+  }
+}
+
+method TupleMatch(e1:Example2, e2:Example2) {
+  match (e1, e2) {
+    case (Ex2a(u1), Ex2a(u2)) => print u1, u2, "\n";
+    case (Ex2b(u1), Ex2a(u2)) => print u1, u2, "\n";
+    case (Ex2a(u1), Ex2b(u2)) => print u1, u2, "\n";
+    case (Ex2b(u1), Ex2b(u2)) => print u1, u2, "\n";
+  }
+}
+
 method Callee(e:Example2) {
     match e {
         case Ex2a(u) => print "Case A: ", u, "\n";

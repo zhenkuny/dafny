@@ -1947,14 +1947,19 @@ namespace Microsoft.Dafny {
 
     protected override void EmitDestructor(string source, Formal dtor, int formalNonGhostIndex, DatatypeCtor ctor, List<Type> typeArgs, Type bvType, TargetWriter wr) {
       if (ctor.EnclosingDatatype is TupleTypeDecl) {
-        wr.Write("({0})[{1}]", source, formalNonGhostIndex);
+        wr.Write("({0}).get_{1}()", source, formalNonGhostIndex);
       } else {
         var dtorName = FormalName(dtor, formalNonGhostIndex);
         if (dtor.Type is UserDefinedType udt && udt.ResolvedClass == ctor.EnclosingDatatype) {
           // Recursively defined datatype requires a dereference here
           wr.Write("*");
         }
-        wr.Write("(({0}){1}.v_{3}.{2})", source, ctor.EnclosingDatatype is CoDatatypeDecl ? "._D()" : "", dtorName, ctor.CompileName);
+
+        if (ctor.EnclosingDatatype.Ctors.Count > 1) {
+          wr.Write("(({0}).v_{2}.{1})", source, dtorName, ctor.CompileName);
+        } else {
+          wr.Write("(({0}).{1})", source, dtorName);
+        }
       }
     }
 
