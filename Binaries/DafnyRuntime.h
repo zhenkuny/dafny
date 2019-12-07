@@ -440,7 +440,7 @@ struct DafnySet {
         return DafnySet();
     }
     
-    bool IsSubsetOf(const DafnySet<T>& other) {
+    bool IsSubsetOf(const DafnySet<T>& other) const {
         if (set.size() > other.set.size()) {
             return false;
         }
@@ -507,7 +507,7 @@ struct DafnySet {
     bool isEmpty() const { return set.empty(); }
     
     
-    bool equals(DafnySet<T> other) {        
+    bool equals(const DafnySet<T> other) const {        
         return IsSubsetOf(other) && other.IsSubsetOf(*this);
     }
 
@@ -517,7 +517,7 @@ struct DafnySet {
 };
 
 template <typename U>
-bool operator==(DafnySet<U> &s0, DafnySet<U> &s1) {
+bool operator==(const DafnySet<U> &s0, const DafnySet<U> &s1) {
     return s0.equals(s1);
 }
 

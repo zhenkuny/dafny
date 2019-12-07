@@ -1087,7 +1087,8 @@ namespace Microsoft.Dafny {
         var t = (BitvectorType)xType;
         return t.NativeType != null ? "0" : "new BigNumber(0)";
       } else if (xType is SetType) {
-        return "_dafny.Set.Empty";
+        var s = (SetType) xType;
+        return String.Format("DafnySet<{0}>::empty()", TypeName(s.Arg, wr, tok));
       } else if (xType is MultiSetType) {
         return "_dafny.MultiSet.Empty";
       } else if (xType is SeqType) {
