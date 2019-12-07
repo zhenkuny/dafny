@@ -26,7 +26,12 @@ namespace Microsoft.Dafny {
     private ReadOnlyCollection<string> headers;
     private List<DatatypeDecl> datatypeDecls;
     private List<string> classDefaults;
-    
+
+    private TargetWriter declarationsWr = null;
+    private TargetWriter moduleDeclarationsWr = null;
+    private TargetWriter definitionsWr = null;
+    private TargetWriter dtDefnWr = null;
+
     // Shadowing variables in Compiler.cs
     new string DafnySetClass = "DafnySet";
     new string DafnyMultiSetClass = "DafnyMultiset";
@@ -45,6 +50,9 @@ namespace Microsoft.Dafny {
       }
       // TODO: Include appropriate .h file here
       //ReadRuntimeSystem("DafnyRuntime.h", wr);
+
+      this.declarationsWr = wr.ForkSection();
+      this.definitionsWr = wr.ForkSection();
     }
 
     protected override void EmitFooter(Program program, TargetWriter wr) {
@@ -78,6 +86,8 @@ namespace Microsoft.Dafny {
 
     protected override TargetWriter CreateModule(string moduleName, bool isDefault, bool isExtern, string/*?*/ libraryName, TargetWriter wr) {
       var s = string.Format("namespace {0} ", IdProtect(moduleName));
+      this.moduleDeclarationsWr = this.declarationsWr.NewBigBlock(s, "// end of " + s + " declarations");
+      this.dtDefnWr = this.definitionsWr.NewBigBlock(s, "// end of " + s + " definitions");
       return wr.NewBigBlock(s, "// end of " + s);
 /* 
       if (!isExtern || libraryName != null) {
@@ -168,8 +178,10 @@ namespace Microsoft.Dafny {
 
       if (typeParameters != null && typeParameters.Count > 0) {
         wr.WriteLine(DeclareTemplate(typeParameters));
+        moduleDeclarationsWr.WriteLine(DeclareTemplate(typeParameters));
       }
 
+      moduleDeclarationsWr.WriteLine("class {0};", name);
       var w = wr.NewBlock(string.Format("class {0}", name), ";");
       //w = w.NewBlock("public:", null, BlockTargetWriter.BraceStyle.Nothing, BlockTargetWriter.BraceStyle.Nothing);
       w.Write("public:\n");      
@@ -352,6 +364,10 @@ namespace Microsoft.Dafny {
 
       string DtT = dt.CompileName;
       string DtT_protected = IdProtect(DtT);
+      
+      // Forward declaration of the type
+      this.moduleDeclarationsWr.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
+      wr = this.dtDefnWr;
 
       if (IsRecursiveDatatype(dt)) { // Note that if this is true, there must be more than one constructor!
         // Add some forward declarations
