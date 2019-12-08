@@ -27,8 +27,10 @@ namespace Microsoft.Dafny {
     private List<DatatypeDecl> datatypeDecls;
     private List<string> classDefaults;
 
+    // Forward declarations of class and struct names
     private TargetWriter declarationsWr = null;
     private TargetWriter moduleDeclarationsWr = null;
+    // Datatype definitions
     private TargetWriter definitionsWr = null;
     private TargetWriter dtDefnWr = null;
 
@@ -87,7 +89,7 @@ namespace Microsoft.Dafny {
     protected override TargetWriter CreateModule(string moduleName, bool isDefault, bool isExtern, string/*?*/ libraryName, TargetWriter wr) {
       var s = string.Format("namespace {0} ", IdProtect(moduleName));
       this.moduleDeclarationsWr = this.declarationsWr.NewBigBlock(s, "// end of " + s + " declarations");
-      this.dtDefnWr = this.definitionsWr.NewBigBlock(s, "// end of " + s + " definitions");
+      this.dtDefnWr = this.definitionsWr.NewBigBlock(s, "// end of " + s + " datatype definitions");
       return wr.NewBigBlock(s, "// end of " + s);
 /* 
       if (!isExtern || libraryName != null) {
@@ -211,7 +213,7 @@ namespace Microsoft.Dafny {
       }
       */
       var methodWriter = w;
-      return new ClassWriter(name, this, methodWriter, fieldWriter, wr);
+      return new ClassWriter(name, this, w, wr, fieldWriter, wr);
     }
 
     protected override bool SupportsProperties { get => false; }
@@ -579,7 +581,7 @@ namespace Microsoft.Dafny {
       }
       var className = "class_" + IdName(nt);
       var cw = CreateClass(nt.Module.CompileName, className, null, wr) as CppCompiler.ClassWriter;
-      var w = cw.MethodWriter;
+      var w = cw.MethodDeclWriter;
       if (nt.WitnessKind == SubsetTypeDecl.WKind.Compiled) {
         var witness = new TargetWriter(w.IndentLevel, true);
         if (nt.NativeType == null) {
@@ -616,7 +618,7 @@ namespace Microsoft.Dafny {
       
       var className = "class_" + IdName(sst);
       var cw = CreateClass(sst.Module.CompileName, className, sst.TypeArgs, wr) as CppCompiler.ClassWriter;
-      var w = cw.MethodWriter;
+      var w = cw.MethodDeclWriter;
       if (sst.WitnessKind == SubsetTypeDecl.WKind.Compiled) {
         var witness = new TargetWriter(w.IndentLevel, true);
         TrExpr(sst.Witness, witness, false);
@@ -668,26 +670,29 @@ namespace Microsoft.Dafny {
     protected class ClassWriter : IClassWriter {
       public string ClassName;
       public readonly CppCompiler Compiler;
-      public readonly BlockTargetWriter MethodWriter;
+      public readonly BlockTargetWriter MethodDeclWriter;
+      public readonly TargetWriter MethodWriter;
       public readonly BlockTargetWriter FieldWriter;
       public readonly TargetWriter Finisher;
 
-      public ClassWriter(string className, CppCompiler compiler, BlockTargetWriter methodWriter, BlockTargetWriter fieldWriter, TargetWriter finisher) {
+      public ClassWriter(string className, CppCompiler compiler, BlockTargetWriter methodDeclWriter, TargetWriter methodWriter, BlockTargetWriter fieldWriter, TargetWriter finisher) {
         Contract.Requires(compiler != null);
+        Contract.Requires(methodDeclWriter != null);
         Contract.Requires(methodWriter != null);
         Contract.Requires(fieldWriter != null);
         this.ClassName = className;
         this.Compiler = compiler;
+        this.MethodDeclWriter = methodDeclWriter;
         this.MethodWriter = methodWriter;
         this.FieldWriter = fieldWriter;
         this.Finisher = finisher;
       }
 
       public BlockTargetWriter/*?*/ CreateMethod(Method m, bool createBody) {
-        return Compiler.CreateMethod(m, createBody, MethodWriter);
+        return Compiler.CreateMethod(m, createBody, MethodDeclWriter, MethodWriter);
       }
       public BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl member) {
-        return Compiler.CreateFunction(name, typeArgs, formals, resultType, tok, isStatic, createBody, MethodWriter);
+        return Compiler.CreateFunction(member.EnclosingClass.CompileName, member.EnclosingClass.TypeArgs, name, typeArgs, formals, resultType, tok, isStatic, createBody, MethodDeclWriter, MethodWriter);
       }
       public BlockTargetWriter/*?*/ CreateGetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl/*?*/ member) {
         return Compiler.CreateGetter(name, resultType, tok, isStatic, createBody, MethodWriter);
@@ -702,7 +707,7 @@ namespace Microsoft.Dafny {
       public void Finish() { }
     }
 
-    protected BlockTargetWriter/*?*/ CreateMethod(Method m, bool createBody, TargetWriter wr) {
+    protected BlockTargetWriter/*?*/ CreateMethod(Method m, bool createBody, BlockTargetWriter wdr, TargetWriter wr) {
       string targetReturnTypeReplacement = null;
       foreach (var p in m.Outs) {
         if (!p.IsGhost) {
@@ -720,20 +725,35 @@ namespace Microsoft.Dafny {
         return null;
       }
 
-      if (m.TypeArgs.Count != 0) {        
+      if (m.TypeArgs.Count != 0) {
+        wdr.WriteLine(DeclareTemplate(m.TypeArgs));
         wr.WriteLine(DeclareTemplate(m.TypeArgs));
       }
 
-      wr.Write("{0}{1} {2}",
-        m.IsStatic ? "static " : "",        
+      if (m.EnclosingClass.TypeArgs != null && m.EnclosingClass.TypeArgs.Count > 0) {
+        wr.WriteLine(DeclareTemplate(m.EnclosingClass.TypeArgs));
+      }
+      
+      wr.Write("{0} {1}{2}::{3}",
+        targetReturnTypeReplacement ?? "void",
+        m.EnclosingClass.CompileName,
+        TemplateMethod(m.EnclosingClass.TypeArgs),
+        IdName(m));
+      
+      wdr.Write("{0}{1} {2}",
+        m.IsStatic ? "static " : "",
         targetReturnTypeReplacement ?? "void",
         IdName(m));
 
       wr.Write("(");
+      wdr.Write("(");
       int nIns = WriteFormals("", m.Ins, wr);
+      WriteFormals("", m.Ins, wdr);
       if (targetReturnTypeReplacement == null) {
         WriteFormals(nIns == 0 ? "" : ", ", m.Outs, wr);
+        WriteFormals(nIns == 0 ? "" : ", ", m.Outs, wdr);
       }
+      wdr.Write(");\n");
 
       var w = wr.NewBlock(")", null, BlockTargetWriter.BraceStyle.Newline, BlockTargetWriter.BraceStyle.Newline);
 
@@ -745,23 +765,35 @@ namespace Microsoft.Dafny {
       return w;
     }
 
-    protected BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, TargetWriter wr) {
+    protected BlockTargetWriter/*?*/ CreateFunction(string className,  List<TypeParameter> classArgs, string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, BlockTargetWriter wdr, TargetWriter wr) {
       if (!createBody) {
         return null;
       }
 
-      if (typeArgs.Count != 0) {        
+      if (typeArgs.Count != 0) {
+        wdr.WriteLine(DeclareTemplate(typeArgs));
+        wr.WriteLine(DeclareTemplate(typeArgs));
+      }
+      if (classArgs != null && classArgs.Count != 0) {
         wr.WriteLine(DeclareTemplate(typeArgs));
       }
 
-      wr.Write("{0}{1} {2}",
-        isStatic ? "static " : "",        
+      wdr.Write("{0}{1} {2}",
+        isStatic ? "static " : "",
         TypeName(resultType, wr, tok),
         name);
+      wr.Write("{0} {1}{2}::{3}",
+        TypeName(resultType, wr, tok),
+        className,
+        TemplateMethod(classArgs),
+        name);
 
+      wdr.Write("(");
       wr.Write("(");
+      WriteFormals("", formals, wdr);
       int nIns = WriteFormals("", formals, wr);
 
+      wdr.Write(");");
       var w = wr.NewBlock(")", null, BlockTargetWriter.BraceStyle.Newline, BlockTargetWriter.BraceStyle.Newline);
       
       /*
