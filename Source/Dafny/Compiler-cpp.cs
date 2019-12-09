@@ -2376,9 +2376,9 @@ namespace Microsoft.Dafny {
               wr.Write(".length())");
             } else if (m != null && m.MemberName == "Length" && m.Obj.Type.IsArrayType) {
               // Optimize .Length to avoid intermediate BigInteger
-              wr.Write("{0}(", GetNativeTypeName(toNative));
+              wr.Write("({0})(", GetNativeTypeName(toNative));
               TrParenExpr(m.Obj, wr, inLetExprBody);
-              wr.Write(".LenInt(0))");
+              wr.Write("->size())");
             } else {
               // no optimization applies; use the standard translation
               TrParenExpr(e.E, wr, inLetExprBody);
