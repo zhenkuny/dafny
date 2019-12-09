@@ -374,7 +374,7 @@ namespace Microsoft.Dafny {
       if (IsRecursiveDatatype(dt)) { // Note that if this is true, there must be more than one constructor!
         // Add some forward declarations
         wr.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
-        wr.WriteLine("bool operator==(const {0} &left, const {0} &right); ", DtT_protected);
+        wr.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, TemplateMethod(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
       }
 
       // Optimize a not-uncommon case
