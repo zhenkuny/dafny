@@ -708,17 +708,12 @@ namespace Microsoft.Dafny {
     }
 
     protected BlockTargetWriter/*?*/ CreateMethod(Method m, bool createBody, BlockTargetWriter wdr, TargetWriter wr) {
+      List<Formal> nonGhostOuts = m.Outs.Where(o => !o.IsGhost).ToList();
       string targetReturnTypeReplacement = null;
-      foreach (var p in m.Outs) {
-        if (!p.IsGhost) {
-          if (targetReturnTypeReplacement == null) {
-            targetReturnTypeReplacement = TypeName(p.Type, wr, p.tok);
-          } else if (targetReturnTypeReplacement != null) {
-            // there's more than one out-parameter, so bail
-            targetReturnTypeReplacement = null;
-            break;
-          }
-        }
+      if (nonGhostOuts.Count == 1) {
+        targetReturnTypeReplacement = TypeName(nonGhostOuts[0].Type, wr, nonGhostOuts[0].tok);
+      } else if (nonGhostOuts.Count > 1) {
+        targetReturnTypeReplacement = String.Format("struct Tuple{0}{1}", nonGhostOuts.Count, TemplateMethod(nonGhostOuts.ConvertAll(n => n.Type)));
       }
 
       if (!createBody) {
@@ -1330,7 +1325,7 @@ namespace Microsoft.Dafny {
         EmitAssignment(actualOutParamNames[0], null, outCollector, null, wr);
       } else {
         for (var i = 0; i < actualOutParamNames.Count; i++) {
-          wr.WriteLine("{0} = {1}[{2}];", actualOutParamNames[i], outCollector, i);
+          wr.WriteLine("{0} = {1}.get_{2}();", actualOutParamNames[i], outCollector, i);
         }
       }
     }
@@ -1362,8 +1357,10 @@ namespace Microsoft.Dafny {
       outParams = outParams.Where(f => !f.IsGhost).ToList();
       if (!outParams.Any()) {
         wr.WriteLine("return;");
+      } else if (outParams.Count == 1) {
+        wr.WriteLine("return {0};", IdName(outParams[0]));
       } else {
-        wr.WriteLine("return {0};", Util.Comma(outParams, IdName));
+        wr.WriteLine("return Tuple{0}{1}({2});", outParams.Count, TemplateMethod(outParams.ConvertAll(o => o.Type)), Util.Comma(outParams, IdName));
       }
     }
 
