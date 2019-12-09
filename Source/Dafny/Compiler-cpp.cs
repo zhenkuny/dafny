@@ -1124,7 +1124,7 @@ namespace Microsoft.Dafny {
       } else if (xType is MultiSetType) {
         return "_dafny.MultiSet.Empty";
       } else if (xType is SeqType) {
-        return string.Format("DafnySequence<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, !inAutoInitContext));
+        return string.Format("DafnySequence<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false));
       } else if (xType is MapType) {
         var m = (MapType) xType;
         return String.Format("DafnyMap<{0},{1}>::empty()", TypeName(m.Domain, wr, tok), TypeName(m.Range, wr, tok));
@@ -1138,6 +1138,7 @@ namespace Microsoft.Dafny {
         } else if (inAutoInitContext && !udt.ResolvedParam.Characteristics.MustSupportZeroInitialization) {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
         } else {
+          return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
           return "nullptr";
           //return string.Format("{0}.Default", RuntimeTypeDescriptor(udt, udt.tok, wr));
         }
@@ -1932,9 +1933,9 @@ namespace Microsoft.Dafny {
             udt.ResolvedClass is TypeSynonymDecl tsd) {
           // Hack to workaround type synonyms wrapped around the actual array type
           // TODO: Come up with a more systematic way of resolving this!
-          typeName = TypeName(tsd.Rhs.TypeArgs[0], wr, source.tok, null, true);
+          typeName = TypeName(tsd.Rhs.TypeArgs[0], wr, source.tok, null, false);
         } else {
-          typeName = TypeName(source.Type.TypeArgs[0], wr, source.tok, null, true);
+          typeName = TypeName(source.Type.TypeArgs[0], wr, source.tok, null, false);
         }
         wr.Write("DafnySequence<{0}>::SeqFromArray", typeName);
         //var arr = source.Type.AsArrayType;
@@ -1952,7 +1953,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitSeqConstructionExpr(SeqConstructionExpr expr, bool inLetExprBody, TargetWriter wr) {
-      wr.Write("DafnySequence<{0}>::Create(", TypeName(expr.Type, wr, expr.tok, null, true));
+      wr.Write("DafnySequence<{0}>::Create(", TypeName(expr.Type, wr, expr.tok, null, false));
       TrExpr(expr.N, wr, inLetExprBody);
       wr.Write(", ");
       TrExpr(expr.Initializer, wr, inLetExprBody);

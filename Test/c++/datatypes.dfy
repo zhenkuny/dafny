@@ -8,6 +8,7 @@ datatype Example1 = Example1(u:uint32, b:bool)
 datatype Example2 = Ex2a(u:uint32) | Ex2b(b:bool)
 datatype Example3 = Example3(e:Example1)
 datatype Example4 = Ex4a | Ex4b
+datatype Example5<V> = Ex5a(v:V) | Ex5b(b:bool)
 
 type Ex1Sub = d:Example1 | d.u == 0 witness Example1(0, true)
 type Ex2Sub = d:Example2 | d.Ex2a? && d.u == 0 witness Ex2a(0)
@@ -47,6 +48,10 @@ method TestDestructor() {
       assert false;
       print "This is unexpected!!!\n";
     }
+}
+
+method TestGenericDefault() {
+  var x:Option<Example5<bool>>;
 }
 
 
