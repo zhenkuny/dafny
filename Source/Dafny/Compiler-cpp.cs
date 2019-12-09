@@ -28,11 +28,14 @@ namespace Microsoft.Dafny {
     private List<string> classDefaults;
 
     // Forward declarations of class and struct names
-    private TargetWriter declarationsWr = null;
-    private TargetWriter moduleDeclarationsWr = null;
+    private TargetWriter modDeclsWr = null;
+    private TargetWriter modDeclWr = null;
     // Datatype definitions
-    private TargetWriter definitionsWr = null;
-    private TargetWriter dtDefnWr = null;
+    private TargetWriter dtDefsWr = null;
+    private TargetWriter dtDefWr = null;
+    // Class declarations
+    private TargetWriter classDeclsWr = null;
+    private TargetWriter classDeclWr = null;
 
     // Shadowing variables in Compiler.cs
     new string DafnySetClass = "DafnySet";
@@ -53,8 +56,9 @@ namespace Microsoft.Dafny {
       // TODO: Include appropriate .h file here
       //ReadRuntimeSystem("DafnyRuntime.h", wr);
 
-      this.declarationsWr = wr.ForkSection();
-      this.definitionsWr = wr.ForkSection();
+      this.modDeclsWr = wr.ForkSection();
+      this.dtDefsWr = wr.ForkSection();
+      this.classDeclsWr = wr.ForkSection();
     }
 
     protected override void EmitFooter(Program program, TargetWriter wr) {
@@ -88,8 +92,9 @@ namespace Microsoft.Dafny {
 
     protected override TargetWriter CreateModule(string moduleName, bool isDefault, bool isExtern, string/*?*/ libraryName, TargetWriter wr) {
       var s = string.Format("namespace {0} ", IdProtect(moduleName));
-      this.moduleDeclarationsWr = this.declarationsWr.NewBigBlock(s, "// end of " + s + " declarations");
-      this.dtDefnWr = this.definitionsWr.NewBigBlock(s, "// end of " + s + " datatype definitions");
+      this.modDeclWr = this.modDeclsWr.NewBigBlock(s, "// end of " + s + " declarations");
+      this.dtDefWr = this.dtDefsWr.NewBigBlock(s, "// end of " + s + " datatype definitions");
+      this.classDeclWr = this.classDeclsWr.NewBigBlock(s, "// end of " + s + " class declarations");
       return wr.NewBigBlock(s, "// end of " + s);
 /* 
       if (!isExtern || libraryName != null) {
@@ -177,18 +182,24 @@ namespace Microsoft.Dafny {
       if (isExtern || (superClasses != null && superClasses.Count > 0)) {
         throw NotSupported(String.Format("extern and/or traits in class {0}", name), tok);
       }
+      
+      var classDeclWriter = modDeclWr;
+      var classDefWriter = this.classDeclWr;
 
       if (typeParameters != null && typeParameters.Count > 0) {
-        wr.WriteLine(DeclareTemplate(typeParameters));
-        moduleDeclarationsWr.WriteLine(DeclareTemplate(typeParameters));
+        classDeclWriter.WriteLine(DeclareTemplate(typeParameters));
+        classDefWriter.WriteLine(DeclareTemplate(typeParameters));
       }
 
-      moduleDeclarationsWr.WriteLine("class {0};", name);
-      var w = wr.NewBlock(string.Format("class {0}", name), ";");
-      //w = w.NewBlock("public:", null, BlockTargetWriter.BraceStyle.Nothing, BlockTargetWriter.BraceStyle.Nothing);
-      w.Write("public:\n");      
+      var methodDeclWriter = classDefWriter.NewBlock(string.Format("class {0}", name), ";");
+      var methodDefWriter = wr;
 
-      w.WriteLine("// Default constructor\n {0}() {{}}", name);
+
+      classDeclWriter.WriteLine("class {0};", name);
+      
+      methodDeclWriter.Write("public:\n");      
+
+      methodDeclWriter.WriteLine("// Default constructor\n {0}() {{}}", name);
       
       // Create the code for the specialization of get_default
       var fullName = moduleName + "::" + name;
@@ -202,18 +213,10 @@ namespace Microsoft.Dafny {
       getDefaultStr += String.Format("return shared_ptr<{0}{1} >();", fullName, TemplateMethod(typeParameters));
       getDefaultStr += "}\n};";
       this.classDefaults.Add(getDefaultStr);
+      
+      var fieldWriter = methodDeclWriter;
 
-      //w.Write("// Constructor\n");
-      //w2.Write(string.Format("{0}(", name));
-      //var fieldWriter = w.NewBlock(")");
-      var fieldWriter = w;
-      /*
-      if (fullPrintName != null) {
-        fieldWriter.WriteLine("this._tname = \"{0}\";", fullPrintName);
-      }
-      */
-      var methodWriter = w;
-      return new ClassWriter(name, this, w, wr, fieldWriter, wr);
+      return new ClassWriter(name, this, methodDeclWriter, methodDefWriter, fieldWriter, wr);
     }
 
     protected override bool SupportsProperties { get => false; }
@@ -368,8 +371,8 @@ namespace Microsoft.Dafny {
       string DtT_protected = IdProtect(DtT);
       
       // Forward declaration of the type
-      this.moduleDeclarationsWr.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
-      wr = this.dtDefnWr;
+      this.modDeclWr.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
+      wr = this.dtDefWr;
 
       if (IsRecursiveDatatype(dt)) { // Note that if this is true, there must be more than one constructor!
         // Add some forward declarations
@@ -614,11 +617,13 @@ namespace Microsoft.Dafny {
       } else {
         templateDecl = DeclareTemplate(sst.Var.Type.TypeArgs);
       }
-      wr.WriteLine("{2} using {1} = {0};", TypeName(sst.Var.Type, wr, sst.tok), IdName(sst), templateDecl);
       
+      this.modDeclWr.WriteLine("{2} using {1} = {0};", TypeName(sst.Var.Type, wr, sst.tok), IdName(sst), templateDecl);
+
       var className = "class_" + IdName(sst);
       var cw = CreateClass(sst.Module.CompileName, className, sst.TypeArgs, wr) as CppCompiler.ClassWriter;
       var w = cw.MethodDeclWriter;
+
       if (sst.WitnessKind == SubsetTypeDecl.WKind.Compiled) {
         var witness = new TargetWriter(w.IndentLevel, true);
         TrExpr(sst.Witness, witness, false);
