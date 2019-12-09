@@ -1,6 +1,15 @@
 newtype{:nativeType "byte"} uint8 = i:int | 0 <= i < 0x100
 newtype{:nativeType "uint"} uint32 = i:int | 0 <= i < 0x100000000
 
+class C {
+  var x:uint8;
+}
+
+method TestSeqOfClass() returns (s:seq<C>)
+{
+  return [];
+}
+
 type fixed = t:seq<uint32> | |t| == 2 witness [0,0]
 
 type buffer<T> = a:array?<T> | a == null || a.Length < 0x100000000
@@ -85,4 +94,5 @@ method Main() {
     ValueEquality();
     Contains();
     PrintTest();
+    var c := TestSeqOfClass();
 }
