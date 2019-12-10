@@ -39,6 +39,11 @@ method Callee(e:Example2) {
     }
 }
 
+method DtUpdate(e:Example1)
+{
+  var x := e.(u := 0);
+}
+
 method TestDestructor() {
     var e1 := Example1(22, false);
     var x := e1.u;

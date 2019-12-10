@@ -2010,8 +2010,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override TargetWriter CreateIIFE_ExprBody(Expression source, bool inLetExprBody, Type sourceType, Bpl.IToken sourceTok, Type resultType, Bpl.IToken resultTok, string bvName, TargetWriter wr) {
-      throw NotSupported("CreateIIFE_ExprBody-A", sourceTok);
-      var w = wr.NewExprBlock("function ({0})", bvName);
+      var w = wr.NewExprBlock("[&]({0} {1}) -> {2} ", TypeName(sourceType, wr, sourceTok), bvName, TypeName(resultType, wr, resultTok));
       w.Write("return ");
       w.BodySuffix = ";" + w.NewLine;
       TrParenExpr(source, wr, inLetExprBody);
@@ -2019,8 +2018,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override TargetWriter CreateIIFE_ExprBody(string source, Type sourceType, Bpl.IToken sourceTok, Type resultType, Bpl.IToken resultTok, string bvName, TargetWriter wr) {
-      throw NotSupported("CreateIIFE_ExprBody-B", sourceTok);
-      var w = wr.NewExprBlock("function ({0})", bvName);
+      var w = wr.NewExprBlock("[&]({0} {1}) -> {2} ", TypeName(sourceType, wr, sourceTok), bvName, TypeName(resultType, wr, resultTok));
       w.Write("return ");
       w.BodySuffix = ";" + w.NewLine;
       wr.Write("({0})", source);
