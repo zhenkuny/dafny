@@ -412,7 +412,7 @@ struct hash<DafnySequence<U>> {
     size_t operator()(const DafnySequence<U>& s) const {
         size_t seed = 0;
         for (size_t i = 0; i < s.seq.size(); i++) {      
-            hash_combine(seed, s.seq[i]);
+            hash_combine<U>(seed, s.seq[i]);
         }
         return seed; 
     }
@@ -544,7 +544,7 @@ struct hash<DafnySet<U>> {
     size_t operator()(const DafnySet<U>& s) const {
         size_t seed = 0;
         for (auto const& elt:s.set) {      
-            hash_combine(seed, elt);
+            hash_combine<U>(seed, elt);
         }
         return seed; 
     }
@@ -700,8 +700,8 @@ struct hash<DafnyMap<T,U>> {
     size_t operator()(const DafnyMap<T,U>& s) const {
         size_t seed = 0;
         for (auto const& kv:s.map) {      
-            hash_combine(seed, kv.first);
-            hash_combine(seed, kv.second);
+            hash_combine<T>(seed, kv.first);
+            hash_combine<U>(seed, kv.second);
         }
         return seed; 
     }

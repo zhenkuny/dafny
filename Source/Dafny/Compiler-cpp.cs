@@ -436,13 +436,13 @@ namespace Microsoft.Dafny {
         
         // Define a custom hasher
         hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
-        var fullName = dt.Module.CompileName + "::" + DtT_protected;
+        var fullName = dt.Module.CompileName + "::" + DtT_protected + TemplateMethod(dt.TypeArgs);
         var hwr = hashWr.NewBlock(string.Format("struct hash<{0}>", fullName), ";");
         var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
         owr.WriteLine("size_t seed = 0;");
         foreach (var arg in ctor.Formals) {
           if (!arg.IsGhost) {
-            owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.Name);
+            owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.CompileName);
           }
         }
         owr.WriteLine("return seed;");
@@ -493,18 +493,18 @@ namespace Microsoft.Dafny {
           
           // Define a custom hasher
           hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
-          var fullName = dt.Module.CompileName + "::" + structName;
-          var hwr = hashWr.NewBlock(string.Format("struct hash<{0}{1}>", fullName, TemplateMethod(dt.TypeArgs)), ";");
-          var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullName, TemplateMethod(dt.TypeArgs)));
+          var fullName = dt.Module.CompileName + "::" + structName + TemplateMethod(dt.TypeArgs);
+          var hwr = hashWr.NewBlock(string.Format("struct hash<{0}>", fullName), ";");
+          var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
           owr.WriteLine("size_t seed = 0;");
           int argCount = 0;
           foreach (var arg in ctor.Formals) {
             if (!arg.IsGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                 // Recursive destructor needs to use a pointer
-                owr.WriteLine("hash_combine<shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.Name);
+                owr.WriteLine("hash_combine<shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.CompileName);
               } else {
-                owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.Name);
+                owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.CompileName);
               }
               argCount++;
             }
