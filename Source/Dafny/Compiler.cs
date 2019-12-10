@@ -2651,7 +2651,7 @@ namespace Microsoft.Dafny {
         } else {
           string qual, compileName;
           if (s.Method.IsExtern(out qual, out compileName) && qual != null) {
-            wr.Write("{0}{1}{2}", qual, ModuleSeparator, compileName);
+            wr.Write("{0}{1}{2}{1}{3}", qual, ModuleSeparator, s.Method.EnclosingClass.CompileName, compileName);
           } else {
             wr.Write(TypeName_Companion(s.Receiver.Type, wr, s.Tok, s.Method));
             wr.Write("{0}{1}", ModuleSeparator, IdName(s.Method));
