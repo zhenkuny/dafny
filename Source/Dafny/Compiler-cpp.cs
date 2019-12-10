@@ -36,6 +36,8 @@ namespace Microsoft.Dafny {
     // Class declarations
     private TargetWriter classDeclsWr = null;
     private TargetWriter classDeclWr = null;
+    // Hash definitions
+    private TargetWriter hashWr = null;
 
     // Shadowing variables in Compiler.cs
     new string DafnySetClass = "DafnySet";
@@ -59,6 +61,7 @@ namespace Microsoft.Dafny {
       this.modDeclsWr = wr.ForkSection();
       this.dtDefsWr = wr.ForkSection();
       this.classDeclsWr = wr.ForkSection();
+      this.hashWr = wr.ForkSection();
     }
 
     protected override void EmitFooter(Program program, TargetWriter wr) {
@@ -128,7 +131,7 @@ namespace Microsoft.Dafny {
 
     private string DeclareTemplate(List<TypeParameter> typeArgs) {
       var targs = "";
-      if (typeArgs.Count > 0) {
+      if (typeArgs != null && typeArgs.Count > 0) {
         targs = String.Format("template <{0}>", TypeParameters(typeArgs));
       }
       return targs;
@@ -136,7 +139,7 @@ namespace Microsoft.Dafny {
 
     private string DeclareTemplate(List<Type> typeArgs) {
       var targs = "";
-      if (typeArgs.Count > 0) {
+      if (typeArgs != null && typeArgs.Count > 0) {
         targs = String.Format("template <{0}>", Util.Comma(typeArgs, t => "typename " + TypeName(t, null, null)));
       }
       return targs;
@@ -429,7 +432,20 @@ namespace Microsoft.Dafny {
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
-        wr.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));        
+        wr.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
+        
+        // Define a custom hasher
+        hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
+        var fullName = dt.Module.CompileName + "::" + DtT_protected;
+        var hwr = hashWr.NewBlock(string.Format("struct hash<{0}>", fullName), ";");
+        var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
+        owr.WriteLine("size_t seed = 0;");
+        foreach (var arg in ctor.Formals) {
+          if (!arg.IsGhost) {
+            owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.Name);
+          }
+        }
+        owr.WriteLine("return seed;");
       } else {
 
         // Create one struct for each constructor
@@ -474,6 +490,29 @@ namespace Microsoft.Dafny {
           
           // Overload the not-comparison operator
           wstruct.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", structName);
+          
+          // Define a custom hasher
+          hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
+          var fullName = dt.Module.CompileName + "::" + structName;
+          var hwr = hashWr.NewBlock(string.Format("struct hash<{0}{1}>", fullName, TemplateMethod(dt.TypeArgs)), ";");
+          var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullName, TemplateMethod(dt.TypeArgs)));
+          owr.WriteLine("size_t seed = 0;");
+          int argCount = 0;
+          foreach (var arg in ctor.Formals) {
+            if (!arg.IsGhost) {
+              if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
+                // Recursive destructor needs to use a pointer
+                owr.WriteLine("hash_combine<shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.Name);
+              } else {
+                owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.Name);
+              }
+              argCount++;
+            }
+          }
+          if (argCount == 0) {
+            owr.WriteLine("(void)x;");
+          }
+          owr.WriteLine("return seed;");
         }
 
         // Declare the overall tagged union
@@ -561,6 +600,28 @@ namespace Microsoft.Dafny {
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
+        // Define a custom hasher for the struct as a whole
+        hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
+        var fullStructName = dt.Module.CompileName + "::" + DtT_protected;
+        var hwr2 = hashWr.NewBlock(string.Format("struct hash<{0}{1}>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
+        var owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullStructName, TemplateMethod(dt.TypeArgs)));
+        owr2.WriteLine("size_t seed = 0;");
+        owr2.WriteLine("hash_combine<uint64>(seed, (uint64)x.tag);");
+        foreach (var ctor in dt.Ctors) {
+          var ifwr = owr2.NewBlock(string.Format("if (x.is_{0}())", ctor.CompileName));
+          ifwr.WriteLine("hash_combine<struct {0}::{1}_{2}{3}>(seed, x.v_{2});", dt.Module.CompileName, DtT_protected, ctor.CompileName, TemplateMethod(dt.TypeArgs));
+        }
+        owr2.WriteLine("return seed;");
+
+        if (IsRecursiveDatatype(dt)) {
+          // Emit a custom hasher for a pointer to this type
+          hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
+          hwr2 = hashWr.NewBlock(string.Format("struct hash<shared_ptr<{0}{1}>>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
+          owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const shared_ptr<{0}{1}>& x) const", fullStructName, TemplateMethod(dt.TypeArgs)));
+          owr2.WriteLine("struct hash<{0}{1}> hasher;", fullStructName, TemplateMethod(dt.TypeArgs));
+          owr2.WriteLine("std::size_t h = hasher(*x);");
+          owr2.WriteLine("return h;");
+        }
       }
     }
 

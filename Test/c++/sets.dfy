@@ -1,5 +1,18 @@
 newtype{:uint32iveType "uint"} uint32 = i:int | 0 <= i < 0x100000000
 
+datatype Example0 = Example0(u:uint32, b:bool)
+
+method Test0(e0:Example0)
+{
+  var s := { e0 };
+}
+
+datatype Example1 = Ex1a(u:uint32) |  Ex1b(b:bool)
+method Test1(t0:Example1)
+{
+  var t := { t0 };
+}
+
 method Test(name:string, b:bool) 
   requires b;
 {

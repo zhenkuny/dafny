@@ -59,7 +59,6 @@ method TestGenericDefault() {
   var x:Option<Example5<bool>>;
 }
 
-
 datatype Option<V> = None | Some(value:V)
 datatype Err<V> = Fail(err:bool) | Ok(value:V)
 
