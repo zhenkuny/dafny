@@ -335,6 +335,7 @@ struct DafnySequence {
     }
     
     uint64 length () { return seq.size(); }
+    uint64 size() { return length(); }
     
     DafnySequence<T> update(uint64 i, T t) {
         DafnySequence<T> ret(*this);

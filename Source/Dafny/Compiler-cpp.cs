@@ -2438,7 +2438,7 @@ namespace Microsoft.Dafny {
             } else if (u != null && u.Op == UnaryOpExpr.Opcode.Cardinality) {
               wr.Write("({0})(", GetNativeTypeName(toNative));
               TrParenExpr(u.E, wr, inLetExprBody);
-              wr.Write(".length())");
+              wr.Write(".size())");
             } else if (m != null && m.MemberName == "Length" && m.Obj.Type.IsArrayType) {
               // Optimize .Length to avoid intermediate BigInteger
               wr.Write("({0})(", GetNativeTypeName(toNative));
