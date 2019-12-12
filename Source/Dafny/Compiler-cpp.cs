@@ -817,6 +817,10 @@ namespace Microsoft.Dafny {
       wdr.Write(");\n");
 
       var w = wr.NewBlock(")", null, BlockTargetWriter.BraceStyle.Newline, BlockTargetWriter.BraceStyle.Newline);
+      if (m.IsTailRecursive) {
+        w.WriteLine("goto TAIL_CALL_START;"); // Avoid warning about unused label
+        w.WriteLine("TAIL_CALL_START: ;");  // Extra semicolon in case there are no additional statements after this
+      }
 
       if (targetReturnTypeReplacement != null) {
         var r = new TargetWriter(w.IndentLevel);
@@ -1052,7 +1056,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitJumpToTailCallStart(TargetWriter wr) {
-      //wr.WriteLine("continue TAIL_CALL_START;");
+      wr.WriteLine("goto TAIL_CALL_START;");
     }
 
     protected void Warn(string msg, Bpl.IToken tok) {
