@@ -256,7 +256,7 @@ inline ostream& operator<<(ostream& out, const Tuple5<T0, T1, T2, T3, T4>& val){
  *********************************************************/
 
  
-int64 EuclideanDivision_int64(int64 a, int64 b) {
+inline int64 EuclideanDivision_int64(int64 a, int64 b) {
     if (0 <= a) {
         if (0 <= b) {
             // +a +b: a/b
