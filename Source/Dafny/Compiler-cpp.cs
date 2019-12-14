@@ -1625,7 +1625,7 @@ namespace Microsoft.Dafny {
         var middle = wr.Fork();
         wr.Write(").mod(new BigNumber(2).exponentiatedBy({0}))", bvType.Width);
         return middle;
-      } else if (bvType.NativeType.Bitwidth != bvType.Width) {
+      } else if (bvType.NativeType.Bitwidth == bvType.Width) {
         // no truncation needed
         return wr;
       } else {
