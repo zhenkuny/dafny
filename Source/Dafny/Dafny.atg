@@ -860,7 +860,7 @@ TopDecl<. ModuleDefinition module, List<MemberDecl/*!*/> membersDefaultClass, bo
   | IteratorDecl<dmod, module, out iter>       (. module.TopLevelDecls.Add(iter); .)
   | TraitDecl<dmod, module, out trait>         (. module.TopLevelDecls.Add(trait); .)
   | ClassMemberDecl<dmod, membersDefaultClass, false, !DafnyOptions.O.AllowGlobals,
-                    !isTopLevel && DafnyOptions.O.IronDafny && isAbstract>
+                    !isTopLevel && isAbstract>
   ) .
 
 SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl submodule>
