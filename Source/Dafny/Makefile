@@ -13,8 +13,21 @@ COCO = $(COCO_EXE_DIR)\Coco.exe
 # nmake that.  --KRML
 all: Parser.cs
 
-Parser.cs: $(FRAME_DIR)\scanner.frame $(FRAME_DIR)\parser.frame Dafny.atg
-	$(COCO) Dafny.atg -namespace Microsoft.Dafny -frames $(FRAME_DIR)
+PARSER_PREREQS=$(FRAME_DIR)\Scanner.frame $(FRAME_DIR)\Parser.frame
+ifeq ($(shell uname),Linux)
+# Linux needs forward slashes. Maybe those are okay on windows too?
+E_PARSER_PREREQS=$(subst \,/,$(PARSER_PREREQS))
+# Linux needs to invoke the parser via mono.
+E_COCO=mono $(subst \,/,$(COCO))
+E_FRAME_DIR=$(subst \,/,$(FRAME_DIR))
+else
+# Windows
+E_PARSER_PREREQS=$(PARSER_PREREQS)
+E_COCO=$(COCO)
+E_FRAME_DIR=$(FRAME_DIR)
+endif
+Parser.cs: $(E_PARSER_PREREQS) Dafny.atg
+	$(E_COCO) Dafny.atg -namespace Microsoft.Dafny -frames $(E_FRAME_DIR)
 
 clean:
 	if exist Scanner.cs del Scanner.cs
