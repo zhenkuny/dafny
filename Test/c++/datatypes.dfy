@@ -93,6 +93,22 @@ method Comparison(x0:Example1, x1:Example1, y0:Example4, y1:Example4) {
   }
 }
 
+
+datatype Dup = Dup1(b:bool, x:uint32) | Dup2(x:uint32)
+
+method DupTest(d:Dup)
+{
+  var y := d.x;
+  print y;
+  print "\n";
+}
+
+method DupTestTest()
+{
+  DupTest(Dup1(false, 42));
+  DupTest(Dup2(330));
+}
+
 datatype IntList = 
   | Nil
   | Cons(hd:uint32, tl:IntList)
@@ -122,6 +138,7 @@ method Main() {
     Comparison(Example1(42, true), Example1(42, true), Ex4b, Ex4b);
     Comparison(Example1(42, false), Example1(42, true), Ex4a, Ex4a);
     Comparison(Example1(2,  false), Example1(42, false), Ex4a, Ex4b);
+    DupTestTest();
 
     var len := IntListLen(Cons(15, Cons(18, Cons(330, Nil))));
     print len;

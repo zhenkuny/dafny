@@ -597,6 +597,40 @@ namespace Microsoft.Dafny {
         }
         ws.WriteLine(";\n}");
         
+        // Create destructors
+        foreach (var ctor in dt.Ctors) {
+          foreach (var dtor in ctor.Destructors) {
+            if (dtor.EnclosingCtors[0] == ctor) {
+              var arg = dtor.CorrespondingFormals[0];
+              if (!arg.IsGhost && arg.HasName) {
+                var returnType = TypeName(arg.Type, wr, arg.tok);
+                if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
+                  // This is a recursive destuctor, so return a pointer
+                  returnType = String.Format("shared_ptr<{0}>", returnType);
+                }
+                using (var wDtor = ws.NewNamedBlock("{0} dtor_{1}()", returnType,
+                  arg.CompileName)) {
+                  if (dt.IsRecordType) {
+                    wDtor.WriteLine("return this.{0};", IdName(arg));
+                  } else {
+                    var n = dtor.EnclosingCtors.Count;
+                    for (int i = 0; i < n - 1; i++) {
+                      var ctor_i = dtor.EnclosingCtors[i];
+                      Contract.Assert(arg.CompileName == dtor.CorrespondingFormals[i].CompileName);
+                      wDtor.WriteLine("if (is_{0}()) {{ return v_{0}.{1}; }}", 
+                        ctor_i.CompileName, IdName(arg));
+                    }
+
+                    Contract.Assert(arg.CompileName == dtor.CorrespondingFormals[n - 1].CompileName);
+                    wDtor.WriteLine("return v_{0}.{1}; ", 
+                      dtor.EnclosingCtors[n - 1].CompileName, IdName(arg));
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
@@ -1919,7 +1953,7 @@ namespace Microsoft.Dafny {
               // This a recursively defined datatype; need to dereference the pointer
               preSource.Write("*");
             }
-            wr.Write(".v_{0}.{1}", dtor2.EnclosingCtors[0].CompileName, sf.CompileName);
+            wr.Write(".dtor_{0}()", sf.CompileName);
           } else {
             wr.Write(".{0}", sf.CompileName);
           }
