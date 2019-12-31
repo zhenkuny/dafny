@@ -31,7 +31,8 @@ $(EXECS): % : %.cpp $(DAFNY_RUNTIME_CPP)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
 test: $(EXECS)
-	for e in $(EXECS); do echo; echo "*******************"; echo "Running $$e"; echo "*******************"; echo; ./$$e; done | tee $(TEST_LOG)
+	python run_cpp_tests.py $(EXECS)
+#for e in $(EXECS); do echo; echo "*******************"; echo "Running $$e"; echo "*******************"; echo; ./$$e; done | tee $(TEST_LOG)
 #	grep unexpected $(TEST_LOG)
 #	if [ $$? -ne 0 ]; then
 #	  echo "FAILED A TEST"
