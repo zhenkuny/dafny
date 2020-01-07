@@ -2036,18 +2036,43 @@ namespace Microsoft.Dafny {
         } else {
           typeName = TypeName(source.Type.TypeArgs[0], wr, source.tok, null, false);
         }
-        wr.Write("DafnySequence<{0}>::SeqFromArray", typeName);
-        //var arr = source.Type.AsArrayType;
-        // wr.Write("DafnySequence<{0}>::SeqFromArray", TypeName(arr., wr, source.tok, null, true));
-        //wr.Write("DafnySequence<{0}>::SeqFromArray", IdName(source.GetType().AsArrayType.TypeArgs[0]));
-      }
-      TrParenExpr(source, wr, inLetExprBody);
+        if (lo == null) {
+          if (hi == null) {
+            wr.Write("DafnySequence<{0}>::SeqFromArray", typeName);
+            TrParenExpr(source, wr, inLetExprBody);
+          } else {
+            wr.Write("DafnySequence<{0}>::SeqFromArrayPrefix(", typeName);
+            TrParenExpr(source, wr, inLetExprBody);
+            wr.Write(",");
+            TrParenExpr(hi, wr, inLetExprBody);
+            wr.Write(")");
+          }
+        } else {
+          if (hi == null) {
+            wr.Write("DafnySequence<{0}>::SeqFromArraySuffix(", typeName);
+            TrParenExpr(source, wr, inLetExprBody);
+            wr.Write(",");
+            TrParenExpr(lo, wr, inLetExprBody);
+            wr.Write(")");
+          } else {
+            wr.Write("DafnySequence<{0}>::SeqFromArraySlice(", typeName);
+            TrParenExpr(source, wr, inLetExprBody);
+            wr.Write(",");
+            TrParenExpr(lo, wr, inLetExprBody);
+            wr.Write(",");
+            TrParenExpr(hi, wr, inLetExprBody);
+            wr.Write(")");
+          }
+        }
+      } else {
+        TrParenExpr(source, wr, inLetExprBody);
 
-      if (hi != null) {
-        TrParenExpr(".take", hi, wr, inLetExprBody);
-      }
-      if (lo != null) {
-        TrParenExpr(".drop", lo, wr, inLetExprBody);
+        if (hi != null) {
+          TrParenExpr(".take", hi, wr, inLetExprBody);
+        }
+        if (lo != null) {
+          TrParenExpr(".drop", lo, wr, inLetExprBody);
+        }
       }
     }
 

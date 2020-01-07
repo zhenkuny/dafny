@@ -301,6 +301,11 @@ struct DafnySequence {
         vector<T> a_seq(*arr);
         seq = a_seq;
     }
+
+    DafnySequence(shared_ptr<vector<T>> arr, uint64 lo, uint64 hi) {
+        seq.resize(hi - lo);
+        std::copy(arr->begin() + lo, arr->begin() + hi, seq.begin());
+    }
     
     DafnySequence(initializer_list<T> il) {
         vector<T> a_seq(il);
@@ -309,6 +314,21 @@ struct DafnySequence {
     
     static DafnySequence<T> SeqFromArray(shared_ptr<vector<T>> arr) {
         DafnySequence<T> ret(arr);         
+        return ret;
+    }
+
+    static DafnySequence<T> SeqFromArrayPrefix(shared_ptr<vector<T>> arr, uint64 hi) {
+        DafnySequence<T> ret(arr, 0, hi);
+        return ret;
+    }
+
+    static DafnySequence<T> SeqFromArraySuffix(shared_ptr<vector<T>> arr, uint64 lo) {
+        DafnySequence<T> ret(arr, lo, arr->size());
+        return ret;
+    }
+
+    static DafnySequence<T> SeqFromArraySlice(shared_ptr<vector<T>> arr, uint64 lo, uint64 hi) {
+        DafnySequence<T> ret(arr, lo, hi);
         return ret;
     }
 
@@ -334,8 +354,8 @@ struct DafnySequence {
         return seq[i];
     }
     
-    uint64 length () { return seq.size(); }
-    uint64 size() { return length(); }
+    uint64 length () const { return seq.size(); }
+    uint64 size() const { return length(); }
     
     DafnySequence<T> update(uint64 i, T t) {
         DafnySequence<T> ret(*this);
@@ -382,6 +402,19 @@ struct DafnySequence {
     
     vector<T> seq;
 };
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const DafnySequence<T>& s)
+{
+  os << "[";
+  for (size_t i = 0; i < s.size(); i++) {
+    os << s.seq[i];
+    if (i != s.size() - 1) {
+      os << ", ";
+    }
+  }
+  return os << "]";
+}
 
 template <typename U>
 struct get_default<DafnySequence<U> > {
