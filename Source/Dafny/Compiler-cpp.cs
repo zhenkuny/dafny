@@ -30,9 +30,9 @@ namespace Microsoft.Dafny {
     // Forward declarations of class and struct names
     private TargetWriter modDeclsWr = null;
     private TargetWriter modDeclWr = null;
-    // Datatype definitions
-    private TargetWriter dtDefsWr = null;
-    private TargetWriter dtDefWr = null;
+    // Datatype declarations
+    private TargetWriter dtDeclsWr = null;
+    private TargetWriter dtDeclWr = null;
     // Class declarations
     private TargetWriter classDeclsWr = null;
     private TargetWriter classDeclWr = null;
@@ -59,7 +59,7 @@ namespace Microsoft.Dafny {
       //ReadRuntimeSystem("DafnyRuntime.h", wr);
 
       this.modDeclsWr = wr.ForkSection();
-      this.dtDefsWr = wr.ForkSection();
+      this.dtDeclsWr = wr.ForkSection();
       this.classDeclsWr = wr.ForkSection();
       this.hashWr = wr.ForkSection();
     }
@@ -96,7 +96,7 @@ namespace Microsoft.Dafny {
     protected override TargetWriter CreateModule(string moduleName, bool isDefault, bool isExtern, string/*?*/ libraryName, TargetWriter wr) {
       var s = string.Format("namespace {0} ", IdProtect(moduleName));
       this.modDeclWr = this.modDeclsWr.NewBigBlock(s, "// end of " + s + " declarations");
-      this.dtDefWr = this.dtDefsWr.NewBigBlock(s, "// end of " + s + " datatype definitions");
+      this.dtDeclWr = this.dtDeclsWr.NewBigBlock(s, "// end of " + s + " datatype declarations");
       this.classDeclWr = this.classDeclsWr.NewBigBlock(s, "// end of " + s + " class declarations");
       return wr.NewBigBlock(s, "// end of " + s);
 /* 
@@ -324,7 +324,7 @@ namespace Microsoft.Dafny {
       return false;
     }
 
-    protected override void DeclareDatatype(DatatypeDecl dt, TargetWriter wr) {
+    protected override void DeclareDatatype(DatatypeDecl dt, TargetWriter writer) {
       // Given:
       // datatype Example1 = Example1(u:uint32, b:bool)
       // datatype Example2 = Ex2a(u:uint32) | Ex2b(b:bool)
@@ -375,25 +375,26 @@ namespace Microsoft.Dafny {
       
       // Forward declaration of the type
       this.modDeclWr.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
-      wr = this.dtDefWr;
+      var wdecl = this.dtDeclWr;
+      var wdef = writer;
 
       if (IsRecursiveDatatype(dt)) { // Note that if this is true, there must be more than one constructor!
         // Add some forward declarations
-        wr.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
-        wr.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, TemplateMethod(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
+        wdecl.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
+        wdecl.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, TemplateMethod(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
       }
 
       // Optimize a not-uncommon case
       if (dt.Ctors.Count == 1) {
         var ctor = dt.Ctors[0];
-        var ws = wr.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
+        var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
         
         // Declare the struct members
         var i = 0;
         var argNames = new List<string>();
         foreach (Formal arg in ctor.Formals) {
           if (!arg.IsGhost) {
-            ws.WriteLine("{0} {1};", TypeName(arg.Type, wr, arg.tok), FormalName(arg, i));
+            ws.WriteLine("{0} {1};", TypeName(arg.Type, wdecl, arg.tok), FormalName(arg, i));
             argNames.Add(FormalName(arg, i));
             i++;
           }
@@ -414,7 +415,8 @@ namespace Microsoft.Dafny {
         }
 
         // Create a constructor with no arguments
-        var wc = ws.NewNamedBlock("{0}()", DtT_protected);
+        ws.WriteLine("{0}();", DtT_protected);
+        var wc = wdef.NewNamedBlock("{1}\n{0}{2}::{0}()", DtT_protected, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs));
         foreach (var arg in ctor.Formals) {
           if (!arg.IsGhost) {
             wc.WriteLine("{0} = {1};", arg.CompileName, DefaultValue(arg.Type, wc, arg.tok));
@@ -432,7 +434,7 @@ namespace Microsoft.Dafny {
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
-        wr.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
+        wdecl.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
         
         // Define a custom hasher
         hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
@@ -451,15 +453,15 @@ namespace Microsoft.Dafny {
         // Create one struct for each constructor
         foreach (var ctor in dt.Ctors) {
           string structName = string.Format("{0}_{1}", DtT_protected, ctor.CompileName);
-          var wstruct = wr.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), structName), ";");
+          var wstruct = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), structName), ";");
           // Declare the struct members
           var i = 0;
           foreach (Formal arg in ctor.Formals) {
             if (!arg.IsGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive declaration needs to use a pointer
-                wstruct.WriteLine("shared_ptr<{0}> {1};", TypeName(arg.Type, wr, arg.tok), FormalName(arg, i));
+                wstruct.WriteLine("shared_ptr<{0}> {1};", TypeName(arg.Type, wdecl, arg.tok), FormalName(arg, i));
               } else {
-                wstruct.WriteLine("{0} {1};", TypeName(arg.Type, wr, arg.tok), FormalName(arg, i));
+                wstruct.WriteLine("{0} {1};", TypeName(arg.Type, wdecl, arg.tok), FormalName(arg, i));
               }
               i++;
             }
@@ -516,7 +518,7 @@ namespace Microsoft.Dafny {
         }
 
         // Declare the overall tagged union
-        var ws = wr.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
+        var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
         ws.Write("enum {");
         ws.Write(Util.Comma(dt.Ctors, nm => String.Format(" TAG_{0}", nm.CompileName)));
         ws.Write("} tag;\n");
@@ -551,7 +553,8 @@ namespace Microsoft.Dafny {
         }
 
         // Declare a default constructor 
-        using (var wd = ws.NewNamedBlock(String.Format("{0}()", DtT_protected))) {
+        ws.WriteLine("{0}();", DtT_protected);
+        using (var wd = wdef.NewNamedBlock(String.Format("{1}\n{0}{2}::{0}()", DtT_protected, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)))) {
           var default_ctor = dt.Ctors[0];   // Arbitrarily choose the first one
           wd.WriteLine("tag = {0}::TAG_{1};", DtT_protected, default_ctor.CompileName);
           foreach (Formal arg in default_ctor.Formals)
@@ -586,7 +589,8 @@ namespace Microsoft.Dafny {
         // Declare type queries, both as members and general-purpose functions
         foreach (var ctor in dt.Ctors) {
           ws.WriteLine("bool is_{0}() const {{ return tag == {1}{2}::TAG_{0}; }}", ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
-          wr.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ return d.tag == {2}{3}::TAG_{1}; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));  
+          wdecl.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d);", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
+          wdef.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ return d.tag == {2}{3}::TAG_{1}; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));  
         }
         
         // Overload the comparison operator
@@ -603,7 +607,7 @@ namespace Microsoft.Dafny {
             if (dtor.EnclosingCtors[0] == ctor) {
               var arg = dtor.CorrespondingFormals[0];
               if (!arg.IsGhost && arg.HasName) {
-                var returnType = TypeName(arg.Type, wr, arg.tok);
+                var returnType = TypeName(arg.Type, ws, arg.tok);
                 if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                   // This is a recursive destuctor, so return a pointer
                   returnType = String.Format("shared_ptr<{0}>", returnType);
