@@ -434,7 +434,7 @@ namespace Microsoft.Dafny {
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
-        wdecl.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
+        wdecl.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
         
         // Define a custom hasher
         hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
@@ -590,7 +590,7 @@ namespace Microsoft.Dafny {
         foreach (var ctor in dt.Ctors) {
           ws.WriteLine("bool is_{0}() const {{ return tag == {1}{2}::TAG_{0}; }}", ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
           wdecl.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d);", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
-          wdef.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d) {{ return d.tag == {2}{3}::TAG_{1}; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));  
+          wdef.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d) {{ return d.tag == {2}{3}::TAG_{1}; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));  
         }
         
         // Overload the comparison operator
