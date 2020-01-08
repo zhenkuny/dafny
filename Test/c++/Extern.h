@@ -19,10 +19,10 @@ namespace Extern {
     public: 
 
     template <typename T>
-    static shared_ptr<vector<T>> newArrayFill(uint64 size, T v) {
-      shared_ptr<vector<T>> ret = make_shared<vector<T>>(size);
+    static DafnyArray<T> newArrayFill(uint64 size, T v) {
+      DafnyArray<T> ret = DafnyArray<T>::New(size);
       for (uint64 i = 0; i < size; i++) {
-        (*ret)[i] = v;
+        ret.at(i) = v;
       }
       return ret;
     }

@@ -100,14 +100,6 @@ struct get_default<unsigned long long> {
 };
 
 template<typename U>
-struct get_default<vector<U>> {
-  static vector<U> call() {
-    vector<U> ret;
-    return ret;
-  }
-};
-
-template<typename U>
 struct get_default<shared_ptr<U>> {
   static shared_ptr<U> call() {
     return make_shared<U>(get_default<U>::call());
@@ -277,12 +269,45 @@ inline int64 EuclideanDivision_int64(int64 a, int64 b) {
     }    
 }
 
+/*********************************************************
+ *  ARRAYS
+ *********************************************************/
+
 template <typename T>
-T* global_empty_ptr = new T[0];
+struct DafnyArray {
+  shared_ptr<vector<T>> vec;
+
+  DafnyArray() { }
+  DafnyArray(size_t len) {
+    vec = make_shared<vector<T>>(len);
+  }
+
+  static DafnyArray<T> Null() { return DafnyArray<T>(); }
+  static DafnyArray<T> New(size_t len) { return DafnyArray<T>(len); }
+
+  size_t size() const { return vec->size(); }
+  T& at(uint64 idx) const { return (*vec)[idx]; }
+
+  bool operator==(DafnyArray<T> const& other) const {
+    return vec == other.vec;
+  }
+};
+
+template<typename U>
+struct get_default<DafnyArray<U>> {
+  static DafnyArray<U> call() {
+    DafnyArray<U> ret;
+    return ret;
+  }
+};
 
 /*********************************************************
  *  SEQUENCES                                            *
  *********************************************************/
+
+template <typename T>
+T* global_empty_ptr = new T[0];
+
 template <class T>
 struct DafnySequence {
     shared_ptr<T> sptr;
@@ -324,18 +349,18 @@ struct DafnySequence {
       start[i] = t;
     }
 
-    explicit DafnySequence(shared_ptr<vector<T>> arr) {
-      len = arr->size();
+    explicit DafnySequence(DafnyArray<T> arr) {
+      len = arr.size();
       sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
-      std::copy(arr->begin(), arr->end(), start);
+      std::copy(arr.vec->begin(), arr.vec->end(), start);
     }
 
-    DafnySequence(shared_ptr<vector<T>> arr, uint64 lo, uint64 hi) {
+    DafnySequence(DafnyArray<T> arr, uint64 lo, uint64 hi) {
       len = hi - lo;
       sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
-      std::copy(arr->begin() + lo, arr->begin() + hi, start);
+      std::copy(arr.vec->begin() + lo, arr.vec->begin() + hi, start);
     }
 
     DafnySequence(initializer_list<T> il) {
@@ -350,22 +375,22 @@ struct DafnySequence {
       }
     }
 
-    static DafnySequence<T> SeqFromArray(shared_ptr<vector<T>> arr) {
+    static DafnySequence<T> SeqFromArray(DafnyArray<T> arr) {
         DafnySequence<T> ret(arr);
         return ret;
     }
 
-    static DafnySequence<T> SeqFromArrayPrefix(shared_ptr<vector<T>> arr, uint64 hi) {
+    static DafnySequence<T> SeqFromArrayPrefix(DafnyArray<T> arr, uint64 hi) {
         DafnySequence<T> ret(arr, 0, hi);
         return ret;
     }
 
-    static DafnySequence<T> SeqFromArraySuffix(shared_ptr<vector<T>> arr, uint64 lo) {
-        DafnySequence<T> ret(arr, lo, arr->size());
+    static DafnySequence<T> SeqFromArraySuffix(DafnyArray<T> arr, uint64 lo) {
+        DafnySequence<T> ret(arr, lo, arr.size());
         return ret;
     }
 
-    static DafnySequence<T> SeqFromArraySlice(shared_ptr<vector<T>> arr, uint64 lo, uint64 hi) {
+    static DafnySequence<T> SeqFromArraySlice(DafnyArray<T> arr, uint64 lo, uint64 hi) {
         DafnySequence<T> ret(arr, lo, hi);
         return ret;
     }
