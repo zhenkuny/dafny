@@ -1448,7 +1448,7 @@ namespace Microsoft.Dafny {
       return "auto " + target;
     }
 
-    protected override void EmitNull(Type type, TargetWriter wr) {
+    protected void EmitNullText(Type type, TextWriter wr) {
       var xType = type.NormalizeExpand();
       if (xType.IsArrayType) {
         ArrayClassDecl at = xType.AsArrayType;
@@ -1462,6 +1462,10 @@ namespace Microsoft.Dafny {
       } else {
         wr.Write("nullptr");
       }
+    }
+
+    protected override void EmitNull(Type type, TargetWriter wr) {
+      EmitNullText(type, wr);
     }
 
     // ----- Statements -------------------------------------------------------------
@@ -1586,19 +1590,7 @@ namespace Microsoft.Dafny {
       if (e is StaticReceiverExpr) {
         wr.Write(TypeName(e.Type, wr, e.tok));
       } else if (e.Value == null) {
-        var xType = e.Type.NormalizeExpand();
-        if (xType.IsArrayType) {
-          ArrayClassDecl at = xType.AsArrayType;
-          Contract.Assert(at != null);  // follows from xType.IsArrayType
-          Type elType = UserDefinedType.ArrayElementType(xType);
-          if (at.Dims == 1) {
-            wr.Write("DafnyArray<{0}>::Null()", TypeName(elType, wr, null));
-          } else {
-            throw NotSupported("Multi-dimensional arrays");
-          }
-        } else {
-          wr.Write("nullptr");
-        }
+        EmitNullText(e.Type, wr);
       } else if (e.Value is bool) {
         wr.Write((bool)e.Value ? "true" : "false");
       } else if (e is CharLiteralExpr) {

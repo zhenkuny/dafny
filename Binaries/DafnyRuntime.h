@@ -291,6 +291,9 @@ struct DafnyArray {
   bool operator==(DafnyArray<T> const& other) const {
     return vec == other.vec;
   }
+
+  typename vector<T>::iterator begin() { return vec->begin(); }
+  typename vector<T>::iterator end() { return vec->end(); }
 };
 
 template<typename U>
@@ -353,14 +356,14 @@ struct DafnySequence {
       len = arr.size();
       sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
-      std::copy(arr.vec->begin(), arr.vec->end(), start);
+      std::copy(arr.begin(), arr.end(), start);
     }
 
     DafnySequence(DafnyArray<T> arr, uint64 lo, uint64 hi) {
       len = hi - lo;
       sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
-      std::copy(arr.vec->begin() + lo, arr.vec->begin() + hi, start);
+      std::copy(arr.begin() + lo, arr.begin() + hi, start);
     }
 
     DafnySequence(initializer_list<T> il) {
