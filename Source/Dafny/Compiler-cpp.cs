@@ -1299,7 +1299,17 @@ namespace Microsoft.Dafny {
         if (Attributes.ContainsBool(cl.Attributes, "handle", ref isHandle) && isHandle) {
           return "0";
         } else {
-          return "nullptr";
+          if (cl is ArrayClassDecl) {
+            var arrayClass = (ArrayClassDecl)cl;
+            Type elType = UserDefinedType.ArrayElementType(xType);
+            if (arrayClass.Dims == 1) {
+              return string.Format("DafnyArray<{0}>::Null()", TypeName(elType, wr, tok));
+            } else {
+              throw NotSupported("Multi-dimensional arrays");
+            }
+          } else {
+            return "nullptr_2";
+          }
         }
       } else if (cl is DatatypeDecl) {
         var dt = (DatatypeDecl)cl;
