@@ -1308,7 +1308,7 @@ namespace Microsoft.Dafny {
               throw NotSupported("Multi-dimensional arrays");
             }
           } else {
-            return "nullptr_2";
+            return "nullptr";
           }
         }
       } else if (cl is DatatypeDecl) {
