@@ -60,6 +60,8 @@ method PrintArray<A>(a:array?<A>, len:uint32)
   }
 }
 
+datatype ArrayDatatype = AD(ar: array<uint32>)
+
 method Main() {
   var a := new uint32[23];
   var i := 0;
@@ -92,6 +94,14 @@ method Main() {
   print "Non-Null array:\n";
   var a2 := returnANonNullArray();
   PrintArray<uint32>(a2, 5);
+
+  print "Array in datatype:\n";
+  var someAr := new uint32[3];
+  someAr[0] := 1;
+  someAr[0] := 3;
+  someAr[0] := 9;
+  var ad := AD(someAr);
+  PrintArray<uint32>(ad.ar, 3);
 }
 
 

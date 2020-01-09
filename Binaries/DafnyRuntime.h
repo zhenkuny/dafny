@@ -520,6 +520,13 @@ struct hash<DafnySequence<U>> {
     }
 };
 
+template <typename U>
+struct hash<DafnyArray<U>> {
+    size_t operator()(const DafnyArray<U>& s) const {
+        return std::hash<shared_ptr<vector<U>>>()(s.vec);
+    }
+};
+
 /*********************************************************
  *  SETS                                                 *
  *********************************************************/
