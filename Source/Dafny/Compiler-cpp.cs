@@ -1281,7 +1281,7 @@ namespace Microsoft.Dafny {
             var arrayClass = (ArrayClassDecl)((NonNullTypeDecl)td).Class;
             Type elType = UserDefinedType.ArrayElementType(xType);
             if (arrayClass.Dims == 1) {
-              return string.Format("DafnyArray<{0}>::Null()", TypeName(udt, wr, tok));
+              return string.Format("DafnyArray<{0}>::Null()", TypeName(elType, wr, tok));
             } else {
               return string.Format("_dafny.newArray(nullptr, {0})", Util.Comma(arrayClass.Dims, _ => "0"));
             }

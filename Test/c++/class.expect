@@ -6,6 +6,8 @@
 0 18 9 70
 0 18 9 70
 0 18 9 70
+stuffWithAr
+5
 EqualityReflexive: This is expected
 ClassAndPtrDiffer: This is expected
 DeepEquality: This is expected
