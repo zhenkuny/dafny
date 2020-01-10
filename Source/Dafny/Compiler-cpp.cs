@@ -1537,13 +1537,28 @@ namespace Microsoft.Dafny {
     protected override void EmitNew(Type type, Bpl.IToken tok, CallStmt/*?*/ initCall, TargetWriter wr) {
       var cl = (type.NormalizeExpand() as UserDefinedType)?.ResolvedClass;
       if (cl != null && cl.Name == "object") {
-        wr.Write("_dafny.NewObject()");
+        //wr.Write("_dafny.NewObject()");
+        NotSupported("Tried to emit new generic object, which C++ doesn't do", tok);
       } else {
+        var ctor = initCall == null ? null : (Constructor)initCall.Method;  // correctness of cast follows from precondition of "EmitNew"
         //string targs = type.TypeArgs.Count > 0
         //  ? String.Format(" <{0}> ", Util.Comma(type.TypeArgs, tp => TypeName(tp, wr, tok))) : "";
         //wr.Write("std::make_shared<{0}{1}> (", TypeName(type, wr, tok, null, true), targs);
         wr.Write("std::make_shared<{0}> (", TypeName(type, wr, tok, null, true));
         EmitRuntimeTypeDescriptorsActuals(type.TypeArgs, cl.TypeArgs, tok, false, wr);
+        string q, n;
+        if (ctor != null && ctor.IsExtern(out q, out n)) {
+          // the arguments of any external constructor are placed here
+          string sep = "";
+          for (int i = 0; i < ctor.Ins.Count; i++) {
+            Formal p = ctor.Ins[i];
+            if (!p.IsGhost) {
+              wr.Write(sep);
+              TrExpr(initCall.Args[i], wr, false);
+              sep = ", ";
+            }
+          }
+        }
         wr.Write(")");
       }
     }

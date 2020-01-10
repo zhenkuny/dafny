@@ -33,6 +33,11 @@ namespace Extern {
     bool my_method0(uint64 a) { (void)a; return true; }
     bool my_method1(uint64 c) { (void)c; return false; }
   };
+  
+  class ExternClass2 {
+    public:
+      ExternClass2(uint64 x) { (void)x; }
+  };
 /*
 class __default {
 

@@ -11,6 +11,10 @@ module {:extern "Extern"} Extern {
     method {:extern "Extern", "my_method0"} my_method0(a:uint64) returns (b:bool)
     method {:extern "Extern", "my_method1"} my_method1(c:uint64) returns (d:bool)
   }
+  
+  class {:extern} ExternClass2 {
+    constructor {:extern "Extern", "ExternClass2"}(x:uint64)
+  }
 }
 
 module TestMod {
@@ -34,6 +38,10 @@ module TestMod {
   method TestClass(e:ExternClass) {
     var x := e.my_method0(0);
     var y := e.my_method1(1);
+  }
+
+  method TestExternClass2() {
+    var x := new ExternClass2(42);
   }
 
   method Main() {
