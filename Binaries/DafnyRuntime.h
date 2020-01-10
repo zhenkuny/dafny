@@ -275,25 +275,26 @@ inline int64 EuclideanDivision_int64(int64 a, int64 b) {
 
 template <typename T>
 struct DafnyArray {
-  shared_ptr<vector<T>> vec;
+  shared_ptr<T> sptr;
+  size_t len;
 
   DafnyArray() { }
-  DafnyArray(size_t len) {
-    vec = make_shared<vector<T>>(len);
+  DafnyArray(size_t len) : len(len) {
+    sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
   }
 
   static DafnyArray<T> Null() { return DafnyArray<T>(); }
   static DafnyArray<T> New(size_t len) { return DafnyArray<T>(len); }
 
-  size_t size() const { return vec->size(); }
-  T& at(uint64 idx) const { return (*vec)[idx]; }
+  size_t size() const { return len; }
+  T& at(uint64 idx) const { return *(sptr.get() + idx); }
 
   bool operator==(DafnyArray<T> const& other) const {
-    return vec == other.vec;
+    return sptr == other.sptr;
   }
 
-  typename vector<T>::iterator begin() { return vec->begin(); }
-  typename vector<T>::iterator end() { return vec->end(); }
+  T* begin() const { return sptr.get(); }
+  T* end() const { return sptr.get() + len; }
 };
 
 template<typename U>
@@ -522,7 +523,11 @@ struct std::hash<DafnySequence<U>> {
 template <typename U>
 struct std::hash<DafnyArray<U>> {
     size_t operator()(const DafnyArray<U>& s) const {
-        return std::hash<shared_ptr<vector<U>>>()(s.vec);
+        size_t seed = 0;
+        for (size_t i = 0; i < s.size(); i++) {      
+            hash_combine<U>(seed, s.at(i));
+        }
+        return seed; 
     }
 };
 
