@@ -291,6 +291,8 @@ struct DafnyArray {
   bool operator==(DafnyArray<T> const& other) const {
     return vec == other.vec;
   }
+  
+  T* ptr() const { return vec->data(); }
 
   typename vector<T>::iterator begin() { return vec->begin(); }
   typename vector<T>::iterator end() { return vec->end(); }
