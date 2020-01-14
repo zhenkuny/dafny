@@ -38,6 +38,8 @@ namespace Microsoft.Dafny {
     private TargetWriter classDeclWr = null;
     // Hash definitions
     private TargetWriter hashWr = null;
+    // Defaults
+    private TargetWriter defaultWr = null;
 
     // Shadowing variables in Compiler.cs
     new string DafnySetClass = "DafnySet";
@@ -55,13 +57,22 @@ namespace Microsoft.Dafny {
       foreach (var header in this.headers) {
         wr.WriteLine("#include \"{0}\"", header);
       }
+
+      var filenameNoExtension = program.Name.Substring(0, program.Name.Length - 4);
+      var headerFileName = String.Format("{0}.h", filenameNoExtension);
+      wr.WriteLine("#include \"{0}\"", headerFileName);
+      
+      var headerFileWr = wr.NewFile(headerFileName);
+      headerFileWr.WriteLine("// Dafny program {0} compiled into Cpp", program.Name);
+      headerFileWr.WriteLine("#include \"DafnyRuntime.h\"");
       // TODO: Include appropriate .h file here
       //ReadRuntimeSystem("DafnyRuntime.h", wr);
 
-      this.modDeclsWr = wr.ForkSection();
-      this.dtDeclsWr = wr.ForkSection();
-      this.classDeclsWr = wr.ForkSection();
-      this.hashWr = wr.ForkSection();
+      this.modDeclsWr = headerFileWr.ForkSection();
+      this.dtDeclsWr = headerFileWr.ForkSection();
+      this.classDeclsWr = headerFileWr.ForkSection();
+      this.hashWr = headerFileWr.ForkSection();
+      this.defaultWr = headerFileWr.ForkSection();
     }
 
     protected override void EmitFooter(Program program, TargetWriter wr) {
