@@ -37,6 +37,67 @@ inline void hash_combine(std::size_t& seed, T const& v)
     seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
+template <typename T>
+struct dafny_ptr {
+  T* ptr;
+
+  static void inc(T* ptr) {
+    if (ptr) {
+      ptr->_refcount++;
+    }
+  }
+  static void dec(T* ptr) {
+    if (ptr) {
+      ptr->_refcount--;
+      if (ptr->_refcount == 0) {
+        delete ptr;
+      }
+    }
+  }
+
+  dafny_ptr() : ptr(NULL) { }
+  dafny_ptr(const dafny_ptr<T>& other) {
+    ptr = other.ptr;
+    inc(ptr);
+  }
+  dafny_ptr(dafny_ptr<T>&& other) {
+    ptr = other.ptr;
+  }
+  dafny_ptr<T>& operator=(dafny_ptr<T> const& other) {
+    inc(other.ptr);
+    dec(ptr);
+    ptr = other.ptr;
+    return *this;
+  }
+  ~dafny_ptr() {
+    dec(ptr);
+  }
+
+  T* operator->() const {
+    return ptr;
+  }
+
+  bool operator==(dafny_ptr<T> const& other) const {
+    return ptr == other.ptr;
+  }
+  bool operator!=(dafny_ptr<T> const& other) const {
+    return ptr != other.ptr;
+  }
+
+  template <typename... Args>
+  static dafny_ptr<T> New(Args&&... args) {
+    dafny_ptr<T> res;
+    res.ptr = new T(std::forward(args)...);
+    res.ptr->_refcount = 1;
+    return res;
+  }
+
+  static dafny_ptr<T> Null() {
+    dafny_ptr<T> res;
+    return res;
+  }
+};
+
 // From https://stackoverflow.com/a/7185723
 class IntegerRange {
  public:
@@ -528,6 +589,13 @@ struct std::hash<DafnyArray<U>> {
             hash_combine<U>(seed, s.at(i));
         }
         return seed; 
+    }
+};
+
+template <typename T>
+struct std::hash<dafny_ptr<T>> {
+    size_t operator()(const dafny_ptr<T>& s) const {
+      return std::hash<uintptr_t>()((uintptr_t)s.ptr);
     }
 };
 

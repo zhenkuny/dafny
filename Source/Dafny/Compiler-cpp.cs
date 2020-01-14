@@ -201,19 +201,20 @@ namespace Microsoft.Dafny {
       classDeclWriter.WriteLine("class {0};", name);
       
       methodDeclWriter.Write("public:\n");      
+      methodDeclWriter.Write("size_t _refcount;\n");      
 
       methodDeclWriter.WriteLine("// Default constructor\n {0}() {{}}", name);
       
       // Create the code for the specialization of get_default
       var fullName = moduleName + "::" + name;
-      var getDefaultStr = String.Format("template <{0}>\nstruct get_default<shared_ptr<{1}{2} > > {{\n",
+      var getDefaultStr = String.Format("template <{0}>\nstruct get_default<dafny_ptr<{1}{2} > > {{\n",
         TypeParameters(typeParameters),
         fullName,
         TemplateMethod(typeParameters));
-      getDefaultStr += String.Format("static shared_ptr<{0}{1} > call() {{\n",
+      getDefaultStr += String.Format("static dafny_ptr<{0}{1} > call() {{\n",
         fullName,
         TemplateMethod(typeParameters));
-      getDefaultStr += String.Format("return shared_ptr<{0}{1} >();", fullName, TemplateMethod(typeParameters));
+      getDefaultStr += String.Format("return dafny_ptr<{0}{1} >();", fullName, TemplateMethod(typeParameters));
       getDefaultStr += "}\n};";
       this.classDefaults.Add(getDefaultStr);
       
@@ -1242,7 +1243,7 @@ namespace Microsoft.Dafny {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
         } else {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
-          return "nullptr";
+          wr.Write("dafny_ptr<{0}>::Null()", TypeName(type, wr, tok, null, true));
           //return string.Format("{0}.Default", RuntimeTypeDescriptor(udt, udt.tok, wr));
         }
       }
@@ -1289,7 +1290,7 @@ namespace Microsoft.Dafny {
             // non-null (non-array) type
             // even though the type doesn't necessarily have a known initializer, it could be that the the compiler needs to
             // lay down some bits to please the C#'s compiler's different definite-assignment rules.
-            return "nullptr";
+            return string.Format("{0}::Null()", TypeName(xType, wr, tok));
           }
         } else {
           return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, inAutoInitContext);
@@ -1308,7 +1309,7 @@ namespace Microsoft.Dafny {
               throw NotSupported("Multi-dimensional arrays");
             }
           } else {
-            return "nullptr";
+            return string.Format("{0}::Null()", TypeName(type, wr, tok));
           }
         }
       } else if (cl is DatatypeDecl) {
@@ -1337,7 +1338,7 @@ namespace Microsoft.Dafny {
       Contract.Assume(fullCompileName != null);  // precondition; this ought to be declared as a Requires in the superclass
       Contract.Assume(typeArgs != null);  // precondition; this ought to be declared as a Requires in the superclass
       string s = IdProtect(fullCompileName);
-      return String.Format("std::shared_ptr<{0}{1}>", s, ActualTypeArgs(typeArgs));
+      return String.Format("dafny_ptr<{0}{1}>", s, ActualTypeArgs(typeArgs));
     }
 
     protected override string TypeName_Companion(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member) {
@@ -1470,7 +1471,7 @@ namespace Microsoft.Dafny {
           throw NotSupported("Multi-dimensional arrays");
         }
       } else {
-        wr.Write("nullptr");
+        wr.Write("dafny_ptr<{0}>::Null()", TypeName(type, wr, null, null, true));
       }
     }
 
@@ -1569,7 +1570,7 @@ namespace Microsoft.Dafny {
         //string targs = type.TypeArgs.Count > 0
         //  ? String.Format(" <{0}> ", Util.Comma(type.TypeArgs, tp => TypeName(tp, wr, tok))) : "";
         //wr.Write("std::make_shared<{0}{1}> (", TypeName(type, wr, tok, null, true), targs);
-        wr.Write("std::make_shared<{0}> (", TypeName(type, wr, tok, null, true));
+        wr.Write("dafny_ptr<{0}>::New (", TypeName(type, wr, tok, null, true));
         EmitRuntimeTypeDescriptorsActuals(type.TypeArgs, cl.TypeArgs, tok, false, wr);
         wr.Write(")");
       }

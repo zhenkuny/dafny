@@ -30,6 +30,7 @@ namespace Extern {
 
   class ExternClass {
     public:
+    size_t _refcount;
     bool my_method0(uint64 a) { (void)a; return true; }
     bool my_method1(uint64 c) { (void)c; return false; }
   };
