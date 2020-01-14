@@ -281,12 +281,16 @@ struct DafnyArray {
   DafnyArray(size_t len) {
     vec = make_shared<vector<T>>(len);
   }
+  DafnyArray(vector<T> contents) {
+    vec = make_shared<vector<T>>(contents.start(), contents.end());
+  }
 
   static DafnyArray<T> Null() { return DafnyArray<T>(); }
   static DafnyArray<T> New(size_t len) { return DafnyArray<T>(len); }
 
   size_t size() const { return vec->size(); }
   T& at(uint64 idx) const { return (*vec)[idx]; }
+  T& operator[](uint64 idx) const { return at(idx); }
 
   bool operator==(DafnyArray<T> const& other) const {
     return vec == other.vec;
