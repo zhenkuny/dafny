@@ -1141,7 +1141,7 @@ namespace Microsoft.Dafny {
         //TypeName_SplitArrayName(elType, wr, tok, out typeNameSansBrackets, out brackets);
         //return typeNameSansBrackets + TypeNameArrayBrackets(at.Dims) + brackets;
         if (at.Dims == 1) {
-          return "shared_ptr<vector<" + TypeName(elType, wr, tok, null, false) + ">>";
+          return "DafnyArray<" + TypeName(elType, wr, tok, null, false) + ">";
         } else {
           throw NotSupported("Multi-dimensional arrays");
         }
@@ -1279,8 +1279,9 @@ namespace Microsoft.Dafny {
           } else if (((NonNullTypeDecl)td).Class is ArrayClassDecl) {
             // non-null array type; we know how to initialize them
             var arrayClass = (ArrayClassDecl)((NonNullTypeDecl)td).Class;
+            Type elType = UserDefinedType.ArrayElementType(xType);
             if (arrayClass.Dims == 1) {
-              return "nullptr";
+              return string.Format("DafnyArray<{0}>::Null()", TypeName(elType, wr, tok));
             } else {
               return string.Format("_dafny.newArray(nullptr, {0})", Util.Comma(arrayClass.Dims, _ => "0"));
             }
@@ -1298,7 +1299,17 @@ namespace Microsoft.Dafny {
         if (Attributes.ContainsBool(cl.Attributes, "handle", ref isHandle) && isHandle) {
           return "0";
         } else {
-          return "nullptr";
+          if (cl is ArrayClassDecl) {
+            var arrayClass = (ArrayClassDecl)cl;
+            Type elType = UserDefinedType.ArrayElementType(xType);
+            if (arrayClass.Dims == 1) {
+              return string.Format("DafnyArray<{0}>::Null()", TypeName(elType, wr, tok));
+            } else {
+              throw NotSupported("Multi-dimensional arrays");
+            }
+          } else {
+            return "nullptr";
+          }
         }
       } else if (cl is DatatypeDecl) {
         var dt = (DatatypeDecl)cl;
@@ -1447,8 +1458,24 @@ namespace Microsoft.Dafny {
       return "auto " + target;
     }
 
+    protected void EmitNullText(Type type, TextWriter wr) {
+      var xType = type.NormalizeExpand();
+      if (xType.IsArrayType) {
+        ArrayClassDecl at = xType.AsArrayType;
+        Contract.Assert(at != null);  // follows from xType.IsArrayType
+        Type elType = UserDefinedType.ArrayElementType(xType);
+        if (at.Dims == 1) {
+          wr.Write("DafnyArray<{0}>::Null()", TypeName(elType, wr, null));
+        } else {
+          throw NotSupported("Multi-dimensional arrays");
+        }
+      } else {
+        wr.Write("nullptr");
+      }
+    }
+
     protected override void EmitNull(Type type, TargetWriter wr) {
-      wr.Write("nullptr");
+      EmitNullText(type, wr);
     }
 
     // ----- Statements -------------------------------------------------------------
@@ -1568,7 +1595,7 @@ namespace Microsoft.Dafny {
       // TODO: Handle initValue
       if (dimensions.Count == 1) {
         // handle the common case of 1-dimensional arrays separately
-        wr.Write("make_shared<vector<{0}>>(", TypeName(elmtType, wr, tok));
+        wr.Write("DafnyArray<{0}>::New(", TypeName(elmtType, wr, tok));
         TrExpr(dimensions[0], wr, false);
         wr.Write(")");
       } else {
@@ -1588,7 +1615,7 @@ namespace Microsoft.Dafny {
       if (e is StaticReceiverExpr) {
         wr.Write(TypeName(e.Type, wr, e.tok));
       } else if (e.Value == null) {
-        wr.Write("nullptr");
+        EmitNullText(e.Type, wr);
       } else if (e.Value is bool) {
         wr.Write((bool)e.Value ? "true" : "false");
       } else if (e is CharLiteralExpr) {
@@ -1991,7 +2018,7 @@ namespace Microsoft.Dafny {
     protected override TargetWriter EmitArraySelect(List<string> indices, Type elmtType, TargetWriter wr) {
       var w = wr.Fork();
       foreach (var index in indices) {
-        wr.Write("->at({0})", index);
+        wr.Write(".at({0})", index);
       }   
       return w;
     }
@@ -2000,7 +2027,7 @@ namespace Microsoft.Dafny {
       Contract.Assert(indices != null && 1 <= indices.Count);  // follows from precondition
       var w = wr.Fork();
       foreach (var index in indices) {
-        wr.Write("->at(");
+        wr.Write(".at(");
         TrExpr(index, wr, inLetExprBody);
         wr.Write(")");
       }
@@ -2525,7 +2552,7 @@ namespace Microsoft.Dafny {
               // Optimize .Length to avoid intermediate BigInteger
               wr.Write("({0})(", GetNativeTypeName(toNative));
               TrParenExpr(m.Obj, wr, inLetExprBody);
-              wr.Write("->size())");
+              wr.Write(".size())");
             } else {
               // no optimization applies; use the standard translation
               TrParenExpr(e.E, wr, inLetExprBody);
