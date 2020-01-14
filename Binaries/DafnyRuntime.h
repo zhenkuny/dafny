@@ -329,13 +329,6 @@ struct DafnySequence {
       this->len = len;
     }
 
-    explicit DafnySequence<char>(string const& s) {
-      len = s.size();
-      sptr = shared_ptr<char> (new char[len], std::default_delete<char[]>());
-      memcpy(&*sptr, s.c_str(), s.size());
-      start = &*sptr;
-    }
-
     DafnySequence(const DafnySequence<T>& other) {
       sptr = other.sptr;
       start = other.start;
@@ -471,6 +464,12 @@ struct DafnySequence {
     // TODO: toString
 };
 
+inline DafnySequence<char> DafnySequenceFromString(string const& s) {
+  DafnySequence<char> seq(s.size());
+  memcpy(seq.ptr(), &s[0], s.size());
+  return seq;
+}
+
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const DafnySequence<T>& s)
 {
@@ -510,7 +509,7 @@ inline ostream& operator<<(ostream& out, const DafnySequence<char>& val){
 }
 
 template <typename U>
-struct hash<DafnySequence<U>> {
+struct std::hash<DafnySequence<U>> {
     size_t operator()(const DafnySequence<U>& s) const {
         size_t seed = 0;
         for (size_t i = 0; i < s.size(); i++) {      
@@ -521,7 +520,7 @@ struct hash<DafnySequence<U>> {
 };
 
 template <typename U>
-struct hash<DafnyArray<U>> {
+struct std::hash<DafnyArray<U>> {
     size_t operator()(const DafnyArray<U>& s) const {
         return std::hash<shared_ptr<vector<U>>>()(s.vec);
     }
@@ -649,7 +648,7 @@ inline ostream& operator<<(ostream& out, const DafnySet<U>& val){
 }
 
 template <typename U>
-struct hash<DafnySet<U>> {
+struct std::hash<DafnySet<U>> {
     size_t operator()(const DafnySet<U>& s) const {
         size_t seed = 0;
         for (auto const& elt:s.set) {      
@@ -805,7 +804,7 @@ inline ostream& operator<<(ostream& out, const DafnyMap<T,U>& val){
 }
 
 template <typename T, typename U>
-struct hash<DafnyMap<T,U>> {
+struct std::hash<DafnyMap<T,U>> {
     size_t operator()(const DafnyMap<T,U>& s) const {
         size_t seed = 0;
         for (auto const& kv:s.map) {      

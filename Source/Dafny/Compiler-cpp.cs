@@ -439,7 +439,7 @@ namespace Microsoft.Dafny {
         // Define a custom hasher
         hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
         var fullName = dt.Module.CompileName + "::" + DtT_protected + TemplateMethod(dt.TypeArgs);
-        var hwr = hashWr.NewBlock(string.Format("struct hash<{0}>", fullName), ";");
+        var hwr = hashWr.NewBlock(string.Format("struct std::hash<{0}>", fullName), ";");
         var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
         owr.WriteLine("size_t seed = 0;");
         foreach (var arg in ctor.Formals) {
@@ -496,7 +496,7 @@ namespace Microsoft.Dafny {
           // Define a custom hasher
           hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
           var fullName = dt.Module.CompileName + "::" + structName + TemplateMethod(dt.TypeArgs);
-          var hwr = hashWr.NewBlock(string.Format("struct hash<{0}>", fullName), ";");
+          var hwr = hashWr.NewBlock(string.Format("struct std::hash<{0}>", fullName), ";");
           var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
           owr.WriteLine("size_t seed = 0;");
           int argCount = 0;
@@ -641,7 +641,7 @@ namespace Microsoft.Dafny {
         // Define a custom hasher for the struct as a whole
         hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
         var fullStructName = dt.Module.CompileName + "::" + DtT_protected;
-        var hwr2 = hashWr.NewBlock(string.Format("struct hash<{0}{1}>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
+        var hwr2 = hashWr.NewBlock(string.Format("struct std::hash<{0}{1}>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
         var owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullStructName, TemplateMethod(dt.TypeArgs)));
         owr2.WriteLine("size_t seed = 0;");
         owr2.WriteLine("hash_combine<uint64>(seed, (uint64)x.tag);");
@@ -654,9 +654,9 @@ namespace Microsoft.Dafny {
         if (IsRecursiveDatatype(dt)) {
           // Emit a custom hasher for a pointer to this type
           hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
-          hwr2 = hashWr.NewBlock(string.Format("struct hash<shared_ptr<{0}{1}>>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
+          hwr2 = hashWr.NewBlock(string.Format("struct std::hash<shared_ptr<{0}{1}>>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
           owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const shared_ptr<{0}{1}>& x) const", fullStructName, TemplateMethod(dt.TypeArgs)));
-          owr2.WriteLine("struct hash<{0}{1}> hasher;", fullStructName, TemplateMethod(dt.TypeArgs));
+          owr2.WriteLine("struct std::hash<{0}{1}> hasher;", fullStructName, TemplateMethod(dt.TypeArgs));
           owr2.WriteLine("std::size_t h = hasher(*x);");
           owr2.WriteLine("return h;");
         }
@@ -1668,7 +1668,7 @@ namespace Microsoft.Dafny {
 
     protected override void EmitStringLiteral(string str, bool isVerbatim, TextWriter wr) {
       var n = str.Length;
-      wr.Write("DafnySequence<char>(");
+      wr.Write("DafnySequenceFromString(");
       if (!isVerbatim) {
         wr.Write("\"{0}\"", str);
       } else {
