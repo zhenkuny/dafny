@@ -289,9 +289,10 @@ struct DafnyArray {
   }
   
   void assign(T* start, T* end) {
-    uint64 i = 0;
+    T* src = sptr.get();
     while (start < end) {
-      *(sptr.get() + i) = *start;     
+      *src = *start;     
+      src++;
       start++;
     }
   }
