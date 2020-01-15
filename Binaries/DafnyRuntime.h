@@ -282,16 +282,22 @@ struct DafnyArray {
   DafnyArray(size_t len) : len(len) {
     sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
   }
+  DafnyArray(vector<T> contents) {
+    vec = make_shared<vector<T>>(contents.start(), contents.end());
+  }
 
   static DafnyArray<T> Null() { return DafnyArray<T>(); }
   static DafnyArray<T> New(size_t len) { return DafnyArray<T>(len); }
 
   size_t size() const { return len; }
   T& at(uint64 idx) const { return *(sptr.get() + idx); }
+  T& operator[](uint64 idx) const { return at(idx); }
 
   bool operator==(DafnyArray<T> const& other) const {
     return sptr == other.sptr;
   }
+  
+  T* ptr() const { return vec->data(); }
 
   T* begin() const { return sptr.get(); }
   T* end() const { return sptr.get() + len; }
