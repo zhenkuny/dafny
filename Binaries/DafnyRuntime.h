@@ -282,8 +282,22 @@ struct DafnyArray {
   DafnyArray(size_t len) : len(len) {
     sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
   }
-  DafnyArray(vector<T> contents) {
-    vec = make_shared<vector<T>>(contents.start(), contents.end());
+  DafnyArray(vector<T> contents) : DafnyArray(contents.size()) {
+    for (uint64 i = 0; i < contents.size(); i++) {
+        sptr[i] = contents[i];
+    }
+  }
+  
+  void assign(T* start, T* end) {
+    uint64 i = 0;
+    while (start < end) {
+      *(sptr.get() + i) = *start;     
+      start++;
+    }
+  }
+  
+  DafnyArray(T* start, T* end) : DafnyArray((end - start)/sizeof(T)) {
+    assign(start, end);
   }
 
   static DafnyArray<T> Null() { return DafnyArray<T>(); }
@@ -297,10 +311,17 @@ struct DafnyArray {
     return sptr == other.sptr;
   }
   
-  T* ptr() const { return vec->data(); }
+  T* ptr() const { return sptr.get(); }
 
   T* begin() const { return sptr.get(); }
   T* end() const { return sptr.get() + len; }
+  
+  void clear_and_resize(uint64 new_len) {
+    shared_ptr<T> new_sptr = shared_ptr<T> (new T[new_len], std::default_delete<T[]>());
+    sptr = new_sptr;
+  }
+  
+  
 };
 
 template<typename U>
