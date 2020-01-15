@@ -98,8 +98,8 @@ method Main() {
   print "Array in datatype:\n";
   var someAr := new uint32[3];
   someAr[0] := 1;
-  someAr[0] := 3;
-  someAr[0] := 9;
+  someAr[1] := 3;
+  someAr[2] := 9;
   var ad := AD(someAr);
   PrintArray<uint32>(ad.ar, 3);
 }
