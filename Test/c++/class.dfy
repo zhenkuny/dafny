@@ -6,23 +6,40 @@ class MyClass {
   const c:uint32 := 17
   static const d: uint32
   static const e:uint32 := 18
+
+  var ar: array<uint32>
+
   constructor (x: uint32) 
     requires x < 100;
     ensures this.a < 300;
     ensures this.b < 300;
+    ensures fresh(this.ar);
   {
     a := 100 + x;
     b := 200 + x;
+    ar := new uint32[5];
   }
 
   function method F(): uint32 { 8 }
   static function method G(): uint32 { 9 }
   method M() returns (r: uint32) { r := 69; }
   static method N() returns (r: uint32) { return 70; }
+
+  method stuffWithAr()
+  modifies this
+  modifies this.ar
+  {
+    print "stuffWithAr\n";
+    this.ar := new uint32[5];
+    this.ar[0] := 5;
+    print this.ar[0];
+    print "\n";
+  }
 }
 
 method CallEm(c: MyClass, t: MyClass, i: MyClass)
   requires c.a as int + t.a as int + i.a as int < 1000;
+  ensures c.ar == old(c.ar)
   modifies c, t, i
 {
   // instance fields
@@ -92,7 +109,8 @@ method CallEm(c: MyClass, t: MyClass, i: MyClass)
 }
 
 
-method TestMyClass() {
+method TestMyClass()
+{
   var c := new MyClass(3);
   var t := new MyClass(2);
   var i := new MyClass(2);
@@ -101,6 +119,7 @@ method TestMyClass() {
   var t3 : MyClass;
   t3 := t;
   CallEm(c, t, i);
+  c.stuffWithAr();
 }
 
 

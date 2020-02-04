@@ -11,6 +11,23 @@ newtype{:nativeType "uint"} uint32 = i:int | 0 <= i < 0x100000000
 //newtype{:nativeType "int"} nat32 = i:int | 0 <= i < 0x80000000
 //newtype{:nativeType "long"} nat64 = i:int | 0 <= i < 0x8000000000000000
 
+method returnANullArray() returns (a: array?<uint32>)
+ensures a == null
+{
+  a := null;
+}
+
+method returnANonNullArray() returns (a: array?<uint32>)
+ensures a != null
+ensures a.Length == 5
+{
+  a := new uint32[5];
+  a[0] := 1;
+  a[1] := 2;
+  a[2] := 3;
+  a[3] := 4;
+  a[4] := 5;
+}
 
 method LinearSearch(a: array<uint32>, len:uint32, key: uint32) returns (n: uint32)
   requires a.Length == len as int
@@ -43,6 +60,8 @@ method PrintArray<A>(a:array?<A>, len:uint32)
   }
 }
 
+datatype ArrayDatatype = AD(ar: array<uint32>)
+
 method Main() {
   var a := new uint32[23];
   var i := 0;
@@ -67,6 +86,22 @@ method Main() {
   print s, "\n";
 
   PrintArray<uint32>(null, 0);
+
+  print "Null array:\n";
+  var a1 := returnANullArray();
+  PrintArray<uint32>(a1, 5);
+
+  print "Non-Null array:\n";
+  var a2 := returnANonNullArray();
+  PrintArray<uint32>(a2, 5);
+
+  print "Array in datatype:\n";
+  var someAr := new uint32[3];
+  someAr[0] := 1;
+  someAr[1] := 3;
+  someAr[2] := 9;
+  var ad := AD(someAr);
+  PrintArray<uint32>(ad.ar, 3);
 }
 
 

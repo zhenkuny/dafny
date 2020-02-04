@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <cstring>
+#include <cstdint>
 
 using namespace std;
 
@@ -16,15 +17,15 @@ class _dafny {
 };
 
 
-typedef unsigned char       uint8;
-typedef unsigned short     uint16;
-typedef unsigned long      uint32;
-typedef unsigned long long uint64;
+typedef uint8_t  uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
 
-typedef char       int8;
-typedef short     int16;
-typedef long      int32;
-typedef long long int64;
+typedef int8_t   int8;
+typedef int16_t  int16;
+typedef int32_t  int32;
+typedef int64_t  int64;
 
 /*********************************************************
  *  UTILITIES                                            *
@@ -97,14 +98,6 @@ struct get_default<unsigned long> {
 template<>
 struct get_default<unsigned long long> {
   static unsigned long long call() { return 0; }
-};
-
-template<typename U>
-struct get_default<vector<U>> {
-  static vector<U> call() {
-    vector<U> ret;
-    return ret;
-  }
 };
 
 template<typename U>
@@ -277,12 +270,77 @@ inline int64 EuclideanDivision_int64(int64 a, int64 b) {
     }    
 }
 
+/*********************************************************
+ *  ARRAYS
+ *********************************************************/
+
 template <typename T>
-T* global_empty_ptr = new T[0];
+struct DafnyArray {
+  shared_ptr<T> sptr;
+  size_t len;
+
+  DafnyArray() { }
+  DafnyArray(size_t len) : len(len) {
+    sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
+  }
+  DafnyArray(vector<T> contents) : DafnyArray(contents.size()) {
+    for (uint64 i = 0; i < contents.size(); i++) {
+        sptr[i] = contents[i];
+    }
+  }
+  
+  void assign(T* start, T* end) {
+    T* src = sptr.get();
+    while (start < end) {
+      *src = *start;     
+      src++;
+      start++;
+    }
+  }
+  
+  DafnyArray(T* start, T* end) : DafnyArray((end - start)/sizeof(T)) {
+    assign(start, end);
+  }
+
+  static DafnyArray<T> Null() { return DafnyArray<T>(); }
+  static DafnyArray<T> New(size_t len) { return DafnyArray<T>(len); }
+
+  size_t size() const { return len; }
+  T& at(uint64 idx) const { return *(sptr.get() + idx); }
+  T& operator[](uint64 idx) const { return at(idx); }
+
+  bool operator==(DafnyArray<T> const& other) const {
+    return sptr == other.sptr;
+  }
+  
+  T* ptr() const { return sptr.get(); }
+
+  T* begin() const { return sptr.get(); }
+  T* end() const { return sptr.get() + len; }
+  
+  void clear_and_resize(uint64 new_len) {
+    shared_ptr<T> new_sptr = shared_ptr<T> (new T[new_len], std::default_delete<T[]>());
+    sptr = new_sptr;
+  }
+  
+  
+};
+
+template<typename U>
+struct get_default<DafnyArray<U>> {
+  static DafnyArray<U> call() {
+    DafnyArray<U> ret;
+    return ret;
+  }
+};
 
 /*********************************************************
  *  SEQUENCES                                            *
  *********************************************************/
+
+template <typename T>
+T* global_empty_ptr = new T[0];
+
 template <class T>
 struct DafnySequence {
     shared_ptr<T> sptr;
@@ -301,13 +359,6 @@ struct DafnySequence {
       this->len = len;
     }
 
-    explicit DafnySequence<char>(string const& s) {
-      len = s.size();
-      sptr = shared_ptr<char> (new char[len], std::default_delete<char[]>());
-      memcpy(&*sptr, s.c_str(), s.size());
-      start = &*sptr;
-    }
-
     DafnySequence(const DafnySequence<T>& other) {
       sptr = other.sptr;
       start = other.start;
@@ -324,18 +375,18 @@ struct DafnySequence {
       start[i] = t;
     }
 
-    explicit DafnySequence(shared_ptr<vector<T>> arr) {
-      len = arr->size();
+    explicit DafnySequence(DafnyArray<T> arr) {
+      len = arr.size();
       sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
-      std::copy(arr->begin(), arr->end(), start);
+      std::copy(arr.begin(), arr.end(), start);
     }
 
-    DafnySequence(shared_ptr<vector<T>> arr, uint64 lo, uint64 hi) {
+    DafnySequence(DafnyArray<T> arr, uint64 lo, uint64 hi) {
       len = hi - lo;
       sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
-      std::copy(arr->begin() + lo, arr->begin() + hi, start);
+      std::copy(arr.begin() + lo, arr.begin() + hi, start);
     }
 
     DafnySequence(initializer_list<T> il) {
@@ -350,22 +401,22 @@ struct DafnySequence {
       }
     }
 
-    static DafnySequence<T> SeqFromArray(shared_ptr<vector<T>> arr) {
+    static DafnySequence<T> SeqFromArray(DafnyArray<T> arr) {
         DafnySequence<T> ret(arr);
         return ret;
     }
 
-    static DafnySequence<T> SeqFromArrayPrefix(shared_ptr<vector<T>> arr, uint64 hi) {
+    static DafnySequence<T> SeqFromArrayPrefix(DafnyArray<T> arr, uint64 hi) {
         DafnySequence<T> ret(arr, 0, hi);
         return ret;
     }
 
-    static DafnySequence<T> SeqFromArraySuffix(shared_ptr<vector<T>> arr, uint64 lo) {
-        DafnySequence<T> ret(arr, lo, arr->size());
+    static DafnySequence<T> SeqFromArraySuffix(DafnyArray<T> arr, uint64 lo) {
+        DafnySequence<T> ret(arr, lo, arr.size());
         return ret;
     }
 
-    static DafnySequence<T> SeqFromArraySlice(shared_ptr<vector<T>> arr, uint64 lo, uint64 hi) {
+    static DafnySequence<T> SeqFromArraySlice(DafnyArray<T> arr, uint64 lo, uint64 hi) {
         DafnySequence<T> ret(arr, lo, hi);
         return ret;
     }
@@ -443,6 +494,12 @@ struct DafnySequence {
     // TODO: toString
 };
 
+inline DafnySequence<char> DafnySequenceFromString(string const& s) {
+  DafnySequence<char> seq(s.size());
+  memcpy(seq.ptr(), &s[0], s.size());
+  return seq;
+}
+
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const DafnySequence<T>& s)
 {
@@ -482,11 +539,22 @@ inline ostream& operator<<(ostream& out, const DafnySequence<char>& val){
 }
 
 template <typename U>
-struct hash<DafnySequence<U>> {
+struct std::hash<DafnySequence<U>> {
     size_t operator()(const DafnySequence<U>& s) const {
         size_t seed = 0;
         for (size_t i = 0; i < s.size(); i++) {      
             hash_combine<U>(seed, s.select(i));
+        }
+        return seed; 
+    }
+};
+
+template <typename U>
+struct std::hash<DafnyArray<U>> {
+    size_t operator()(const DafnyArray<U>& s) const {
+        size_t seed = 0;
+        for (size_t i = 0; i < s.size(); i++) {      
+            hash_combine<U>(seed, s.at(i));
         }
         return seed; 
     }
@@ -614,7 +682,7 @@ inline ostream& operator<<(ostream& out, const DafnySet<U>& val){
 }
 
 template <typename U>
-struct hash<DafnySet<U>> {
+struct std::hash<DafnySet<U>> {
     size_t operator()(const DafnySet<U>& s) const {
         size_t seed = 0;
         for (auto const& elt:s.set) {      
@@ -770,7 +838,7 @@ inline ostream& operator<<(ostream& out, const DafnyMap<T,U>& val){
 }
 
 template <typename T, typename U>
-struct hash<DafnyMap<T,U>> {
+struct std::hash<DafnyMap<T,U>> {
     size_t operator()(const DafnyMap<T,U>& s) const {
         size_t seed = 0;
         for (auto const& kv:s.map) {      
