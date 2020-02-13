@@ -649,18 +649,17 @@ namespace Microsoft.Dafny {
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
         // Define a custom hasher for the struct as a whole
-        /*
         hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
         var fullStructName = dt.Module.CompileName + "::" + DtT_protected;
         var hwr2 = hashWr.NewBlock(string.Format("struct std::hash<{0}{1}>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
         var owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullStructName, TemplateMethod(dt.TypeArgs)));
         owr2.WriteLine("size_t seed = 0;");
-        owr2.WriteLine("");
-        
-        owr2.WriteLine("hash_combine<uint64>(seed, (uint64)x.tag);");
+        var index = 0;
         foreach (var ctor in dt.Ctors) {
-          var ifwr = owr2.NewBlock(string.Format("if (x.is_{0}())", ctor.CompileName));
-          ifwr.WriteLine("hash_combine<struct {0}::{1}_{2}{3}>(seed, x.v_{2});", dt.Module.CompileName, DtT_protected, ctor.CompileName, TemplateMethod(dt.TypeArgs));
+          var ifwr = owr2.NewBlock(string.Format("if (x.is_{0}())", DatatypeSubStructName(ctor)));
+          ifwr.WriteLine("hash_combine<uint64>(seed, {0});", index);
+          ifwr.WriteLine("hash_combine<struct {0}::{1}>(seed, get<{0}::{1}>(x.v));", dt.Module.CompileName, DatatypeSubStructName(ctor, true));
+          index++;
         }
         owr2.WriteLine("return seed;");
 
@@ -673,7 +672,6 @@ namespace Microsoft.Dafny {
           owr2.WriteLine("std::size_t h = hasher(*x);");
           owr2.WriteLine("return h;");
         }
-        */
       }
     }
 
