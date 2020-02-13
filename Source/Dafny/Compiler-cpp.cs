@@ -1992,7 +1992,7 @@ namespace Microsoft.Dafny {
         // Ugly hack of a check to figure out if this is a datatype query: f.Constructor?
         //wr = EmitCoercionIfNecessary(from:sf2.Type, to:expectedType, tok:null, wr:wr);
         wSource = wr.Fork();
-        wr.Write(".{0}()", fieldName);
+        wr.Write(".is_{0}_{1}()", IdProtect(sf2.EnclosingClass.CompileName), fieldName.Substring(3));
       } else if (!isLValue && member is SpecialField sf) {
         string compiledName, preStr, postStr;
         GetSpecialFieldInfo(sf.SpecialId, sf.IdParam, out compiledName, out preStr, out postStr);
