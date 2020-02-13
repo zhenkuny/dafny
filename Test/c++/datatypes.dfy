@@ -1,5 +1,5 @@
 newtype{:nativeType "uint"} uint32 = i:int | 0 <= i < 0x100000000
-/*
+
 datatype Op =
   | NoOp
   | PushOp(ghost id: int)
@@ -55,14 +55,14 @@ method TestDestructor() {
     }
 }
 
+datatype Option<V> = None | Some(value:V)
+
 method TestGenericDefault() {
   var x:Option<Example5<bool>>;
 }
-*/
-datatype Option<V> = None | Some(value:V)
-//datatype Err<V> = Fail(err:bool) | Ok(value:V)
 
-/*
+datatype Err<V> = Fail(err:bool) | Ok(value:V)
+
 method matcher(e:Err<uint32>) {
   match e {
     case Fail(s) => print s;
@@ -70,14 +70,14 @@ method matcher(e:Err<uint32>) {
   }
   print "\n";
 }
-*/
+
 method GenericTest() {
   var v:Option<uint32> := Some(32);
-//  matcher(Ok(42));
-//  matcher(Fail(true));
+  matcher(Ok(42));
+  matcher(Fail(true));
   if v.Some? { print "Got some:", v.value, "\n"; }
 }
-/*
+
 method Comparison(x0:Example1, x1:Example1, y0:Example4, y1:Example4) {
   if x0 == x1 {
     print "Example1s are equal\n";
@@ -108,8 +108,7 @@ method DupTestTest()
   DupTest(Dup1(false, 42));
   DupTest(Dup2(330));
 }
-*/
-/*
+
 datatype IntList = 
   | Nil
   | Cons(hd:uint32, tl:IntList)
@@ -144,4 +143,3 @@ method Main() {
     var len := IntListLen(Cons(15, Cons(18, Cons(330, Nil))));
     print len;
 }
-*/
