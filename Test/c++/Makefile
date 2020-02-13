@@ -1,6 +1,7 @@
 
 DAFNYS=$(wildcard *.dfy)
 CPPS=$(subst .dfy,.cpp,$(DAFNYS))
+DOT_H_S=$(subst .dfy,.h,$(DAFNYS))
 EXECS=$(subst .dfy,,$(DAFNYS))
 DAFNY_DIR=../..
 DAFNY=$(DAFNY_DIR)/Binaries/dafny
@@ -41,4 +42,4 @@ test: $(EXECS)
 #	fi
 
 clean:
-	rm -f *.cpp $(EXECS) $(TEST_LOG)
+	rm -f *.cpp *cs $(DOT_H_S) $(EXECS) $(TEST_LOG)
