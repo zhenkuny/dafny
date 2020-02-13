@@ -1,5 +1,5 @@
 newtype{:nativeType "uint"} uint32 = i:int | 0 <= i < 0x100000000
-
+/*
 datatype Op =
   | NoOp
   | PushOp(ghost id: int)
@@ -9,7 +9,7 @@ datatype Example2 = Ex2a(u:uint32) | Ex2b(b:bool)
 datatype Example3 = Example3(e:Example1)
 datatype Example4 = Ex4a | Ex4b
 datatype Example5<V> = Ex5a(v:V) | Ex5b(b:bool)
-
+datatype Example6 = Ex6a(u:uint32) | Ex6b(b:bool) | Ex6c(u:uint32, s:seq<bool>)
 type Ex1Sub = d:Example1 | d.u == 0 witness Example1(0, true)
 type Ex2Sub = d:Example2 | d.Ex2a? && d.u == 0 witness Ex2a(0)
 type Ex3Sub = d:Example3 | d.e.b witness Example3(Example1(42, true))
@@ -58,11 +58,11 @@ method TestDestructor() {
 method TestGenericDefault() {
   var x:Option<Example5<bool>>;
 }
-
+*/
 datatype Option<V> = None | Some(value:V)
-datatype Err<V> = Fail(err:bool) | Ok(value:V)
+//datatype Err<V> = Fail(err:bool) | Ok(value:V)
 
-
+/*
 method matcher(e:Err<uint32>) {
   match e {
     case Fail(s) => print s;
@@ -70,14 +70,14 @@ method matcher(e:Err<uint32>) {
   }
   print "\n";
 }
-
+*/
 method GenericTest() {
   var v:Option<uint32> := Some(32);
-  matcher(Ok(42));
-  matcher(Fail(true));
+//  matcher(Ok(42));
+//  matcher(Fail(true));
   if v.Some? { print "Got some:", v.value, "\n"; }
 }
-
+/*
 method Comparison(x0:Example1, x1:Example1, y0:Example4, y1:Example4) {
   if x0 == x1 {
     print "Example1s are equal\n";
@@ -108,7 +108,8 @@ method DupTestTest()
   DupTest(Dup1(false, 42));
   DupTest(Dup2(330));
 }
-
+*/
+/*
 datatype IntList = 
   | Nil
   | Cons(hd:uint32, tl:IntList)
@@ -143,3 +144,4 @@ method Main() {
     var len := IntListLen(Cons(15, Cons(18, Cons(330, Nil))));
     print len;
 }
+*/

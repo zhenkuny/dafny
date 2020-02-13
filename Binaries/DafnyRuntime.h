@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <cstring>
 #include <cstdint>
+#include <variant>
 
 using namespace std;
 

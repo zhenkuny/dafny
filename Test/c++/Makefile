@@ -9,7 +9,7 @@ DAFNY_RUNTIME_CPP=$(DAFNY_RUNTIME_DIR)/DafnyRuntime.h
 DAFNY_DEPS=$(DAFNY) $(DAFNY_RUNTIME_DIR)/Dafny.exe $(DAFNY_RUNTIME_DIR)/DafnyPipeline.dll $(DAFNY_RUNTIME_CPP)
 TEST_LOG=tests.log
 
-CXXFLAGS += -g -Wall -Wextra -Wpedantic -std=c++14 -I$(DAFNY_RUNTIME_DIR)
+CXXFLAGS += -g -Wall -Wextra -Wpedantic -std=c++17 -I$(DAFNY_RUNTIME_DIR)
 
 .SECONDARY: $(CPPS)
 

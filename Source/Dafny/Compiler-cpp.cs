@@ -334,6 +334,15 @@ namespace Microsoft.Dafny {
       }
       return false;
     }
+    
+    // Uniform naming convention
+    protected string DatatypeSubStructName(DatatypeCtor ctor, bool inclTemplateArgs = false) {
+      string args = "";
+      if (inclTemplateArgs) {
+        args = TemplateMethod(ctor.EnclosingDatatype.TypeArgs);
+      }
+      return String.Format("{0}_{1}{2}", IdProtect(ctor.EnclosingDatatype.CompileName), ctor.CompileName, args);
+    }
 
     protected override void DeclareDatatype(DatatypeDecl dt, TargetWriter writer) {
       // Given:
@@ -461,9 +470,9 @@ namespace Microsoft.Dafny {
         owr.WriteLine("return seed;");
       } else {
 
-        // Create one struct for each constructor
+        /*** Create one struct for each constructor ***/
         foreach (var ctor in dt.Ctors) {
-          string structName = string.Format("{0}_{1}", DtT_protected, ctor.CompileName);
+          string structName = DatatypeSubStructName(ctor);
           var wstruct = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), structName), ";");
           // Declare the struct members
           var i = 0;
@@ -528,18 +537,10 @@ namespace Microsoft.Dafny {
           owr.WriteLine("return seed;");
         }
 
-        // Declare the overall tagged union
+        /*** Declare the overall tagged union ***/
         var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
-        ws.Write("enum {");
-        ws.Write(Util.Comma(dt.Ctors, nm => String.Format(" TAG_{0}", nm.CompileName)));
-        ws.Write("} tag;\n");
-        // TODO: The union doesn't play nicely with shared_ptr, so for now, use more memory than needed
-        //var wu = ws.NewBlock("union ", ";");
-        var wu = ws;
-        foreach (var ctor in dt.Ctors) {
-          wu.WriteLine("struct {2}_{0}{1} v_{0};", ctor.CompileName, TemplateMethod(dt.TypeArgs), DtT_protected);
-        }
-        
+        ws.WriteLine("variant<{0}> v;", Util.Comma(dt.Ctors, ctor => DatatypeSubStructName(ctor, true)));
+
         // Declare static "constructors" for each Dafny constructor
         foreach (var ctor in dt.Ctors)
         {
@@ -547,18 +548,20 @@ namespace Microsoft.Dafny {
                                            DtT_protected, ctor.CompileName,
                                            DeclareFormals(ctor.Formals))) {
             wc.WriteLine("{0}{1} COMPILER_result;", DtT_protected, TemplateMethod(dt.TypeArgs));
-            wc.WriteLine("COMPILER_result.tag = {0}::TAG_{1};", DtT_protected, ctor.CompileName);
+            wc.WriteLine("{0} COMPILER_result_subStruct;", DatatypeSubStructName(ctor, true));
+            
             foreach (Formal arg in ctor.Formals)
             {
               if (!arg.IsGhost) {
                 if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                   // This is a recursive destuctor, so we need to allocate space and copy the input in
-                  wc.WriteLine("COMPILER_result.v_{0}.{1} = make_shared<{2}>({1});", ctor.CompileName, arg.CompileName, DtT_protected);
+                  wc.WriteLine("COMPILER_result_subStruct.{0} = make_shared<{1}>({0});", arg.CompileName, DtT_protected);
                 } else {
-                  wc.WriteLine("COMPILER_result.v_{0}.{1} = {1};", ctor.CompileName, arg.CompileName);
+                  wc.WriteLine("COMPILER_result_subStruct.{0} = {0};", arg.CompileName);
                 }
               }
             }
+            wc.WriteLine("COMPILER_result.v = COMPILER_result_subStruct;");
             wc.WriteLine("return COMPILER_result;");
           }
         }
@@ -567,14 +570,15 @@ namespace Microsoft.Dafny {
         ws.WriteLine("{0}();", DtT_protected);
         using (var wd = wdef.NewNamedBlock(String.Format("{1}\n{0}{2}::{0}()", DtT_protected, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)))) {
           var default_ctor = dt.Ctors[0];   // Arbitrarily choose the first one
-          wd.WriteLine("tag = {0}::TAG_{1};", DtT_protected, default_ctor.CompileName);
+          wd.WriteLine("{0} COMPILER_result_subStruct;", DatatypeSubStructName(default_ctor, true));
           foreach (Formal arg in default_ctor.Formals)
           {
             if (!arg.IsGhost) {
-              wd.WriteLine("v_{0}.{1} = {2};", default_ctor.CompileName, arg.CompileName,
+              wd.WriteLine("COMPILER_result_subStruct.{0} = {1};", arg.CompileName,
                 DefaultValue(arg.Type, wd, arg.tok));
             }
           }
+          wd.WriteLine("v = COMPILER_result_subStruct;");
         }
         
         // Declare a default destructor
@@ -582,36 +586,29 @@ namespace Microsoft.Dafny {
         
         // Declare a default copy constructor (just in case any of our components are non-trivial, i.e., contain smart_ptr)
         using (var wcc = ws.NewNamedBlock(String.Format("{0}(const {0} &other)", DtT_protected))) {
-          wcc.WriteLine("tag = other.tag;");
-          foreach (var ctor in dt.Ctors) {
-            wcc.WriteLine("if (tag == {0}::TAG_{1}) {{ v_{1} = other.v_{1}; }}", DtT_protected, ctor.CompileName);
-          }
+          wcc.WriteLine("v = other.v;");
         }
         
         // Declare a default copy assignment operator (just in case any of our components are non-trivial, i.e., contain smart_ptr)
         using (var wcc = ws.NewNamedBlock(String.Format("{0}& operator=(const {0} other)", DtT_protected))) {
-          wcc.WriteLine("tag = other.tag;");
-          foreach (var ctor in dt.Ctors) {
-            wcc.WriteLine("if (tag == {0}::TAG_{1}) {{ v_{1} = other.v_{1}; }}", DtT_protected, ctor.CompileName);
-          }
+          wcc.WriteLine("v = other.v;");
           wcc.WriteLine("return *this;");
         }
         
         // Declare type queries, both as members and general-purpose functions
         foreach (var ctor in dt.Ctors) {
-          ws.WriteLine("bool is_{0}() const {{ return tag == {1}{2}::TAG_{0}; }}", ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
-          wdecl.WriteLine("{0}\nbool is_{1}(const struct {2}{3} d);", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));
-          wdef.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d) {{ return d.tag == {2}{3}::TAG_{1}; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, TemplateMethod(dt.TypeArgs));  
+          var name = DatatypeSubStructName(ctor);
+          var holds = String.Format("holds_alternative<{0}{1}>", name, TemplateMethod(dt.TypeArgs));
+          ws.WriteLine("bool is_{0}() const {{ return {1}(v); }}", name, holds);
+          wdecl.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d);", DeclareTemplate(dt.TypeArgs), name, DtT_protected, TemplateMethod(dt.TypeArgs));
+           wdef.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d) {{ return {4}(d.v); }}", 
+             DeclareTemplate(dt.TypeArgs), name, DtT_protected, TemplateMethod(dt.TypeArgs), holds);  
         }
         
         // Overload the comparison operator
         ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", DtT_protected);
-        ws.Write("\treturn false");
-        foreach (var ctor in dt.Ctors) {
-          ws.WriteLine("\t\t|| (left.is_{0}() && right.is_{0}() && left.v_{0} == right.v_{0})", ctor.CompileName);
-        }
-        ws.WriteLine(";\n}");
-        
+        ws.WriteLine("\treturn left.v == right.v;\n}");
+
         // Create destructors
         foreach (var ctor in dt.Ctors) {
           foreach (var dtor in ctor.Destructors) {
@@ -631,14 +628,16 @@ namespace Microsoft.Dafny {
                     var n = dtor.EnclosingCtors.Count;
                     for (int i = 0; i < n - 1; i++) {
                       var ctor_i = dtor.EnclosingCtors[i];
+                      var ctor_name = DatatypeSubStructName(ctor_i);
                       Contract.Assert(arg.CompileName == dtor.CorrespondingFormals[i].CompileName);
-                      wDtor.WriteLine("if (is_{0}()) {{ return v_{0}.{1}; }}", 
-                        ctor_i.CompileName, IdName(arg));
+                      wDtor.WriteLine("if (is_{0}()) {{ return get<{0}{1}>(v).{2}; }}", 
+                        ctor_name, TemplateMethod(dt.TypeArgs), IdName(arg));
                     }
 
                     Contract.Assert(arg.CompileName == dtor.CorrespondingFormals[n - 1].CompileName);
-                    wDtor.WriteLine("return v_{0}.{1}; ", 
-                      dtor.EnclosingCtors[n - 1].CompileName, IdName(arg));
+                    var final_ctor_name = DatatypeSubStructName(dtor.EnclosingCtors[n - 1], true);
+                    wDtor.WriteLine("return get<{0}>(v).{1}; ", 
+                      final_ctor_name, IdName(arg));
                   }
                 }
               }
@@ -650,11 +649,14 @@ namespace Microsoft.Dafny {
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
         // Define a custom hasher for the struct as a whole
+        /*
         hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
         var fullStructName = dt.Module.CompileName + "::" + DtT_protected;
         var hwr2 = hashWr.NewBlock(string.Format("struct std::hash<{0}{1}>", fullStructName, TemplateMethod(dt.TypeArgs)), ";");
         var owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullStructName, TemplateMethod(dt.TypeArgs)));
         owr2.WriteLine("size_t seed = 0;");
+        owr2.WriteLine("");
+        
         owr2.WriteLine("hash_combine<uint64>(seed, (uint64)x.tag);");
         foreach (var ctor in dt.Ctors) {
           var ifwr = owr2.NewBlock(string.Format("if (x.is_{0}())", ctor.CompileName));
@@ -671,6 +673,7 @@ namespace Microsoft.Dafny {
           owr2.WriteLine("std::size_t h = hasher(*x);");
           owr2.WriteLine("return h;");
         }
+        */
       }
     }
 
@@ -2159,7 +2162,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitConstructorCheck(string source, DatatypeCtor ctor, TargetWriter wr) {
-      wr.Write("is_{1}({0})", source, ctor.CompileName);
+      wr.Write("is_{1}({0})", source, DatatypeSubStructName(ctor));
     }
 
     protected override void EmitDestructor(string source, Formal dtor, int formalNonGhostIndex, DatatypeCtor ctor, List<Type> typeArgs, Type bvType, TargetWriter wr) {
@@ -2173,7 +2176,7 @@ namespace Microsoft.Dafny {
         }
 
         if (ctor.EnclosingDatatype.Ctors.Count > 1) {
-          wr.Write("(({0}).v_{2}.{1})", source, dtorName, ctor.CompileName);
+          wr.Write("(({0}).dtor_{1}())", source, dtorName);
         } else {
           wr.Write("(({0}).{1})", source, dtorName);
         }
