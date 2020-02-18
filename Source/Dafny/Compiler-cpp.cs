@@ -630,13 +630,13 @@ namespace Microsoft.Dafny {
                       var ctor_i = dtor.EnclosingCtors[i];
                       var ctor_name = DatatypeSubStructName(ctor_i);
                       Contract.Assert(arg.CompileName == dtor.CorrespondingFormals[i].CompileName);
-                      wDtor.WriteLine("if (is_{0}()) {{ return std::get<{0}{1}>(v).{2}; }}", 
+                      wDtor.WriteLine("if (is_{0}()) {{ return dafny_get<{0}{1}>(v).{2}; }}", 
                         ctor_name, TemplateMethod(dt.TypeArgs), IdName(arg));
                     }
 
                     Contract.Assert(arg.CompileName == dtor.CorrespondingFormals[n - 1].CompileName);
                     var final_ctor_name = DatatypeSubStructName(dtor.EnclosingCtors[n - 1], true);
-                    wDtor.WriteLine("return std::get<{0}>(v).{1}; ", 
+                    wDtor.WriteLine("return dafny_get<{0}>(v).{1}; ", 
                       final_ctor_name, IdName(arg));
                   }
                 }
@@ -658,7 +658,7 @@ namespace Microsoft.Dafny {
         foreach (var ctor in dt.Ctors) {
           var ifwr = owr2.NewBlock(string.Format("if (x.is_{0}())", DatatypeSubStructName(ctor)));
           ifwr.WriteLine("hash_combine<uint64>(seed, {0});", index);
-          ifwr.WriteLine("hash_combine<struct {0}::{1}>(seed, std::get<{0}::{1}>(x.v));", dt.Module.CompileName, DatatypeSubStructName(ctor, true));
+          ifwr.WriteLine("hash_combine<struct {0}::{1}>(seed, dafny_get<{0}::{1}>(x.v));", dt.Module.CompileName, DatatypeSubStructName(ctor, true));
           index++;
         }
         owr2.WriteLine("return seed;");

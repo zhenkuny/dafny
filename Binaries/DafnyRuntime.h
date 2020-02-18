@@ -15,7 +15,6 @@ class _dafny {
     static void Print(std::string s) { std::cout << s << std::endl; }
 };
 
-
 typedef uint8_t  uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
@@ -64,6 +63,14 @@ private:
    iterator begin_;
    iterator end_;
 };
+
+// Replacement for std::get that doesn't check the variant type before
+// accessing it. UB if this is called with the wrong type.
+template <class T, class... Types>
+T dafny_get(std::variant<Types...> const& v) {
+  return std::__variant_detail::__access::__variant::__get_alt
+    <std::__find_exactly_one_t<T, Types...>::value>(v).__value;
+}
 
 /*********************************************************
  *  DEFAULTS                                             *
