@@ -1,4 +1,4 @@
-// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint.dfy" /autoTriggers:0 "%s" > "%t"
+// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint.dfy" "%s" > "%t"
 // RUN: %dafny /noVerify /compile:0 "%t.dprint.dfy" >> "%t"
 // RUN: %diff "%s.expect" "%t"
 
@@ -6,13 +6,13 @@ method CalcTest0(s: seq<int>) {
   calc {
     s[0]; // error: ill-formed line
   }
-  
+
   calc {
     2;
     { assert s[0] == 1; } // error: ill-formed hint
     1 + 1;
   }
-  
+
   if (|s| > 0) {
     calc {
       s[0]; // OK: well-formed in this context
@@ -23,19 +23,19 @@ method CalcTest0(s: seq<int>) {
   assume forall x :: x in s ==> x >= 0;
   calc {
     0 < |s|;
-  ==>  { assert s[0] >= 0; }  // OK: well-formed after previous line
+  ==>  { assert s[0] in s && s[0] >= 0; }  // OK: well-formed after previous line
     s[0] >= 0;                // OK: well-formed after previous line
-  <==> { assert s[0] >= 0; }  // OK: well-formed when the previous line is well-formed
+  <==> { assert s[0] in s && s[0] >= 0; }  // OK: well-formed when the previous line is well-formed
     s[0] > 0 || s[0] == 0;    // OK: well-formed when the previous line is well-formed
   }
-  
+
   calc { // same as the last one, but well-formedness is checked in reverse order
     s[0] + 1 > 0;
   <==>
     s[0] >= 0;
   <== { assert s[0] >= 0; }
     0 < |s|;
-  }  
+  }
 }
 
 method CalcTest1(x: int, y: int) {
@@ -67,7 +67,7 @@ function CalcTest3(s: seq<int>): int {
 }
 
 // dangling hints:
-method CalcTest4(s: seq<int>) 
+method CalcTest4(s: seq<int>)
   requires forall n | n in s :: n > 0;
 {
   calc {
@@ -80,9 +80,9 @@ method CalcTest4(s: seq<int>)
   }
   calc {
     |s| > 0;
-  ==> { assert s[0] > 0; } // okay
+  ==> { assert s[0] in s && s[0] > 0; } // okay
   }
-  
+
 }
 
 // ------------- tests for the pretty printer -------------

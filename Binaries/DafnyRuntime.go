@@ -439,8 +439,8 @@ func (seq Seq) Cardinality() Int {
 }
 
 // CardinalityInt finds the length of the sequence as an int.
-func (seq Seq) CardinalityInt() Int {
-	return seq.Len()
+func (seq Seq) CardinalityInt() int {
+	return seq.LenInt()
 }
 
 // Contains finds whether the value is equal to any element in the sequence.
@@ -1520,21 +1520,6 @@ func (m Map) Items() Set {
 	return b.ToSet()
 }
 
-// IsDisjointFrom returns whether two maps have no keys in common.
-func (m Map) IsDisjointFrom(m2 Map) bool {
-	if len(m.elts) == 0 || len(m2.elts) == 0 {
-		return true
-	}
-
-	for _, e := range m.elts {
-		if m2.Contains(e.key) {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (m Map) String() string {
 	s := "map["
 	for i, e := range m.elts {
@@ -1889,6 +1874,12 @@ func (i BV) Rrot(j BV, w uint) BV {
 // Cmp compares two Ints, returning -1 for less, 0 for equal, or 1 for greater.
 func (i Int) Cmp(j Int) int {
 	return i.impl.Cmp(j.impl)
+}
+
+// Sign returns the sign of an Int, returning -1 for negative, 0 for zero, or
+// 1 for positive.
+func (i Int) Sign() int {
+	return i.impl.Sign()
 }
 
 // EqualsGeneric compares an int to another value.
@@ -2251,6 +2242,12 @@ func (x Real) DivBy(y Real) Real {
 // for greater.
 func (x Real) Cmp(y Real) int {
 	return x.impl.Cmp(y.impl)
+}
+
+// Sign returns the sign of a Real, returning -1 for negative, 0 for zero, or
+// 1 for positive.
+func (x Real) Sign() int {
+	return x.impl.Sign()
 }
 
 // EqualsGeneric compares an int to another value.

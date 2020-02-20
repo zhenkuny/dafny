@@ -63,6 +63,7 @@ namespace Microsoft.Dafny
     public List<string> DafnyPrintExportedViews = new List<string>();
     public bool Compile = true;
     [Flags]
+    public enum CompilationTarget { Csharp = 1, JavaScript = 2, Go = 4, Java = 8, Cpp = 16, Php = 32 }
     public enum CompilationTarget { Csharp = 1, JavaScript = 2, Go = 4, Cpp = 8 }
     public CompilationTarget CompileTarget = CompilationTarget.Csharp;
     public bool CompileVerbose = true;
@@ -176,8 +177,12 @@ namespace Microsoft.Dafny
               CompileTarget = CompilationTarget.JavaScript;
             } else if (args[ps.i].Equals("go")) {
               CompileTarget = CompilationTarget.Go;
+            } else if (args[ps.i].Equals("java")) {
+              CompileTarget = CompilationTarget.Java;
             } else if (args[ps.i].Equals("cpp")) {
               CompileTarget = CompilationTarget.Cpp;  
+            } else if (args[ps.i].Equals("php")) {
+              CompileTarget = CompilationTarget.Php;
             } else {
               throw new Exception("Invalid value for compileTarget");
             }
@@ -561,8 +566,9 @@ namespace Microsoft.Dafny
   /titrace      print type-inference debug info
   /view:<view1, view2>
                 print the filtered views of a module after it is resolved (/rprint).
-                if print before the module is resolved (/dprint), then everthing in the module is printed
-                if no view is specified, then everything in the module is printed.
+                If print before the module is resolved (/dprint), then everything in the module
+                is printed.
+                If no view is specified, then everything in the module is printed.
 
   /dafnyVerify:<n>
                 0 - stop after typechecking
@@ -571,7 +577,7 @@ namespace Microsoft.Dafny
                 1 (default) - upon successful verification of the Dafny
                     program, compile Dafny program to .NET assembly
                     Program.exe (if the program has a Main method) or
-                    Program.dll (othewise), where Program.dfy is the name
+                    Program.dll (otherwise), where Program.dfy is the name
                     of the last .dfy file on the command line
                 2 - always attempt to compile Dafny program to C# program
                     out.cs, regardless of verification outcome
@@ -582,9 +588,11 @@ namespace Microsoft.Dafny
                     verification outcome
   /compileTarget:<lang>
                 cs (default) - Compilation to .NET via C#
-                go  - Compilation to Go
-                js  - Compilation to JavaScript
+                go - Compilation to Go
+                js - Compilation to JavaScript
+                java - Compilation to Java
                 cpp - Compilation to C++
+                php - Compilation to PHP
   /compileVerbose:<n>
                 0 - don't print status of compilation to the console
                 1 (default) - print information such as files being written by
