@@ -153,7 +153,7 @@ namespace Microsoft.Dafny
         } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Cpp) {
           if (extension == ".h") {
             otherFiles.Add(file);
-          } else {
+          } else if (!isDafnyFile) {
             ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or C headers (.h)", file,
               extension == null ? "" : extension);
             return ExitValue.PREPROCESSING_ERROR;
