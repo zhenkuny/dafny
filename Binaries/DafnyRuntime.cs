@@ -799,14 +799,6 @@ namespace Dafny
 
   public abstract class Sequence<T>
   {
-    private readonly ArraySegment<T> segment;
-    public Sequence(T[] ee) {
-      T[] backing = ee;
-      segment = new ArraySegment<T>(backing);
-    }
-    private Sequence(ArraySegment<T> segment_) {
-      segment = segment_;
-    }
     public static Sequence<T> Empty {
       get {
         return new ArraySequence<T>(new T[0]);
@@ -833,46 +825,37 @@ namespace Dafny
       return Empty;
     }
     public int Count {
-      get { return segment.Count; }
-    }
-    public long LongCount {
-      get { return segment.Count; }
-    }
-    public IList<T> Elements {
-      get {
-        return segment;
-      }
+      get { return (int)LongCount; }
     }
     public abstract long LongCount { get; }
     public abstract T[] Elements { get; }
 
     public IEnumerable<T> UniqueElements {
       get {
-        var st = Set<T>.FromCollection((IEnumerable<T>) segment);
+        var st = Set<T>.FromElements(Elements);
         return st.Elements;
       }
     }
 
     public T Select(ulong index) {
-      return Elements[(int) index];
+      return Elements[index];
     }
     public T Select(long index) {
-      return Elements[(int) index];
+      return Elements[index];
     }
     public T Select(uint index) {
-      return Elements[(int) index];
+      return Elements[index];
     }
     public T Select(int index) {
       return Elements[index];
     }
     public T Select(BigInteger index) {
-      return Elements[(int) index];
+      return Elements[(int)index];
     }
     public Sequence<T> Update(long index, T t) {
-      T[] dst = new T[segment.Count];
-      ((ICollection<T>) segment).CopyTo(dst, 0);
-      dst[index] = t;
-      return new Sequence<T>(dst);
+      T[] a = (T[])Elements.Clone();
+      a[index] = t;
+      return new ArraySequence<T>(a);
     }
     public Sequence<T> Update(ulong index, T t) {
       return Update((long)index, t);
@@ -881,23 +864,24 @@ namespace Dafny
       return Update((long)index, t);
     }
     public bool Equals(Sequence<T> other) {
-      int n = segment.Count;
-      return n == other.segment.Count && EqualUntil(other, n);
+      int n = Elements.Length;
+      return n == other.Elements.Length && EqualUntil(other, n);
     }
     public override bool Equals(object other) {
       return other is Sequence<T> && Equals((Sequence<T>)other);
     }
     public override int GetHashCode() {
-      if (segment == null || segment.Count == 0)
+      T[] elmts = Elements;
+      if (elmts == null || elmts.Length == 0)
         return 0;
       var hashCode = 0;
-      for (var i = 0; i < Elements.Count; i++) {
-        hashCode = (hashCode << 3) | (hashCode >> 29) ^ Dafny.Helpers.GetHashCode(Elements[i]);
+      for (var i = 0; i < elmts.Length; i++) {
+        hashCode = (hashCode << 3) | (hashCode >> 29) ^ Dafny.Helpers.GetHashCode(elmts[i]);
       }
       return hashCode;
     }
     public override string ToString() {
-      if (segment.Array is char[]) {
+      if (Elements is char[]) {
         var s = "";
         foreach (var t in Elements) {
           s += t.ToString();
@@ -916,46 +900,44 @@ namespace Dafny
     bool EqualUntil(Sequence<T> other, int n) {
       T[] elmts = Elements, otherElmts = other.Elements;
       for (int i = 0; i < n; i++) {
-        if (!Dafny.Helpers.AreEqual(Elements[i], other.Elements[i]))
+        if (!object.Equals(elmts[i], otherElmts[i]))
           return false;
       }
       return true;
     }
     public bool IsProperPrefixOf(Sequence<T> other) {
-      int n = segment.Count;
-      return n < other.segment.Count && EqualUntil(other, n);
+      int n = Elements.Length;
+      return n < other.Elements.Length && EqualUntil(other, n);
     }
     public bool IsPrefixOf(Sequence<T> other) {
-      int n = segment.Count;
-      return n <= other.segment.Count && EqualUntil(other, n);
+      int n = Elements.Length;
+      return n <= other.Elements.Length && EqualUntil(other, n);
     }
     public Sequence<T> Concat(Sequence<T> other) {
-      if (segment.Count == 0)
+      if (Count == 0)
         return other;
-      else if (other.segment.Count == 0)
+      else if (other.Count == 0)
         return this;
-      T[] a = new T[segment.Count + other.segment.Count];
-      Elements.CopyTo(a, 0);
-      other.Elements.CopyTo(a, Elements.Count);
-      return new Sequence<T>(a);
+      return new ConcatSequence<T>(this, other);
     }
     public bool Contains<G>(G g) {
       if (g == null || g is T) {
         var t = (T)(object)g;
-        int n = Elements.Count;
+        var elmts = Elements;
+        int n = elmts.Length;
         for (int i = 0; i < n; i++) {
-          if (Dafny.Helpers.AreEqual(t, Elements[i]))
+          if (object.Equals(t, elmts[i]))
             return true;
         }
       }
       return false;
     }
     public Sequence<T> Take(long m) {
-      if (segment.Count == m)
+      if (Elements.LongLength == m)
         return this;
-      // System.Array.Copy(elmts, a, m);
-      System.Diagnostics.Debug.Assert(m <= segment.Count);
-      return new Sequence<T>(new ArraySegment<T>(segment.Array, segment.Offset, (int) m));
+      T[] a = new T[m];
+      System.Array.Copy(Elements, a, m);
+      return new ArraySequence<T>(a);
     }
     public Sequence<T> Take(ulong n) {
       return Take((long)n);
@@ -966,8 +948,9 @@ namespace Dafny
     public Sequence<T> Drop(long m) {
       if (m == 0)
         return this;
-      System.Diagnostics.Debug.Assert(m <= segment.Count);
-      return new Sequence<T>(new ArraySegment<T>(segment.Array, segment.Offset + (int) m, segment.Count - (int) m));
+      T[] a = new T[Elements.Length - m];
+      System.Array.Copy(Elements, m, a, 0, Elements.Length - m);
+      return new ArraySequence<T>(a);
     }
     public Sequence<T> Drop(ulong n) {
       return Drop((long)n);
@@ -1282,65 +1265,7 @@ namespace Dafny
     public static Sequence<T> SeqFromArray<T>(T[] array) {
       return new ArraySequence<T>((T[])array.Clone());
     }
-
-    public static Sequence<T> SeqFromArrayPrefix<T>(T[] array, long n) {
-      T[] ar = new T[n];
-      System.Array.Copy(array, 0, ar, 0, n);
-      return new Sequence<T>(ar);
-    }
-
-    public static Sequence<T> SeqFromArrayPrefix<T>(T[] array, ulong n) {
-      return SeqFromArrayPrefix(array, (long)n);
-    }
-
-    public static Sequence<T> SeqFromArrayPrefix<T>(T[] array, BigInteger n) {
-      return SeqFromArrayPrefix(array, (long)n);
-    }
-
-    public static Sequence<T> SeqFromArraySuffix<T>(T[] array, long n) {
-      T[] ar = new T[array.Length - n];
-      System.Array.Copy(array, n, ar, 0, array.Length - n);
-      return new Sequence<T>(ar);
-    }
-
-    public static Sequence<T> SeqFromArraySuffix<T>(T[] array, ulong n) {
-      return SeqFromArraySuffix(array, (long) n);
-    }
-    public static Sequence<T> SeqFromArraySuffix<T>(T[] array, BigInteger n) {
-      return SeqFromArraySuffix(array, (long) n);
-    }
-
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, long lo, long hi) {
-      T[] ar = new T[hi - lo];
-      System.Array.Copy(array, lo, ar, 0, hi - lo);
-      return new Sequence<T>(ar);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, long lo, ulong hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, long lo, BigInteger hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, ulong lo, long hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, ulong lo, ulong hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, ulong lo, BigInteger hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, BigInteger lo, long hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, BigInteger lo, ulong hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-    public static Sequence<T> SeqFromArraySlice<T>(T[] array, BigInteger lo, BigInteger hi) {
-      return SeqFromArraySlice(array, (long)lo, (long)hi);
-    }
-
-    // In .NET version 4.5, it it possible to mark a method with "AggressiveInlining", which says to inline the
+    // In .NET version 4.5, it is possible to mark a method with "AggressiveInlining", which says to inline the
     // method if possible.  Method "ExpressionSequence" would be a good candidate for it:
     // [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public static U ExpressionSequence<T, U>(T t, U u)
