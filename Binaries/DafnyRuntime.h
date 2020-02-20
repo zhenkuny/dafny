@@ -8,12 +8,11 @@
 #include <unordered_map>
 #include <cstring>
 #include <cstdint>
-
-using namespace std;
+#include <variant>
 
 class _dafny {
   public:
-    static void Print(string s) { cout << s << endl; }
+    static void Print(std::string s) { std::cout << s << std::endl; }
 };
 
 
@@ -101,9 +100,9 @@ struct get_default<unsigned long long> {
 };
 
 template<typename U>
-struct get_default<shared_ptr<U>> {
-  static shared_ptr<U> call() {
-    return make_shared<U>(get_default<U>::call());
+struct get_default<std::shared_ptr<U>> {
+  static std::shared_ptr<U> call() {
+    return std::make_shared<U>(get_default<U>::call());
   }
 };
 
@@ -131,7 +130,7 @@ struct Tuple2 {
 };
 
 template <typename T0, typename T1>
-inline ostream& operator<<(ostream& out, const Tuple2<T0, T1>& val){
+inline std::ostream& operator<<(std::ostream& out, const Tuple2<T0, T1>& val){
   out << val.get_0();
   out << val.get_1();
   return out;
@@ -161,7 +160,7 @@ struct Tuple3 {
 };
 
 template <typename T0, typename T1, typename T2>
-inline ostream& operator<<(ostream& out, const Tuple3<T0, T1, T2>& val){
+inline std::ostream& operator<<(std::ostream& out, const Tuple3<T0, T1, T2>& val){
   out << val.get_0();
   out << val.get_1();
   out << val.get_2();
@@ -196,7 +195,7 @@ struct Tuple4 {
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
-inline ostream& operator<<(ostream& out, const Tuple4<T0, T1, T2, T3>& val){
+inline std::ostream& operator<<(std::ostream& out, const Tuple4<T0, T1, T2, T3>& val){
   out << val.get_0();
   out << val.get_1();
   out << val.get_2();
@@ -236,7 +235,7 @@ struct Tuple5 {
 };
 
 template <typename T0, typename T1, typename T2, typename T3, typename T4>
-inline ostream& operator<<(ostream& out, const Tuple5<T0, T1, T2, T3, T4>& val){
+inline std::ostream& operator<<(std::ostream& out, const Tuple5<T0, T1, T2, T3, T4>& val){
   out << val.get_0();
   out << val.get_1();
   out << val.get_2();
@@ -276,14 +275,14 @@ inline int64 EuclideanDivision_int64(int64 a, int64 b) {
 
 template <typename T>
 struct DafnyArray {
-  shared_ptr<T> sptr;
+  std::shared_ptr<T> sptr;
   size_t len;
 
   DafnyArray() { }
   DafnyArray(size_t len) : len(len) {
-    sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
+    sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
   }
-  DafnyArray(vector<T> contents) : DafnyArray(contents.size()) {
+  DafnyArray(std::vector<T> contents) : DafnyArray(contents.size()) {
     for (uint64 i = 0; i < contents.size(); i++) {
         sptr[i] = contents[i];
     }
@@ -319,7 +318,7 @@ struct DafnyArray {
   T* end() const { return sptr.get() + len; }
   
   void clear_and_resize(uint64 new_len) {
-    shared_ptr<T> new_sptr = shared_ptr<T> (new T[new_len], std::default_delete<T[]>());
+    std::shared_ptr<T> new_sptr = std::shared_ptr<T> (new T[new_len], std::default_delete<T[]>());
     sptr = new_sptr;
   }
   
@@ -343,7 +342,7 @@ T* global_empty_ptr = new T[0];
 
 template <class T>
 struct DafnySequence {
-    shared_ptr<T> sptr;
+    std::shared_ptr<T> sptr;
     T* start;
     size_t len;
 
@@ -354,7 +353,7 @@ struct DafnySequence {
     }
 
     explicit DafnySequence(uint64 len) {
-      sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
       this->len = len;
     }
@@ -368,7 +367,7 @@ struct DafnySequence {
     // Update one element
     DafnySequence(const DafnySequence<T>& other, uint64 i, T t) {
       len = other.length();
-      sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
 
       std::copy(other.start, other.start + len, start);
@@ -377,21 +376,21 @@ struct DafnySequence {
 
     explicit DafnySequence(DafnyArray<T> arr) {
       len = arr.size();
-      sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
       std::copy(arr.begin(), arr.end(), start);
     }
 
     DafnySequence(DafnyArray<T> arr, uint64 lo, uint64 hi) {
       len = hi - lo;
-      sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
       std::copy(arr.begin() + lo, arr.begin() + hi, start);
     }
 
-    DafnySequence(initializer_list<T> il) {
+    DafnySequence(std::initializer_list<T> il) {
       len = il.size();
-      sptr = shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       start = &*sptr;
 
       int i = 0;
@@ -421,7 +420,7 @@ struct DafnySequence {
         return ret;
     }
 
-    static DafnySequence<T> Create(initializer_list<T> il) {
+    static DafnySequence<T> Create(std::initializer_list<T> il) {
         DafnySequence<T> ret(il);
         return ret;
     }
@@ -494,7 +493,7 @@ struct DafnySequence {
     // TODO: toString
 };
 
-inline DafnySequence<char> DafnySequenceFromString(string const& s) {
+inline DafnySequence<char> DafnySequenceFromString(std::string const& s) {
   DafnySequence<char> seq(s.size());
   memcpy(seq.ptr(), &s[0], s.size());
   return seq;
@@ -531,7 +530,7 @@ bool operator!=(const DafnySequence<U> &s0, const DafnySequence<U> &s1) {
     return !s0.equals(s1);
 }
 
-inline ostream& operator<<(ostream& out, const DafnySequence<char>& val){
+inline std::ostream& operator<<(std::ostream& out, const DafnySequence<char>& val){
     for (size_t i = 0; i < val.size(); i++) {
         out << val.select(i);
     }
@@ -570,15 +569,15 @@ struct DafnySet {
     }
     
     DafnySet(const DafnySet<T>& other) {
-        set = unordered_set<T>(other.set);        
+        set = std::unordered_set<T>(other.set);        
     }
 
-    DafnySet(initializer_list<T> il) {
-        unordered_set<T> a_set(il);
+    DafnySet(std::initializer_list<T> il) {
+        std::unordered_set<T> a_set(il);
         set = a_set;
     }
        
-    static DafnySet<T> Create(initializer_list<T> il) {
+    static DafnySet<T> Create(std::initializer_list<T> il) {
         DafnySet<T> ret(il);
         return ret;            
     }
@@ -645,7 +644,7 @@ struct DafnySet {
         return ret;            
     }
     
-    unordered_set<T> Elements() {
+    std::unordered_set<T> Elements() {
         return set;
     }
 
@@ -660,7 +659,7 @@ struct DafnySet {
 
     // TODO: toString
     
-    unordered_set<T> set;
+    std::unordered_set<T> set;
 };
 
 template <typename U>
@@ -674,7 +673,7 @@ bool operator!=(const DafnySet<U> &s0, const DafnySet<U> &s1) {
 }
 
 template <typename U>
-inline ostream& operator<<(ostream& out, const DafnySet<U>& val){
+inline std::ostream& operator<<(std::ostream& out, const DafnySet<U>& val){
     for (auto const& c:val.set) {
         out << c;
     }    
@@ -703,15 +702,15 @@ struct DafnyMap {
     }
     
     DafnyMap(const DafnyMap<K,V>& other) {
-        map = unordered_map<K,V>(other.map);        
+        map = std::unordered_map<K,V>(other.map);        
     }
 
-    DafnyMap(initializer_list<pair<const K,V>> il) {
-        unordered_map<K,V> a_map(il);
+    DafnyMap(std::initializer_list<std::pair<const K,V>> il) {
+        std::unordered_map<K,V> a_map(il);
         map = a_map;
     }
        
-    static DafnyMap<K,V> Create(initializer_list<pair<const K,V>> il) {
+    static DafnyMap<K,V> Create(std::initializer_list<std::pair<const K,V>> il) {
         DafnyMap<K,V> ret(il);
         return ret;            
     }
@@ -815,7 +814,7 @@ struct DafnyMap {
     // TODO: hash
     // TODO: toString
     
-    unordered_map<K,V> map;
+    std::unordered_map<K,V> map;
 };
 
 
@@ -830,7 +829,7 @@ bool operator!=(const DafnyMap<T,U> &s0, const DafnyMap<T,U> &s1) {
 }
 
 template <typename T, typename U>
-inline ostream& operator<<(ostream& out, const DafnyMap<T,U>& val){
+inline std::ostream& operator<<(std::ostream& out, const DafnyMap<T,U>& val){
     for (auto const& kv:val.map) {
         out << "(" << kv.first << " -> " << kv.second << ")";
     }    

@@ -9,7 +9,7 @@ datatype Example2 = Ex2a(u:uint32) | Ex2b(b:bool)
 datatype Example3 = Example3(e:Example1)
 datatype Example4 = Ex4a | Ex4b
 datatype Example5<V> = Ex5a(v:V) | Ex5b(b:bool)
-
+datatype Example6 = Ex6a(u:uint32) | Ex6b(b:bool) | Ex6c(u:uint32, s:seq<bool>)
 type Ex1Sub = d:Example1 | d.u == 0 witness Example1(0, true)
 type Ex2Sub = d:Example2 | d.Ex2a? && d.u == 0 witness Ex2a(0)
 type Ex3Sub = d:Example3 | d.e.b witness Example3(Example1(42, true))
@@ -55,13 +55,13 @@ method TestDestructor() {
     }
 }
 
+datatype Option<V> = None | Some(value:V)
+
 method TestGenericDefault() {
   var x:Option<Example5<bool>>;
 }
 
-datatype Option<V> = None | Some(value:V)
 datatype Err<V> = Fail(err:bool) | Ok(value:V)
-
 
 method matcher(e:Err<uint32>) {
   match e {
