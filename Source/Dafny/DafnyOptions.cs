@@ -64,7 +64,6 @@ namespace Microsoft.Dafny
     public bool Compile = true;
     [Flags]
     public enum CompilationTarget { Csharp = 1, JavaScript = 2, Go = 4, Java = 8, Cpp = 16, Php = 32 }
-    public enum CompilationTarget { Csharp = 1, JavaScript = 2, Go = 4, Cpp = 8 }
     public CompilationTarget CompileTarget = CompilationTarget.Csharp;
     public bool CompileVerbose = true;
     public string DafnyPrintCompiledFile = null;

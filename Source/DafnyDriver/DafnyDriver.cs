@@ -173,39 +173,6 @@ namespace Microsoft.Dafny
             ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or Go files (.go)", file,
               extension == null ? "" : extension);
             return ExitValue.PREPROCESSING_ERROR;
-        try { dafnyFiles.Add(new DafnyFile(file)); } catch (IllegalDafnyFile) {
-          if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Csharp) {
-            if (extension == ".cs" || extension == ".dll") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or C# files (.cs) or managed DLLS (.dll)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
-          } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.JavaScript) {
-            if (extension == ".js") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or JavaScrip files (.js)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
-          } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Go) {
-            if (extension == ".go") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or Go files (.go)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
-          } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Cpp) {
-            if (extension == ".h") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or C headers (.h)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
           }
         }
       }
@@ -678,13 +645,8 @@ namespace Microsoft.Dafny
 
       if (!completeProgram) {
         return false;
-      // compile the program into an assembly
-      if (!completeProgram || !invokeCompiler) {
-        // don't compile
-        // Caller interprets this as success/fail and returns an error if false,
-        //  but we didn't actually hit an error, we just didn't invoke the compiler
-        return true;  
       }
+
       // If we got until here, compilation to C# succeeded
       if (!invokeCompiler) {
         return true; // If we're not asked to invoke the C# to assembly compiler, we can report success

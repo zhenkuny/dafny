@@ -997,9 +997,9 @@ namespace Microsoft.Dafny {
               var w = new TargetWriter();
               TrExpr(cf.Rhs, w, false);
               var rhs = w.ToString();
-              classWriter.DeclareField(f.CompileName, false, true, f.Type, f.tok, rhs);
+              classWriter.DeclareField(f.CompileName, c.TypeArgs, false, true, f.Type, f.tok, rhs);
             } else {
-              classWriter.DeclareField(f.CompileName, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, true));
+              classWriter.DeclareField(f.CompileName, c.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, true));
             }
 
             if (!FieldsInTraits) { // Create getters and setters for "traits" in languages that don't allow for non-final field declarations.
