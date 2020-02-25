@@ -117,39 +117,62 @@ namespace Microsoft.Dafny
       { Contract.Assert(file != null);
         string extension = Path.GetExtension(file);
         if (extension != null) { extension = extension.ToLower(); }
-        try { dafnyFiles.Add(new DafnyFile(file)); } catch (IllegalDafnyFile) {
-          if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Csharp) {
-            if (extension == ".cs" || extension == ".dll") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or C# files (.cs) or managed DLLS (.dll)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
-          } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.JavaScript) {
-            if (extension == ".js") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or JavaScrip files (.js)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
-          } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Go) {
-            if (extension == ".go") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or Go files (.go)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
-          } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Cpp) {
-            if (extension == ".h") {
-              otherFiles.Add(file);
-            } else {
-              ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or C headers (.h)", file,
-                extension == null ? "" : extension);
-              return ExitValue.PREPROCESSING_ERROR;
-            }
+
+        bool isDafnyFile = false;
+        try {
+          dafnyFiles.Add(new DafnyFile(file));
+          isDafnyFile = true;
+        } catch (IllegalDafnyFile) {
+          // Fall through and try to handle the file as an "other file"
+        }
+
+        if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Csharp) {
+          if (extension == ".cs" || extension == ".dll") {
+            otherFiles.Add(file);
+          } else if (!isDafnyFile) {
+            ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or C# files (.cs) or managed DLLS (.dll)", file,
+              extension == null ? "" : extension);
+            return ExitValue.PREPROCESSING_ERROR;
+          }
+        } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.JavaScript) {
+          if (extension == ".js") {
+            otherFiles.Add(file);
+          } else if (!isDafnyFile) {
+            ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or JavaScript files (.js)", file,
+              extension == null ? "" : extension);
+            return ExitValue.PREPROCESSING_ERROR;
+          }
+        } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Java) {
+          if (extension == ".java") {
+            otherFiles.Add(file);
+          } else if (!isDafnyFile) {
+            ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or Java files (.java)", file,
+              extension == null ? "" : extension);
+            return ExitValue.PREPROCESSING_ERROR;
+          }
+        } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Cpp) {
+          if (extension == ".h") {
+            otherFiles.Add(file);
+          } else if (!isDafnyFile) {
+            ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or C headers (.h)", file,
+              extension == null ? "" : extension);
+            return ExitValue.PREPROCESSING_ERROR;
+          }
+        } else if (DafnyOptions.O.CompileTarget == DafnyOptions.CompilationTarget.Php) {
+          if (extension == ".php") {
+            otherFiles.Add(file);
+          } else if (!isDafnyFile) {
+            ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or PHP files (.php)", file,
+              extension == null ? "" : extension);
+            return ExitValue.PREPROCESSING_ERROR;
+          }
+        } else {
+          if (extension == ".go") {
+            otherFiles.Add(file);
+          } else if (!isDafnyFile) {
+            ExecutionEngine.printer.ErrorWriteLine(Console.Out, "*** Error: '{0}': Filename extension '{1}' is not supported. Input files must be Dafny programs (.dfy) or Go files (.go)", file,
+              extension == null ? "" : extension);
+            return ExitValue.PREPROCESSING_ERROR;
           }
         }
       }
@@ -460,6 +483,14 @@ namespace Microsoft.Dafny
           targetExtension = "go";
           targetBaseDir = baseName + "-go/src";
           break;
+        case DafnyOptions.CompilationTarget.Java:
+          targetExtension = "java";
+          targetBaseDir = baseName;
+          break;
+        case DafnyOptions.CompilationTarget.Php:
+          targetExtension = "php";
+          targetBaseDir = baseName;
+          break;
         case DafnyOptions.CompilationTarget.Cpp:
           targetExtension = "cpp";
           break;        
@@ -469,10 +500,18 @@ namespace Microsoft.Dafny
       }
       string targetBaseName = Path.ChangeExtension(dafnyProgramName, targetExtension);
       string targetDir = Path.Combine(Path.GetDirectoryName(dafnyProgramName), targetBaseDir);
+      // WARNING: Make sure that Directory.Delete is only called when the compilation target is Java.
+      // If called during C# or JS compilation, you will lose your entire target directory.
+      // Purpose is to delete the old generated folder with the Java compilation output and replace all contents.
+      if (DafnyOptions.O.CompileTarget is DafnyOptions.CompilationTarget.Java && Directory.Exists(targetDir))
+        Directory.Delete(targetDir, true);
       string targetFilename = Path.Combine(targetDir, targetBaseName);
-      WriteFile(targetFilename, targetProgram);
+      if (targetProgram != null) {
+        WriteFile(targetFilename, targetProgram);
+      }
+
       string relativeTarget = Path.Combine(targetBaseDir, targetBaseName);
-      if (completeProgram) {
+      if (completeProgram && targetProgram != null) {
         if (DafnyOptions.O.CompileVerbose) {
           outputWriter.WriteLine("Compiled program written to {0}", relativeTarget);
         }
@@ -532,6 +571,9 @@ namespace Microsoft.Dafny
         case DafnyOptions.CompilationTarget.Go:
           compiler = new Dafny.GoCompiler(dafnyProgram.reporter);
           break;
+        case DafnyOptions.CompilationTarget.Java:
+          compiler = new Dafny.JavaCompiler(dafnyProgram.reporter);
+          break;
         case DafnyOptions.CompilationTarget.Cpp:
           compiler = new Dafny.CppCompiler(dafnyProgram.reporter, otherFileNames);
           break;
@@ -557,10 +599,18 @@ namespace Microsoft.Dafny
           otherFiles.Add(wr.Filename, sw.ToString());
         }
       }
+      string baseName = Path.GetFileNameWithoutExtension(dafnyProgramName);
       string callToMain = null;
       if (hasMain) {
         using (var wr = new TargetWriter(0)) {
+          if (DafnyOptions.O.CompileTarget is DafnyOptions.CompilationTarget.Java) {
+            dafnyProgramName = dafnyProgramName.Replace('-', '_');
+            wr.WriteLine($"public class {baseName.Replace('-', '_')} {{");
+          }
           compiler.EmitCallToMain(mainMethod, wr);
+          if (DafnyOptions.O.CompileTarget is DafnyOptions.CompilationTarget.Java) {
+            wr.WriteLine("}");
+          }
           callToMain = wr.ToString(); // assume there aren't multiple files just to call main
         }
       }
@@ -571,17 +621,38 @@ namespace Microsoft.Dafny
       if (DafnyOptions.O.SpillTargetCode > 0 || otherFileNames.Count > 0 || (invokeCompiler && !compiler.SupportsInMemoryCompilation))
       {
         var p = callToMain == null ? targetProgramText : targetProgramText + callToMain;
+        if (DafnyOptions.O.CompileTarget is DafnyOptions.CompilationTarget.Java && callToMain == null) {
+          p = null;
+        }
         targetFilename = WriteDafnyProgramToFiles(dafnyProgramName, p, completeProgram, otherFiles, outputWriter);
       }
 
-      // compile the program into an assembly
-      if (!completeProgram || !invokeCompiler) {
-        // don't compile
-        // Caller interprets this as success/fail and returns an error if false,
-        //  but we didn't actually hit an error, we just didn't invoke the compiler
-        return true;  
+      if (DafnyOptions.O.CompileTarget is DafnyOptions.CompilationTarget.Java) {
+        string targetBaseDir = baseName;
+        string targetDir = Path.Combine(Path.GetDirectoryName(dafnyProgramName), targetBaseDir);
+        var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        Contract.Assert(assemblyLocation != null);
+        var codebase = System.IO.Path.GetDirectoryName(assemblyLocation);
+        Contract.Assert(codebase != null);
+        string dest = targetDir + "/dafny";
+        Directory.CreateDirectory(dest);
+        var jcompiler = (JavaCompiler) compiler;
+        jcompiler.CompileTuples(dest);
+        jcompiler.CreateFunctionInterface(dest);
+        jcompiler.CompileDafnyArrays(dest);
+        jcompiler.CompileArrayInits(dest);
       }
 
+      if (!completeProgram) {
+        return false;
+      }
+
+      // If we got until here, compilation to C# succeeded
+      if (!invokeCompiler) {
+        return true; // If we're not asked to invoke the C# to assembly compiler, we can report success
+      }
+
+      // compile the program into an assembly
       object compilationResult;
       var compiledCorrectly = compiler.CompileTargetProgram(dafnyProgramName, targetProgramText, callToMain, targetFilename, otherFileNames,
         hasMain, hasMain && DafnyOptions.O.RunAfterCompile, outputWriter, out compilationResult);

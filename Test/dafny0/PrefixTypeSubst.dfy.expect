@@ -17,14 +17,14 @@ module _System {
 
   trait {:compile false} object { }
   /*-- non-null type
-  type {:axiom} object(==) = c: object? | c != null    /*special witness*/
+  type {:axiom} object(==) = c: object? | c != null /*special witness*/
   */
 
   class {:compile false} array<arg> {
     var Length: int  // immutable
   }
   /*-- non-null type
-  type {:axiom} array(==)<arg> = c: array?<arg> | c != null    /*special witness*/
+  type {:axiom} array(==)<arg> = c: array?<arg> | c != null /*special witness*/
   */
 
   class {:compile false} /*_#Func0*/ () ~> +R {
@@ -108,7 +108,7 @@ module _System {
     var IsNat: bool  // immutable
   }
 
-  type bv {
+  type _bv {
     function method RotateLeft(w: nat): selftype
 
     function method RotateRight(w: nat): selftype
@@ -280,7 +280,7 @@ class MyClass<A, B> {
     L(u, v);
   }
   /***
-  lemma /*{:_induction _k}*/ L#<U, V>[_k: ORDINAL](u: U, v: V)
+  lemma /*{:_induction this, _k}*/ L#<U, V>[_k: ORDINAL](u: U, v: V)
     ensures P#[_k](u, v)
     decreases _k
   {
@@ -303,7 +303,7 @@ class MyClass<A, B> {
     assert R#<char>[_k - 1]();
   }
   /***
-  lemma /*{:_induction _k}*/ M#<W>[_k: ORDINAL]()
+  lemma /*{:_induction this, _k}*/ M#<W>[_k: ORDINAL]()
     ensures R#<char>[_k]()
     decreases _k
   {
@@ -321,7 +321,7 @@ class MyClass<A, B> {
   ***/
 }
 /*-- non-null type
-type {:axiom} MyClass(==)<A, B> = c: MyClass?<A, B> | c != null  /*special witness*/
+type {:axiom} MyClass(==)<A, B> = c: MyClass?<A, B> | c != null /*special witness*/
 */
 
 colemma N<D0, D1, D2>(o: MyClass<D0, D1>)

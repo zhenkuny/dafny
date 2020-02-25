@@ -244,7 +244,17 @@ namespace Microsoft.Dafny {
             wr.Write("| ");
             PrintExpression(dd.Constraint, true);
             wr.WriteLine();
-            PrintWitnessClause(dd, indent + IndentAmount);
+            if (dd.WitnessKind != SubsetTypeDecl.WKind.None) {
+              Indent(indent + IndentAmount);
+              PrintWitnessClause(dd);
+              wr.WriteLine();
+            }
+          }
+          if (dd.Members.Count != 0) {
+            wr.WriteLine("{");
+            PrintMembers(dd.Members, indent + IndentAmount, fileBeingPrinted);
+            Indent(indent);
+            wr.WriteLine("}");
           }
         } else if (d is SubsetTypeDecl) {
           var dd = (SubsetTypeDecl)d;
@@ -265,10 +275,16 @@ namespace Microsoft.Dafny {
           }
           wr.Write("| ");
           PrintExpression(dd.Constraint, true);
-          if (!(dd is NonNullTypeDecl)) {
-            wr.WriteLine();
+          if (dd.WitnessKind != SubsetTypeDecl.WKind.None) {
+            if (dd is NonNullTypeDecl) {
+              wr.Write(" ");
+            } else {
+              wr.WriteLine();
+              Indent(indent + IndentAmount);
+            }
+            PrintWitnessClause(dd);
           }
-          PrintWitnessClause(dd, indent + IndentAmount);
+          wr.WriteLine();
         } else if (d is TypeSynonymDecl) {
           var dd = (TypeSynonymDecl)d;
           if (i++ != 0) { wr.WriteLine(); }
@@ -278,8 +294,9 @@ namespace Microsoft.Dafny {
           PrintType(dd.Rhs);
           wr.WriteLine();
         } else if (d is DatatypeDecl) {
+          var dd = (DatatypeDecl)d;
           if (i++ != 0) { wr.WriteLine(); }
-          PrintDatatype((DatatypeDecl)d, indent);
+          PrintDatatype(dd, indent, fileBeingPrinted);
         } else if (d is IteratorDecl) {
           var iter = (IteratorDecl)d;
           if (i++ != 0) { wr.WriteLine(); }
@@ -385,13 +402,10 @@ namespace Microsoft.Dafny {
       }
     }
 
-    private void PrintWitnessClause(RedirectingTypeDecl dd, int indent) {
+    private void PrintWitnessClause(RedirectingTypeDecl dd) {
       Contract.Requires(dd != null);
-      Contract.Requires(0 <= indent);
-      if (dd.WitnessKind == SubsetTypeDecl.WKind.None) {
-        return;
-      }
-      Indent(indent);
+      Contract.Requires(dd.WitnessKind != SubsetTypeDecl.WKind.None);
+
       switch (dd.WitnessKind) {
         case SubsetTypeDecl.WKind.Ghost:
           wr.Write("ghost ");
@@ -399,13 +413,11 @@ namespace Microsoft.Dafny {
         case SubsetTypeDecl.WKind.Compiled:
           wr.Write("witness ");
           PrintExpression(dd.Witness, true);
-          wr.WriteLine();
-          break;
-        case SubsetTypeDecl.WKind.None:
           break;
         case SubsetTypeDecl.WKind.Special:
-          wr.WriteLine("/*special witness*/");
+          wr.Write("/*special witness*/");
           break;
+        case SubsetTypeDecl.WKind.None:
         default:
           Contract.Assert(false);  // unexpected WKind
           break;
@@ -584,7 +596,9 @@ namespace Microsoft.Dafny {
       int state = 0;  // 0 - no members yet; 1 - previous member was a field; 2 - previous member was non-field
       foreach (MemberDecl m in members) {
         if (PrintModeSkipGeneral(m.tok, fileBeingPrinted)) { continue; }
-        if (m is Method) {
+        if (printMode == DafnyOptions.PrintModes.DllEmbed && Attributes.Contains(m.Attributes, "auto_generated")) {
+          // omit this declaration
+        } else if (m is Method) {
           if (state != 0) { wr.WriteLine(); }
           PrintMethod((Method)m, indent, false);
           var com = m as FixpointLemma;
@@ -698,7 +712,7 @@ namespace Microsoft.Dafny {
       wr.Write(Type.TypeArgsToString(typeArgs));
     }
 
-    public void PrintDatatype(DatatypeDecl dt, int indent) {
+    public void PrintDatatype(DatatypeDecl dt, int indent, string fileBeingPrinted) {
       Contract.Requires(dt != null);
       Indent(indent);
       PrintClassMethodHelper(dt is IndDatatypeDecl ? "datatype" : "codatatype", dt.Attributes, dt.Name, dt.TypeArgs);
@@ -712,7 +726,14 @@ namespace Microsoft.Dafny {
         }
         sep = " |";
       }
-      wr.WriteLine();
+      if (dt.Members.Count == 0) {
+        wr.WriteLine();
+      } else {
+        wr.WriteLine(" {");
+        PrintMembers(dt.Members, indent + IndentAmount, fileBeingPrinted);
+        Indent(indent);
+        wr.WriteLine("}");
+      }
     }
 
     /// <summary>
@@ -1373,7 +1394,10 @@ namespace Microsoft.Dafny {
           PrintExpression(lhs, true);
           sep = ", ";
         }
-        PrintUpdateRHS(s);
+        if (s.Lhss.Count > 0) {
+          wr.Write(" ");
+        }
+        PrintUpdateRHS(s, indent);
         wr.Write(";");
 
       } else if (stmt is CallStmt) {
@@ -1386,7 +1410,9 @@ namespace Microsoft.Dafny {
       } else if (stmt is VarDeclStmt) {
         var s = (VarDeclStmt)stmt;
         if (s.Locals.Exists(v => v.IsGhost) && printMode == DafnyOptions.PrintModes.NoGhost) { return; }
-        if (s.Locals.Exists(v => v.IsGhost)) {
+        if (s.Locals.TrueForAll((v => v.IsGhost))) {
+          // Emit the "ghost" modifier if all of the variables are ghost. If some are ghost, but not others,
+          // then some of these ghosts are auto-converted to ghost, so we should not emit the "ghost" keyword.
           wr.Write("ghost ");
         }
         wr.Write("var");
@@ -1401,7 +1427,8 @@ namespace Microsoft.Dafny {
           sep = ",";
         }
         if (s.Update != null) {
-          PrintUpdateRHS(s.Update);
+          wr.Write(" ");
+          PrintUpdateRHS(s.Update, indent);
         }
         wr.Write(";");
 
@@ -1468,14 +1495,15 @@ namespace Microsoft.Dafny {
     }
 
     /// <summary>
-    /// Does not print LHS
+    /// Does not print LHS, nor the space one might want between LHS and RHS,
+    /// because if there's no LHS, we don't want to start with a space
     /// </summary>
-    void PrintUpdateRHS(ConcreteUpdateStatement s) {
+    void PrintUpdateRHS(ConcreteUpdateStatement s, int indent) {
       Contract.Requires(s != null);
       if (s is UpdateStmt) {
         var update = (UpdateStmt)s;
         if (update.Lhss.Count != 0) {
-          wr.Write(" := ");
+          wr.Write(":= ");
         }
         var sep = "";
         foreach (var rhs in update.Rhss) {
@@ -1485,13 +1513,29 @@ namespace Microsoft.Dafny {
         }
       } else if (s is AssignSuchThatStmt) {
         var update = (AssignSuchThatStmt)s;
-        wr.Write(" :| ");
+        wr.Write(":| ");
         if (update.AssumeToken != null) {
           wr.Write("assume ");
         }
         PrintExpression(update.Expr, true);
+      } else if (s is AssignOrReturnStmt) {
+        var stmt = (AssignOrReturnStmt)s;
+        wr.Write(":- ");
+        PrintExpression(stmt.Rhs, true);
+        if (DafnyOptions.O.DafnyPrintResolvedFile != null) {
+          Contract.Assert(stmt.ResolvedStatements.Count > 0);  // filled in during resolution
+          wr.WriteLine();
+          Indent(indent); wr.WriteLine("/*---------- desugared ----------");
+          foreach (Statement r in stmt.ResolvedStatements) {
+            Indent(indent);
+            PrintStatement(r, indent);
+            wr.WriteLine();
+          }
+          Indent(indent); wr.Write("---------- end desugared ----------*/");
+        }
+
       } else {
-        Contract.Assert(s == null);  // otherwise, unknown type
+        Contract.Assert(false);  // otherwise, unknown type
       }
     }
 
@@ -2064,7 +2108,11 @@ namespace Microsoft.Dafny {
 
       } else if (expr is SeqConstructionExpr) {
         var e = (SeqConstructionExpr)expr;
-        wr.Write("seq(");
+        wr.Write("seq");
+        if (e.ExplicitElementType != null) {
+          wr.Write("<{0}>", e.ExplicitElementType);
+        }
+        wr.Write("(");
         PrintExpression(e.N, false);
         wr.Write(", ");
         PrintExpression(e.Initializer, false);
@@ -2306,6 +2354,23 @@ namespace Microsoft.Dafny {
           wr.Write(" :| ");
         }
         PrintExpressionList(e.RHSs, true);
+        wr.Write("; ");
+        PrintExpression(e.Body, !parensNeeded && isFollowedBySemicolon);
+        if (parensNeeded) { wr.Write(")"); }
+
+      } else if (expr is LetOrFailExpr) {
+        // TODO should we also print the desugared version?
+        // If so, should we insert newlines?
+        var e = (LetOrFailExpr)expr;
+        bool parensNeeded = !isRightmost;
+        if (parensNeeded) { wr.Write("("); }
+        if (e.Lhs != null) {
+          if (e.Lhs.Var != null && e.Lhs.Var.IsGhost) { wr.Write("ghost "); }
+          wr.Write("var ");
+          PrintCasePattern(e.Lhs);
+          wr.Write(" :- ");
+        }
+        PrintExpression(e.Rhs, true);
         wr.Write("; ");
         PrintExpression(e.Body, !parensNeeded && isFollowedBySemicolon);
         if (parensNeeded) { wr.Write(")"); }

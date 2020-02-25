@@ -14,11 +14,35 @@ let Library = (function() {
       return y;
     }
   };
-  
+
+  $module.OtherClass = class OtherClass {
+    static CallMe() {
+      return "OtherClass.CallMe";
+    }
+  }
+
+  $module.AllDafny = class AllDafny {
+    // Just here so the generated class can extend it
+  }
+
   $module.Mixed = class Mixed {
+    constructor() { }
+
     // static method P()
     static P() {
       process.stdout.write("Mixed.P\n");
+    }
+
+    IP() {
+      process.stdout.write("Mixed.IP\n");
+    }
+
+    static G() {
+      return new BigNumber(1);
+    }
+
+    IG() {
+      return new BigNumber(2);
     }
   }
   $module.AllExtern = class AllExtern {
@@ -26,6 +50,6 @@ let Library = (function() {
       process.stdout.write("AllExtern.P\n");
     }
   };
-  
+
   return $module;
 })();

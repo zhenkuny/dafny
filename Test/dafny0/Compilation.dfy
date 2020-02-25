@@ -155,13 +155,13 @@ module M {
     A
   }
   class public {
-    var private: int;
+    var private: int const namespace: int const fallthrough: int const try: int
   }
 }
 
 method Caller() {
   var p := new M.public;
-  var x := p.private;
+  var x := p.private + p.namespace + p.fallthrough + p.try;
 }
 
 // ----- digits-identifiers for destructors -----
@@ -191,7 +191,7 @@ ghost method {:axiom} m_nobody() returns (y:int)
 lemma {:axiom} l_nobody() returns (y:int)
   ensures y > 5;
 
-function {:axiom} f_nobody():int 
+function {:axiom} f_nobody():int
   ensures f_nobody() > 5;
 
 // Make sure the lemma created for opaque functions doesn't produce compiler errors
@@ -335,7 +335,7 @@ class DigitUnderscore_Names_Functions_and_Methods {
     ensures this.70() == 80
   {
   }
-  
+
   const 90 := () => 92
   method 567(y: int) {
     var m := this.90;
