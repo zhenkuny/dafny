@@ -1,6 +1,7 @@
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:cs "%s" > "%t"
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:js "%s" >> "%t"
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:go "%s" >> "%t"
+// RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:java "%s" >> "%t"
 // RUN: %diff "%s.expect" "%t"
 
 method M1() returns (x: int)
@@ -12,7 +13,7 @@ method M2() returns (x: int, ghost y: int)
 {
   print "hello, M2\n";
 }
- 
+
 method M3() returns (x: int, ghost y: int, z: int)
 {
   print "hello, M3\n";

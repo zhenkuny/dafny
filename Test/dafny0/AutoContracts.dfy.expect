@@ -17,14 +17,14 @@ module _System {
 
   trait {:compile false} object { }
   /*-- non-null type
-  type {:axiom} object(==) = c: object? | c != null    /*special witness*/
+  type {:axiom} object(==) = c: object? | c != null /*special witness*/
   */
 
   class {:compile false} array<arg> {
     var Length: int  // immutable
   }
   /*-- non-null type
-  type {:axiom} array(==)<arg> = c: array?<arg> | c != null    /*special witness*/
+  type {:axiom} array(==)<arg> = c: array?<arg> | c != null /*special witness*/
   */
 
   class {:compile false} /*_#Func0*/ () ~> +R {
@@ -76,7 +76,7 @@ module _System {
     var IsNat: bool  // immutable
   }
 
-  type bv {
+  type _bv {
     function method RotateLeft(w: nat): selftype
 
     function method RotateRight(w: nat): selftype
@@ -140,7 +140,7 @@ module OneModule {
     }
   }
   /*-- non-null type
-  type {:axiom} D(==) = c: D? | c != null    /*special witness*/
+  type {:axiom} D(==) = c: D? | c != null /*special witness*/
   */
 
   class {:autocontracts} C {
@@ -230,13 +230,13 @@ module OneModule {
       data < 20
     }
 
-    lemma L()
+    lemma /*{:_induction this}*/ L()
       requires Valid()
       ensures data < 100
     {
     }
 
-    twostate lemma TL()
+    twostate lemma /*{:_induction this}*/ TL()
       requires old(Valid())
       ensures old(data) <= data
     {
@@ -251,7 +251,7 @@ module OneModule {
     ghost var Repr: set<object?>
   }
   /*-- non-null type
-  type {:axiom} C(==) = c: C? | c != null    /*special witness*/
+  type {:axiom} C(==) = c: C? | c != null /*special witness*/
   */
 }
 
@@ -344,7 +344,7 @@ module N0 {
     }
   }
   /*-- non-null type
-  type {:axiom} C(==) = c: C? | c != null    /*special witness*/
+  type {:axiom} C(==) = c: C? | c != null /*special witness*/
   */
 }
 
@@ -443,7 +443,7 @@ module N1 refines N0 {
     ghost var Repr: set<object?>
   }
   /*-- non-null type
-  type {:axiom} C(==) = c: C? | c != null    /*special witness*/
+  type {:axiom} C(==) = c: C? | c != null /*special witness*/
   */
 }
 
@@ -542,7 +542,7 @@ module N2 refines N1 {
     ghost var Repr: set<object?>
   }
   /*-- non-null type
-  type {:axiom} C(==) = c: C? | c != null    /*special witness*/
+  type {:axiom} C(==) = c: C? | c != null /*special witness*/
   */
 }
 AutoContracts.dfy(17,4): Error BP5003: A postcondition might not hold on this return path.

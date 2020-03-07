@@ -63,7 +63,8 @@ namespace Microsoft.Dafny {
       wr.WriteLine("#include \"{0}\"", headerFileName);
       
       var headerFileWr = wr.NewFile(headerFileName);
-      headerFileWr.WriteLine("// Dafny program {0} compiled into Cpp", program.Name);
+      headerFileWr.WriteLine("// Dafny program {0} compiled into a Cpp header file", program.Name);
+      headerFileWr.WriteLine("#pragma once");
       headerFileWr.WriteLine("#include \"DafnyRuntime.h\"");
       // TODO: Include appropriate .h file here
       //ReadRuntimeSystem("DafnyRuntime.h", wr);
@@ -344,7 +345,7 @@ namespace Microsoft.Dafny {
       return String.Format("{0}_{1}{2}", IdProtect(ctor.EnclosingDatatype.CompileName), ctor.CompileName, args);
     }
 
-    protected override void DeclareDatatype(DatatypeDecl dt, TargetWriter writer) {
+    protected override IClassWriter DeclareDatatype(DatatypeDecl dt, TargetWriter writer) {
       // Given:
       // datatype Example1 = Example1(u:uint32, b:bool)
       // datatype Example2 = Ex2a(u:uint32) | Ex2b(b:bool)
@@ -385,7 +386,7 @@ namespace Microsoft.Dafny {
 
       if (dt is TupleTypeDecl) {
         // Tuple types are declared once and for all in DafnyRuntime.h
-        return;
+        return null;
       }
 
       this.datatypeDecls.Add(dt);
@@ -673,9 +674,11 @@ namespace Microsoft.Dafny {
           owr2.WriteLine("return h;");
         }
       }
+
+      return null;
     }
 
-    protected override void DeclareNewtype(NewtypeDecl nt, TargetWriter wr) {    
+    protected override IClassWriter DeclareNewtype(NewtypeDecl nt, TargetWriter wr) {    
       
       if (nt.NativeType != null) {
         if (nt.NativeType.Name != nt.Name) {
@@ -715,6 +718,8 @@ namespace Microsoft.Dafny {
         var d = TypeInitializationValue(udt, wr, nt.tok, false);
         wDefault.WriteLine("return {0};", d);
       }
+
+      return cw;
     }
 
     protected override void DeclareSubsetType(SubsetTypeDecl sst, TargetWriter wr) {
@@ -2457,7 +2462,6 @@ namespace Microsoft.Dafny {
           callString = "IsProperSupersetOf"; break;
         case BinaryExpr.ResolvedOpcode.Disjoint:
         case BinaryExpr.ResolvedOpcode.MultiSetDisjoint:
-        case BinaryExpr.ResolvedOpcode.MapDisjoint:
           callString = "IsDisjointFrom"; break;
         case BinaryExpr.ResolvedOpcode.InSet:
         case BinaryExpr.ResolvedOpcode.InMultiSet:

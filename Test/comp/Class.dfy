@@ -1,6 +1,7 @@
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:cs "%s" > "%t"
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:js "%s" >> "%t"
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:go "%s" >> "%t"
+// RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:java "%s" >> "%t"
 // RUN: %diff "%s.expect" "%t"
 
 class MyClass {
@@ -26,7 +27,7 @@ trait MyTrait {
   const c := 17
   static const d: int
   static const e := 18
-    
+
   function method F(): int { 8 }
   static function method G(): int { 9 }
   method M() returns (r: int) { r := 69; }
@@ -65,7 +66,7 @@ method CallEm(c: MyClass, t: MyTrait, i: MyTraitInstance)
   print u, " ";
   u := c.N();
   print u, "\n";
-  
+
   print t.b, " ";
   print t.c, " ";
   print t.d, " ";
@@ -121,6 +122,8 @@ method Main() {
   t3 := t;
   // Upcast via function call
   CallEm(c, t, i);
+  DependentStaticConsts.Test();
+  NewtypeWithMethods.Test();
 }
 
 module Module1 {
@@ -130,5 +133,43 @@ module Module1 {
 module Module2 {
   import Module1
 
-  class ClassExtendingTraitInOtherModule extends Module1.TraitInModule { } 
+  class ClassExtendingTraitInOtherModule extends Module1.TraitInModule { }
+}
+
+module DependentStaticConsts {
+  newtype ID = x: int | 0 <= x < 100
+
+  // regression test: const's A,B,C,D should all be initialized before Suite is
+  const A: ID := 0
+  const B: ID := 1
+  const C: ID := 2
+  const Suite := map[A := "hello", B := "hi", C := "bye", D := "later"]
+  const D: ID := 3
+
+  method Test()
+  {
+    print Suite[B], " ", Suite[D], "\n";  // hi later
+  }
+}
+
+newtype NewtypeWithMethods = x | 0 <= x < 42 {
+  function method double() : int {
+    this as int * 2
+  }
+
+  method divide(d : NewtypeWithMethods) returns (q : int, r : int) requires d != 0 {
+    q := (this / d) as int;
+    r := (this % d) as int;
+  }
+
+  static method Test() {
+    var a : NewtypeWithMethods := 21;
+    var b : NewtypeWithMethods;
+    b := 4;
+    var q : int;
+    var r : int;
+    q, r := a.divide(b);
+
+    print a, " ", b, " ", a.double(), " ", q, " ", r, "\n";
+  }
 }
