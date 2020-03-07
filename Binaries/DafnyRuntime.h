@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <variant>
 
+#include "MallocAccounting.h"
+
 class _dafny {
   public:
     static void Print(std::string s) { std::cout << s << std::endl; }
@@ -280,7 +282,12 @@ struct DafnyArray {
 
   DafnyArray() { }
   DafnyArray(size_t len) : len(len) {
-    sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
+    malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "array");
+    auto ary = new T[len];
+    malloc_accounting_default_scope();
+    malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "array-shared_ptr");
+    sptr = std::shared_ptr<T> (ary, std::default_delete<T[]>());
+    malloc_accounting_default_scope();
   }
   DafnyArray(std::vector<T> contents) : DafnyArray(contents.size()) {
     for (uint64 i = 0; i < contents.size(); i++) {
@@ -353,7 +360,9 @@ struct DafnySequence {
     }
 
     explicit DafnySequence(uint64 len) {
+      malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "explicit-seq");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      malloc_accounting_default_scope();
       start = &*sptr;
       this->len = len;
     }
@@ -367,7 +376,9 @@ struct DafnySequence {
     // Update one element
     DafnySequence(const DafnySequence<T>& other, uint64 i, T t) {
       len = other.length();
+      malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "seq-update");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      malloc_accounting_default_scope();
       start = &*sptr;
 
       std::copy(other.start, other.start + len, start);
@@ -376,21 +387,27 @@ struct DafnySequence {
 
     explicit DafnySequence(DafnyArray<T> arr) {
       len = arr.size();
+      malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "seq-from-array");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      malloc_accounting_default_scope();
       start = &*sptr;
       std::copy(arr.begin(), arr.end(), start);
     }
 
     DafnySequence(DafnyArray<T> arr, uint64 lo, uint64 hi) {
       len = hi - lo;
+      malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "seq-from-array-slice");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      malloc_accounting_default_scope();
       start = &*sptr;
       std::copy(arr.begin() + lo, arr.begin() + hi, start);
     }
 
     DafnySequence(std::initializer_list<T> il) {
       len = il.size();
+      malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "literal-seq");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      malloc_accounting_default_scope();
       start = &*sptr;
 
       int i = 0;
@@ -701,8 +718,24 @@ struct DafnyMap {
     DafnyMap() {    
     }
     
+    DafnyMap& operator=(const DafnyMap&& other) {
+      malloc_accounting_set_scope("map-move");
+      this->map = other.map;
+      malloc_accounting_default_scope();
+      return *this;
+    }
+
+    DafnyMap& operator=(const DafnyMap& other) {
+      malloc_accounting_set_scope("map-copy");
+      this->map = other.map;
+      malloc_accounting_default_scope();
+      return *this;
+    }
+
     DafnyMap(const DafnyMap<K,V>& other) {
+        malloc_accounting_set_scope("map-copy2");
         map = std::unordered_map<K,V>(other.map);        
+        malloc_accounting_default_scope();
     }
 
     DafnyMap(std::initializer_list<std::pair<const K,V>> il) {
@@ -731,7 +764,9 @@ struct DafnyMap {
         DafnyMap<K,V> ret(*this);
         auto ptr = ret.map.find(k);
         if (ptr == ret.map.end()) {
+            malloc_accounting_set_scope("map-emplace");
             ret.map.emplace(k, v);
+            malloc_accounting_default_scope();
         } else {
             ptr->second = v;
         }

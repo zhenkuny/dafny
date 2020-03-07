@@ -555,7 +555,7 @@ namespace Microsoft.Dafny {
               if (!arg.IsGhost) {
                 if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                   // This is a recursive destuctor, so we need to allocate space and copy the input in
-                  wc.WriteLine("COMPILER_result_subStruct.{0} = std::make_shared<{1}>({0});", arg.CompileName, DtT_protected);
+                  wc.WriteLine("COMPILER_result_subStruct.{0} = /*DeclDt*/ malloc_accounting_make_shared<{1}>(\"{1}\", {0});", arg.CompileName, DtT_protected);
                 } else {
                   wc.WriteLine("COMPILER_result_subStruct.{0} = {0};", arg.CompileName);
                 }
@@ -1583,12 +1583,12 @@ namespace Microsoft.Dafny {
         //string targs = type.TypeArgs.Count > 0
         //  ? String.Format(" <{0}> ", Util.Comma(type.TypeArgs, tp => TypeName(tp, wr, tok))) : "";
         //wr.Write("std::make_shared<{0}{1}> (", TypeName(type, wr, tok, null, true), targs);
-        wr.Write("std::make_shared<{0}> (", TypeName(type, wr, tok, null, true));
+        wr.Write("/*EmitNew*/ malloc_accounting_make_shared<{0}> (\"{0}\"", TypeName(type, wr, tok, null, true));
         EmitRuntimeTypeDescriptorsActuals(type.TypeArgs, cl.TypeArgs, tok, false, wr);
         string q, n;
         if (ctor != null && ctor.IsExtern(out q, out n)) {
           // the arguments of any external constructor are placed here
-          string sep = "";
+          string sep = ", ";  // always need a sep if using malloc_accounting_make_shared which begins with scope arg
           for (int i = 0; i < ctor.Ins.Count; i++) {
             Formal p = ctor.Ins[i];
             if (!p.IsGhost) {
@@ -1680,7 +1680,7 @@ namespace Microsoft.Dafny {
 
     protected override void EmitStringLiteral(string str, bool isVerbatim, TextWriter wr) {
       var n = str.Length;
-      wr.Write("DafnySequenceFromString(");
+      wr.Write("DafnySequenceFromString(malloc_accounting_std_string(");
       if (!isVerbatim) {
         wr.Write("\"{0}\"", str);
       } else {
@@ -1701,7 +1701,7 @@ namespace Microsoft.Dafny {
         }
         wr.Write("\"");
       }
-      wr.Write(")");
+      wr.Write("))");
     }
 
     protected override TargetWriter EmitBitvectorTruncation(BitvectorType bvType, bool surroundByUnchecked, TargetWriter wr) {
