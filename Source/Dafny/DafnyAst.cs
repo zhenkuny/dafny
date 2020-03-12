@@ -3548,11 +3548,8 @@ namespace Microsoft.Dafny {
       get {
         if (compileName == null) {
           var externArgs = DafnyOptions.O.DisallowExterns ? null : Attributes.FindExpressions(this.Attributes, "extern");
-          var compileNameArgs = Attributes.FindExpressions(this.Attributes, "compileName");
           if (externArgs != null && 1 <= externArgs.Count && externArgs[0] is StringLiteralExpr) {
             compileName = (string)((StringLiteralExpr)externArgs[0]).Value;
-          } else if (compileNameArgs != null && 1 <= compileNameArgs.Count && compileNameArgs[0] is StringLiteralExpr) {
-            compileName = (string)((StringLiteralExpr)compileNameArgs[0]).Value;
           } else if (IsBuiltinName || externArgs != null) {
             compileName = Name;
           } else {
