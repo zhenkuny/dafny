@@ -4615,7 +4615,7 @@ namespace Microsoft.Dafny {
           } else {
             var pp = f.OverriddenFunction.Result;
             Contract.Assert(!pp.IsOld);
-            pOut = new Formal(pp.tok, pp.Name, f.ResultType, false, pp.IsGhost);
+            pOut = new Formal(pp.tok, pp.Name, f.ResultType, false, pp.Usage);
           }
           var varType = TrType(pOut.Type);
           var wh = GetWhereClause(pOut.tok, new Bpl.IdentifierExpr(pOut.tok, pOut.AssignUniqueName(f.IdGenerator), varType), pOut.Type, etran, NOALLOC);
@@ -7135,7 +7135,7 @@ namespace Microsoft.Dafny {
             // Note, in the following, the "##" makes the variable invisible in BVD.  An alternative would be to communicate
             // to BVD what this variable stands for and display it as such to the user.
             Type et = Resolver.SubstType(p.Type, e.TypeArgumentSubstitutions);
-            LocalVariable local = new LocalVariable(p.tok, p.tok, "##" + p.Name, et, p.IsGhost);
+            LocalVariable local = new LocalVariable(p.tok, p.tok, "##" + p.Name, et, p.Usage);
             local.type = local.OptionalType;  // resolve local here
             IdentifierExpr ie = new IdentifierExpr(local.Tok, local.AssignUniqueName(currentDeclaration.IdGenerator));
             ie.Var = local; ie.Type = ie.Var.Type;  // resolve ie here
@@ -9782,7 +9782,7 @@ namespace Microsoft.Dafny {
               var substMap = new Dictionary<IVariable, Expression>();
               foreach (var v in ComputeFreeVariables(assertStmt.Expr)) {
                 if (v is LocalVariable) {
-                  var vcopy = new LocalVariable(stmt.Tok, stmt.Tok, string.Format("##{0}#{1}", name, v.Name), v.Type, v.IsGhost);
+                  var vcopy = new LocalVariable(stmt.Tok, stmt.Tok, string.Format("##{0}#{1}", name, v.Name), v.Type, ((LocalVariable)v).Usage);
                   vcopy.type = vcopy.OptionalType;  // resolve local here
                   IdentifierExpr ie = new IdentifierExpr(vcopy.Tok, vcopy.AssignUniqueName(currentDeclaration.IdGenerator));
                   ie.Var = vcopy; ie.Type = ie.Var.Type;  // resolve ie here
@@ -11719,7 +11719,7 @@ namespace Microsoft.Dafny {
       var substMap = new Dictionary<IVariable, Expression>();
       for (int i = 0; i < callee.Ins.Count; i++) {
         var formal = callee.Ins[i];
-        var local = new LocalVariable(formal.tok, formal.tok, formal.Name + "#", formal.Type, formal.IsGhost);
+        var local = new LocalVariable(formal.tok, formal.tok, formal.Name + "#", formal.Type, formal.Usage);
         local.type = local.OptionalType;  // resolve local here
         var ie = new IdentifierExpr(local.Tok, local.AssignUniqueName(currentDeclaration.IdGenerator));
         ie.Var = local; ie.Type = ie.Var.Type;  // resolve ie here
@@ -11878,7 +11878,7 @@ namespace Microsoft.Dafny {
       }
       var substMap = new Dictionary<IVariable, Expression>();
       foreach (BoundVar bv in boundVars) {
-        LocalVariable local = new LocalVariable(bv.tok, bv.tok, nameSuffix == null ? bv.Name : bv.Name + nameSuffix, Resolver.SubstType(bv.Type, typeMap), bv.IsGhost);
+        LocalVariable local = new LocalVariable(bv.tok, bv.tok, nameSuffix == null ? bv.Name : bv.Name + nameSuffix, Resolver.SubstType(bv.Type, typeMap), bv.Usage);
         local.type = local.OptionalType;  // resolve local here
         IdentifierExpr ie = new IdentifierExpr(local.Tok, local.AssignUniqueName(currentDeclaration.IdGenerator));
         ie.Var = local; ie.Type = ie.Var.Type;  // resolve ie here
@@ -18185,7 +18185,7 @@ namespace Microsoft.Dafny {
           r = rr;
         } else if (stmt is VarDeclStmt) {
           var s = (VarDeclStmt)stmt;
-          var lhss = s.Locals.ConvertAll(c => new LocalVariable(c.Tok, c.EndTok, c.Name, c.OptionalType == null ? null : Resolver.SubstType(c.OptionalType, typeMap), c.IsGhost));
+          var lhss = s.Locals.ConvertAll(c => new LocalVariable(c.Tok, c.EndTok, c.Name, c.OptionalType == null ? null : Resolver.SubstType(c.OptionalType, typeMap), c.Usage));
           var rr = new VarDeclStmt(s.Tok, s.EndTok, lhss, (ConcreteUpdateStatement)SubstStmt(s.Update));
           r = rr;
         } else if (stmt is RevealStmt) {

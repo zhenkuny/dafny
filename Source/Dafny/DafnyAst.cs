@@ -208,7 +208,7 @@ namespace Microsoft.Dafny {
           new TypeParameter(tok, "T" + x, TypeParameter.TPVarianceSyntax.Contravariance) :
           new TypeParameter(tok, "R", TypeParameter.TPVarianceSyntax.Covariant_Strict));
         var tys = tps.ConvertAll(tp => (Type)(new UserDefinedType(tp)));
-        var args = Util.Map(Enumerable.Range(0, arity), i => new Formal(tok, "x" + i, tys[i], true, false));
+        var args = Util.Map(Enumerable.Range(0, arity), i => new Formal(tok, "x" + i, tys[i], true, Usage.Ordinary));
         var argExprs = args.ConvertAll(a =>
               (Expression)new IdentifierExpr(tok, a.Name) { Var = a, Type = a.Type });
         var readsIS = new FunctionCallExpr(tok, "reads", new ImplicitThisExpr(tok), tok, argExprs) {
@@ -4020,7 +4020,7 @@ namespace Microsoft.Dafny {
       var formals = new List<Formal>();
       for (int i = 0; i < typeArgs.Count; i++) {
         var tp = typeArgs[i];
-        var f = new Formal(Token.NoToken, i.ToString(), new UserDefinedType(Token.NoToken, tp), true, false);
+        var f = new Formal(Token.NoToken, i.ToString(), new UserDefinedType(Token.NoToken, tp), true, Usage.Ordinary);
         formals.Add(f);
       }
       var ctor = new DatatypeCtor(Token.NoToken, BuiltIns.TupleTypeCtorNamePrefix + typeArgs.Count, formals, null);
@@ -4266,7 +4266,7 @@ namespace Microsoft.Dafny {
       OutsHistoryFields = new List<Field>();
       DecreasesFields = new List<Field>();
 
-      YieldCountVariable = new LocalVariable(tok, tok, "_yieldCount", new EverIncreasingType(), true);
+      YieldCountVariable = new LocalVariable(tok, tok, "_yieldCount", new EverIncreasingType(), Usage.Ghost);
       YieldCountVariable.type = YieldCountVariable.OptionalType;  // resolve YieldCountVariable here
     }
 
@@ -4365,6 +4365,14 @@ namespace Microsoft.Dafny {
     }
   }
 
+  public enum Usage {
+    Ordinary,
+    Shared,
+    Linear,
+    Inout,
+    Ghost,
+  }
+
   public abstract class MemberDecl : Declaration {
     public abstract string WhatKind { get; }
     public readonly bool HasStaticKeyword;
@@ -4373,8 +4381,8 @@ namespace Microsoft.Dafny {
         return HasStaticKeyword || (EnclosingClass is ClassDecl && ((ClassDecl)EnclosingClass).IsDefaultClass);
       }
     }
-    protected readonly bool isGhost;
-    public bool IsGhost { get { return isGhost; } }
+    protected readonly Usage usage;
+    public bool IsGhost { get { return usage == Usage.Ghost; } }
     public bool IsInstanceIndependentConstant {
       get {
         var cf = this as ConstantField;
@@ -4389,7 +4397,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       HasStaticKeyword = hasStaticKeyword;
-      this.isGhost = isGhost;
+      this.usage = isGhost ? Usage.Ghost : Usage.Ordinary;
     }
     /// <summary>
     /// Returns className+"."+memberName.  Available only after resolution.
@@ -4662,7 +4670,7 @@ namespace Microsoft.Dafny {
     }
 
     //
-    public new bool IsGhost { get { return this.isGhost; } }
+    public new bool IsGhost { get { return this.usage == Usage.Ghost; } }
     public List<TypeParameter> TypeArgs { get { return new List<TypeParameter>(); } }
     public List<Formal> Ins { get { return new List<Formal>(); } }
     public ModuleDefinition EnclosingModule { get { return this.EnclosingClass.Module; } }
@@ -5081,6 +5089,12 @@ namespace Microsoft.Dafny {
     bool IsGhost {
       get;
     }
+    bool IsLinear {
+      get;
+    }
+    bool IsShared {
+      get;
+    }
     IToken Tok {
       get;
     }
@@ -5134,6 +5148,16 @@ namespace Microsoft.Dafny {
       }
     }
     public bool IsGhost {
+      get {
+        throw new NotImplementedException();
+      }
+    }
+    public bool IsLinear {
+      get {
+        throw new NotImplementedException();
+      }
+    }
+    public bool IsShared {
       get {
         throw new NotImplementedException();
       }
@@ -5251,13 +5275,28 @@ namespace Microsoft.Dafny {
     public abstract bool IsMutable {
       get;
     }
-    bool isGhost;  // readonly after resolution
-    public bool IsGhost {
+    Usage usage;  // readonly after resolution
+    public Usage Usage {
       get {
-        return isGhost;
+        return usage;
       }
       set {
-        isGhost = value;
+        usage = value;
+      }
+    }
+    public bool IsGhost {
+      get {
+        return Usage == Usage.Ghost;
+      }
+    }
+    public bool IsLinear {
+      get {
+        return Usage == Usage.Linear;
+      }
+    }
+    public bool IsShared {
+      get {
+        return Usage == Usage.Shared;
       }
     }
     public IToken Tok {
@@ -5266,14 +5305,14 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public NonglobalVariable(IToken tok, string name, Type type, bool isGhost) {
+    public NonglobalVariable(IToken tok, string name, Type type, Usage usage) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(type != null);
       this.tok = tok;
       this.name = name;
       this.type = type;
-      this.isGhost = isGhost;
+      this.usage = usage;
     }
   }
 
@@ -5286,8 +5325,8 @@ namespace Microsoft.Dafny {
     }
     public readonly bool IsOld;
 
-    public Formal(IToken tok, string name, Type type, bool inParam, bool isGhost, bool isOld = false)
-      : base(tok, name, type, isGhost) {
+    public Formal(IToken tok, string name, Type type, bool inParam, Usage usage, bool isOld = false)
+      : base(tok, name, type, usage) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(type != null);
@@ -5317,7 +5356,7 @@ namespace Microsoft.Dafny {
   public class ImplicitFormal : Formal
   {
     public ImplicitFormal(IToken tok, string name, Type type, bool inParam, bool isGhost)
-      : base(tok, name, type, inParam, isGhost) {
+      : base(tok, name, type, inParam, isGhost ? Usage.Ghost : Usage.Ordinary) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(type != null);
@@ -5333,7 +5372,7 @@ namespace Microsoft.Dafny {
     }
 
     public BoundVar(IToken tok, string name, Type type)
-      : base(tok, name, type, false) {
+      : base(tok, name, type, Usage.Ordinary) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(type != null);
@@ -6794,14 +6833,14 @@ namespace Microsoft.Dafny {
     public readonly IToken EndTok;  // typically a terminating semi-colon or end-curly-brace
     readonly string name;
     public Attributes Attributes;
-    public bool IsGhost;
+    public Usage Usage;
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(name != null);
       Contract.Invariant(OptionalType != null);
     }
 
-    public LocalVariable(IToken tok, IToken endTok, string name, Type type, bool isGhost) {
+    public LocalVariable(IToken tok, IToken endTok, string name, Type type, Usage usage) {
       Contract.Requires(tok != null);
       Contract.Requires(endTok != null);
       Contract.Requires(name != null);
@@ -6814,7 +6853,7 @@ namespace Microsoft.Dafny {
       if (type is InferredTypeProxy) {
         ((InferredTypeProxy)type).KeepConstraints = true;
       }
-      this.IsGhost = isGhost;
+      this.Usage = usage;
     }
 
     public string Name {
@@ -6880,16 +6919,31 @@ namespace Microsoft.Dafny {
         return true;
       }
     }
+    public bool IsGhost {
+      get {
+        return this.Usage == Usage.Ghost;
+      }
+    }
     bool IVariable.IsGhost {
       get {
-        return this.IsGhost;
+        return this.Usage == Usage.Ghost;
+      }
+    }
+    bool IVariable.IsLinear {
+      get {
+        return false;
+      }
+    }
+    bool IVariable.IsShared {
+      get {
+        return false;
       }
     }
     /// <summary>
     /// This method retrospectively makes the LocalVariable a ghost.  It is to be used only during resolution.
     /// </summary>
     public void MakeGhost() {
-      this.IsGhost = true;
+      this.Usage = Usage.Ghost;
     }
     IToken IVariable.Tok {
       get {

@@ -36,8 +36,8 @@ int anonymousIds = 0;
 struct DeclModifierData {
   public bool IsAbstract;
   public IToken AbstractToken;
-  public bool IsGhost;
-  public IToken GhostToken;
+  public Usage Usage;
+  public IToken UsageToken;
   public bool IsStatic;
   public IToken StaticToken;
   public bool IsProtected;
@@ -82,13 +82,13 @@ void CheckDeclModifiers(DeclModifierData dmod, string declCaption, AllowedDeclMo
     SemErr(dmod.AbstractToken, declCaption + " cannot be declared 'abstract'.");
     dmod.IsAbstract = false;
   }
-  if (dmod.IsGhost) {
+  if (dmod.Usage != Usage.Ordinary) {
     if ((allowed & AllowedDeclModifiers.AlreadyGhost) != 0) {
-      SemErr(dmod.GhostToken, declCaption + " cannot be declared ghost (they are 'ghost' by default).");
-      dmod.IsGhost = false;
+      SemErr(dmod.UsageToken, declCaption + " cannot be declared ghost (they are 'ghost' by default).");
+      dmod.Usage = Usage.Ordinary;
     } else if ((allowed & AllowedDeclModifiers.Ghost) == 0) {
-      SemErr(dmod.GhostToken, declCaption + " cannot be declared 'ghost'.");
-      dmod.IsGhost = false;
+      SemErr(dmod.UsageToken, declCaption + " cannot be declared 'ghost'.");
+      dmod.Usage = Usage.Ordinary;
     }
   }
   if (dmod.IsStatic && ((allowed & AllowedDeclModifiers.Static) == 0)) {
@@ -209,7 +209,7 @@ bool IsAlternative() {
 
 bool FollowedByColon() {
   IToken x = la;
-  while (x.kind == _ident || x.kind == _openparen)
+  while (x.kind == _ident || x.kind == _openparen || x.kind == _linear)
      x = scanner.Peek();
   return x.kind == _colon;
 }
@@ -772,6 +772,9 @@ TOKENS
   requires = "requires".
   ensures = "ensures".
   ghost = "ghost".
+  linear = "linear".
+  shared = "shared".
+  inout = "inout".
   witness = "witness".
   lbrace = '{'.
   rbrace = '}'.
@@ -834,7 +837,7 @@ Dafny
 
 DeclModifier<ref DeclModifierData dmod>
 = ( "abstract"                             (. dmod.IsAbstract = true;  CheckAndSetToken(ref dmod.AbstractToken); .)
-  | "ghost"                                (. dmod.IsGhost = true;  CheckAndSetToken(ref dmod.GhostToken); .)
+  | "ghost"                                (. dmod.Usage = Usage.Ghost;  CheckAndSetToken(ref dmod.UsageToken); .)
   | "static"                               (. dmod.IsStatic = true; CheckAndSetToken(ref dmod.StaticToken); .)
   | "protected"                            (. dmod.IsProtected = true; CheckAndSetToken(ref dmod.ProtectedToken); .)
   )
@@ -1136,8 +1139,8 @@ FieldDecl<.DeclModifierData dmod, List<MemberDecl/*!*/>/*!*/ mm.>
   SYNC
   "var"
   { Attribute<ref attrs> }
-  FIdentType<out id, out ty>                        (. mm.Add(new Field(id, id.val, dmod.IsGhost, ty, attrs)); .)
-  { "," FIdentType<out id, out ty>                  (. mm.Add(new Field(id, id.val, dmod.IsGhost, ty, attrs)); .)
+  FIdentType<out id, out ty>                        (. mm.Add(new Field(id, id.val, dmod.Usage == Usage.Ghost, ty, attrs)); .)
+  { "," FIdentType<out id, out ty>                  (. mm.Add(new Field(id, id.val, dmod.Usage == Usage.Ghost, ty, attrs)); .)
   }
   OldSemi
   .
@@ -1160,7 +1163,7 @@ ConstantFieldDecl<.DeclModifierData dmod, List<MemberDecl/*!*/>/*!*/ mm, bool mo
                                              (. if (e == null && ty is InferredTypeProxy) {
                                                   SemErr(id, "a const declaration must have a type or a RHS value");
                                                 }
-                                                mm.Add(new ConstantField(id, id.val, e, dmod.IsStatic, dmod.IsGhost, ty, attrs));
+                                                mm.Add(new ConstantField(id, id.val, e, dmod.IsStatic, dmod.Usage == Usage.Ghost, ty, attrs));
                                              .)
   OldSemi
   .
@@ -1249,12 +1252,15 @@ OtherTypeDecl<DeclModifierData dmod, ModuleDefinition module, out TopLevelDecl t
       (. errors.Deprecated(t, "the semi-colon that used to terminate an opaque-type declaration has been deprecated; in the new syntax, just leave off the semi-colon"); .)
   ]
   .
-GIdentType<bool allowGhostKeyword, bool allowNewKeyword, out IToken/*!*/ id, out Type/*!*/ ty, out bool isGhost, out bool isOld>
-/* isGhost always returns as false if allowGhostKeyword is false */
+GIdentType<bool allowGhostKeyword, bool allowLinearKeyword, bool allowNewKeyword, out IToken/*!*/ id, out Type/*!*/ ty, out Usage usage, out bool isOld>
+/* usage always returns Ordinary if allowGhostKeyword is false */
 = (. Contract.Ensures(Contract.ValueAtReturn(out id)!=null);
      Contract.Ensures(Contract.ValueAtReturn(out ty)!=null);
-     isGhost = false; isOld = allowNewKeyword; .)
-  { "ghost"                    (. if (allowGhostKeyword) { isGhost = true; } else { SemErr(t, "formal cannot be declared 'ghost' in this context"); } .)
+     usage = Usage.Ordinary; isOld = allowNewKeyword; .)
+  { "ghost"                    (. if (allowGhostKeyword) { usage = Usage.Ghost; } else { SemErr(t, "formal cannot be declared 'ghost' in this context"); } .)
+  | "shared"                   (. if (allowGhostKeyword) { usage = Usage.Shared; } else { SemErr(t, "formal cannot be declared 'shared' in this context"); } .)
+  | "inout"                    (. if (allowGhostKeyword) { usage = Usage.Inout; } else { SemErr(t, "formal cannot be declared 'inout' in this context"); } .)
+  | "linear"                   (. if (allowLinearKeyword) { usage = Usage.Linear; } else { SemErr(t, "formal cannot be declared 'linear' in this context"); } .)
   | "new"                      (. if (allowNewKeyword) { isOld = false; } else { SemErr(t, "formal cannot be declared 'new' in this context"); } .)
   }
   IdentType<out id, out ty, true>
@@ -1287,13 +1293,13 @@ IdentType<out IToken/*!*/ id, out Type/*!*/ ty, bool allowWildcardId>
   ":"
   Type<out ty>
   .
-LocalIdentTypeOptional<out LocalVariable var, bool isGhost>
+LocalIdentTypeOptional<out LocalVariable var, Usage usage>
 = (. IToken id;  Type ty;  Type optType = null;
   .)
   WildIdent<out id, true>
   [ ":" Type<out ty>             (. optType = ty; .)
   ]
-  (. var = new LocalVariable(id, id, id.val, optType == null ? new InferredTypeProxy() : optType, isGhost); .)
+  (. var = new LocalVariable(id, id, id.val, optType == null ? new InferredTypeProxy() : optType, usage); .)
   .
 IdentTypeOptional<out BoundVar var>
 = (. Contract.Ensures(Contract.ValueAtReturn(out var) != null);
@@ -1304,12 +1310,13 @@ IdentTypeOptional<out BoundVar var>
   ]
   (. var = new BoundVar(id, id.val, optType == null ? new InferredTypeProxy() : optType); .)
   .
-TypeIdentOptional<out IToken/*!*/ id, out string/*!*/ identName, out Type/*!*/ ty, out bool isGhost>
+TypeIdentOptional<out IToken/*!*/ id, out string/*!*/ identName, out Type/*!*/ ty, out Usage usage>
 = (.Contract.Ensures(Contract.ValueAtReturn(out id)!=null);
      Contract.Ensures(Contract.ValueAtReturn(out ty)!=null);
      Contract.Ensures(Contract.ValueAtReturn(out identName)!=null);
-     string name = null; id = Token.NoToken; ty = new BoolType()/*dummy*/; isGhost = false; .)
-  [ "ghost"                            (. isGhost = true; .)
+     string name = null; id = Token.NoToken; ty = new BoolType()/*dummy*/; usage = Usage.Ordinary; .)
+  [ "ghost"                            (. usage = Usage.Ghost; .)
+  | "linear"                           (. usage = Usage.Linear; .)
   ]
   ( TypeAndToken<out id, out ty, false>
     [ ":"
@@ -1515,7 +1522,7 @@ MethodDecl<DeclModifierData dmod, bool allowConstructor, bool isWithinAbstractMo
     [ GenericParameters<typeArgs, false> ]
     [ KType<ref kType>              (. if (!(isCoLemma || isIndLemma)) { SemErr(t, "type of _k can only be specified for inductive lemmas and co-lemmas"); } .)
     ]
-    (. var isCompilable = (isPlainOlMethod && !dmod.IsGhost) || isConstructor; .)
+    (. var isCompilable = (isPlainOlMethod && dmod.Usage == Usage.Ordinary) || isConstructor; .)
     Formals<true, isCompilable, isTwoStateLemma, ins>
     [ "returns"                                 (. if (isConstructor) { SemErr(t, "constructors cannot have out-parameters"); } .)
       Formals<false, isCompilable, false, outs>
@@ -1552,7 +1559,7 @@ MethodDecl<DeclModifierData dmod, bool allowConstructor, bool isWithinAbstractMo
                              req, new Specification<FrameExpression>(mod, modAttrs),
                              ens, new Specification<Expression>(dec, decAttrs), body, attrs, signatureEllipsis);
      } else {
-       m = new Method(tok, id.val, dmod.IsStatic, dmod.IsGhost, typeArgs, ins, outs,
+       m = new Method(tok, id.val, dmod.IsStatic, dmod.Usage == Usage.Ghost, typeArgs, ins, outs,
                       req, new Specification<FrameExpression>(mod, modAttrs), ens, new Specification<Expression>(dec, decAttrs), body, attrs, signatureEllipsis);
      }
      m.BodyStartTok = bodyStart;
@@ -1648,25 +1655,25 @@ Formals<.bool incoming, bool allowGhostKeyword, bool allowNewKeyword, List<Forma
 = (. Contract.Requires(cce.NonNullElements(formals));
      IToken id;
      Type ty;
-     bool isGhost;
+     Usage usage;
      bool isOld;
   .)
   "("
   [
-    GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
-                 (. formals.Add(new Formal(id, id.val, ty, incoming, isGhost, isOld)); .)
-    { "," GIdentType<allowGhostKeyword, allowNewKeyword, out id, out ty, out isGhost, out isOld>
-                 (. formals.Add(new Formal(id, id.val, ty, incoming, isGhost, isOld)); .)
+    GIdentType<allowGhostKeyword, allowGhostKeyword, allowNewKeyword, out id, out ty, out usage, out isOld>
+                 (. formals.Add(new Formal(id, id.val, ty, incoming, usage, isOld)); .)
+    { "," GIdentType<allowGhostKeyword, allowGhostKeyword, allowNewKeyword, out id, out ty, out usage, out isOld>
+                 (. formals.Add(new Formal(id, id.val, ty, incoming, usage, isOld)); .)
     }
   ]
   ")"
   .
 FormalsOptionalIds<.List<Formal/*!*/>/*!*/ formals.>
-= (. Contract.Requires(cce.NonNullElements(formals)); IToken/*!*/ id;  Type/*!*/ ty;  string/*!*/ name;  bool isGhost; .)
+= (. Contract.Requires(cce.NonNullElements(formals)); IToken/*!*/ id;  Type/*!*/ ty;  string/*!*/ name;  Usage usage; .)
   "("
   [
-    TypeIdentOptional<out id, out name, out ty, out isGhost>        (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
-    { "," TypeIdentOptional<out id, out name, out ty, out isGhost>  (. formals.Add(new Formal(id, name, ty, true, isGhost)); .)
+    TypeIdentOptional<out id, out name, out ty, out usage>        (. formals.Add(new Formal(id, name, ty, true, usage)); .)
+    { "," TypeIdentOptional<out id, out name, out ty, out usage>  (. formals.Add(new Formal(id, name, ty, true, usage)); .)
     }
   ]
   ")"
@@ -1872,15 +1879,17 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
            (.
               IToken resultId;
               Type ty;
-              bool isGhost;
+              Usage usage;
               bool isOld;
            .)
-           GIdentType<false, false, out resultId, out ty, out isGhost, out isOld>
-           (. Contract.Assert(!isGhost && !isOld);
-              result = new Formal(resultId, resultId.val, ty, false, false, false);
+           GIdentType<false, true, false, out resultId, out ty, out usage, out isOld>
+           (. Contract.Assert(usage != Usage.Ghost && !isOld);
+              result = new Formal(resultId, resultId.val, ty, false, usage, false);
            .)
          ")"
          | Type<out returnType>
+         | "linear" Type<out returnType>
+           (. result = new Formal(Token.NoToken, "return", returnType, false, Usage.Linear, false); .)
       )
     | "..."                    (. signatureEllipsis = t; .)
     )
@@ -2277,7 +2286,7 @@ NewArray<. out List<Expression> ee, out Expression arrayElementInit, out List<Ex
   .)
   .
 VarDeclStatement<.out Statement/*!*/ s.>
-= (. IToken x = null, assignTok = null;  bool isGhost = false;
+= (. IToken x = null, assignTok = null;  Usage usage = Usage.Ordinary;
      LocalVariable d;
      AssignmentRhs r;
      List<LocalVariable> lhss = new List<LocalVariable>();
@@ -2288,15 +2297,16 @@ VarDeclStatement<.out Statement/*!*/ s.>
      IToken endTok;
      s = dummyStmt;
   .)
-  [ "ghost"                                 (. isGhost = true;  x = t; .)
+  [ "ghost"                                 (. usage = Usage.Ghost;  x = t; .)
+  | "linear"                                (. usage = Usage.Linear;  x = t; .)
   ]
-  "var"                                     (. if (!isGhost) { x = t; } .)
+  "var"                                     (. if (usage == Usage.Ordinary) { x = t; } .)
   ( IF(!IsLetStmt())
     { Attribute<ref attrs> }
-    LocalIdentTypeOptional<out d, isGhost>    (. lhss.Add(d); d.Attributes = attrs; attrs = null; .)
+    LocalIdentTypeOptional<out d, usage>    (. lhss.Add(d); d.Attributes = attrs; attrs = null; .)
     { ","
       { Attribute<ref attrs> }
-      LocalIdentTypeOptional<out d, isGhost>  (. lhss.Add(d); d.Attributes = attrs; attrs = null; .)
+      LocalIdentTypeOptional<out d, usage>  (. lhss.Add(d); d.Attributes = attrs; attrs = null; .)
     }
     [ ":="                           (. assignTok = t; .)
       Rhs<out r>                     (. rhss.Add(r); .)
@@ -2332,7 +2342,7 @@ VarDeclStatement<.out Statement/*!*/ s.>
        Expression e = dummyExpr;
        IToken id = t;
     .)
-    CasePatternLocal<out pat, isGhost>
+    CasePatternLocal<out pat, usage>
     ( ":="
     | { Attribute<ref attrs> }
       ":|"                          (.  SemErr(pat.tok, "LHS of assign-such-that expression must be variables, not general patterns"); .)
@@ -3458,7 +3468,7 @@ StmtInExpr<out Statement s>
 
 LetExpr<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwiseOps>
 = (. IToken x = null;
-     bool isGhost = false;
+     Usage usage = Usage.Ordinary;
      var letLHSs = new List<CasePattern<BoundVar>>();
      var letRHSs = new List<Expression>();
      CasePattern<BoundVar> pat;
@@ -3466,13 +3476,14 @@ LetExpr<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwiseOps
      Attributes attrs = null;
      e = dummyExpr;
   .)
-    [ "ghost"                       (. isGhost = true;  x = t; .)
+    [ "ghost"                       (. usage = Usage.Ghost;  x = t; .)
+    | "linear"                      (. usage = Usage.Linear;  x = t; .)
     ]
-    "var"                           (. if (!isGhost) { x = t; } .)
-    CasePattern<out pat>            (. if (isGhost) { pat.Vars.Iter(bv => bv.IsGhost = true); }
+    "var"                           (. if (usage == Usage.Ordinary) { x = t; } .)
+    CasePattern<out pat>            (. pat.Vars.Iter(bv => bv.Usage = usage);
                                        letLHSs.Add(pat);
                                     .)
-    { "," CasePattern<out pat>      (. if (isGhost) { pat.Vars.Iter(bv => bv.IsGhost = true); }
+    { "," CasePattern<out pat>      (. pat.Vars.Iter(bv => bv.Usage = usage);
                                        letLHSs.Add(pat);
                                     .)
     }
@@ -3589,7 +3600,7 @@ CasePattern<.out CasePattern<BoundVar> pat.>
 /* CasePatternLocal is identical to CasePattern, except that it uses LocalVariable instead of BoundVar. Coco does
  * not have a way to make the patterns take a bounded type parameter.
  */
-CasePatternLocal<.out CasePattern<LocalVariable> pat, bool isGhost.>
+CasePatternLocal<.out CasePattern<LocalVariable> pat, Usage usage.>
 = (. IToken id;  List<CasePattern<LocalVariable>> arguments;
      LocalVariable local;
      pat = null;
@@ -3597,16 +3608,16 @@ CasePatternLocal<.out CasePattern<LocalVariable> pat, bool isGhost.>
   ( IF(IsIdentParen())
     Ident<out id>
     "("                                          (. arguments = new List<CasePattern<LocalVariable>>(); .)
-      [ CasePatternLocal<out pat, isGhost>       (. arguments.Add(pat); .)
-        { "," CasePatternLocal<out pat, isGhost> (. arguments.Add(pat); .)
+      [ CasePatternLocal<out pat, usage>       (. arguments.Add(pat); .)
+        { "," CasePatternLocal<out pat, usage> (. arguments.Add(pat); .)
         }
       ]
     ")"                                          (. pat = new CasePattern<LocalVariable>(id, id.val, arguments); .)
   | "("                                          (. id = t;
                                                     arguments = new List<CasePattern<LocalVariable>>();
                                                  .)
-      [ CasePatternLocal<out pat, isGhost>       (. arguments.Add(pat); .)
-        { "," CasePatternLocal<out pat, isGhost> (. arguments.Add(pat); .)
+      [ CasePatternLocal<out pat, usage>       (. arguments.Add(pat); .)
+        { "," CasePatternLocal<out pat, usage> (. arguments.Add(pat); .)
         }
       ]
     ")"                                (. // Parse parenthesis without an identifier as a built in tuple type.
@@ -3614,7 +3625,7 @@ CasePatternLocal<.out CasePattern<LocalVariable> pat, bool isGhost.>
                                           string ctor = BuiltIns.TupleTypeCtorNamePrefix + arguments.Count;  //use the TupleTypeCtors
                                           pat = new CasePattern<LocalVariable>(id, ctor, arguments);
                                        .)
-  | LocalIdentTypeOptional<out local, isGhost>
+  | LocalIdentTypeOptional<out local, usage>
                                        (. // This could be a LocalVariable of a parameter-less constructor and we may not know until resolution.
                                           // Nevertheless, we do put the local" into the CasePattern here (even though it will get thrown out
                                           // later if resolution finds the CasePattern to denote a parameter-less constructor), because this

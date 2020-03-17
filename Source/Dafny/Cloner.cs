@@ -200,7 +200,7 @@ namespace Microsoft.Dafny
     }
 
     public Formal CloneFormal(Formal formal) {
-      Formal f = new Formal(Tok(formal.tok), formal.Name, CloneType(formal.Type), formal.InParam, formal.IsGhost, formal.IsOld);
+      Formal f = new Formal(Tok(formal.tok), formal.Name, CloneType(formal.Type), formal.InParam, formal.Usage, formal.IsOld);
       //if (f.Type is UserDefinedType && formal.Type is UserDefinedType)
       //    ((UserDefinedType)f.Type).ResolvedClass = ((UserDefinedType)(formal.Type)).ResolvedClass;
       return f;
@@ -208,7 +208,7 @@ namespace Microsoft.Dafny
 
     public virtual BoundVar CloneBoundVar(BoundVar bv) {
       var bvNew = new BoundVar(Tok(bv.tok), bv.Name, CloneType(bv.SyntacticType));
-      bvNew.IsGhost = bv.IsGhost;
+      bvNew.Usage = bv.Usage;
       return bvNew;
     }
 
@@ -220,7 +220,7 @@ namespace Microsoft.Dafny
         iv = CloneBoundVar((BoundVar)iv);
       } else if (iv is LocalVariable) {
         var local = (LocalVariable)iv;
-        iv = new LocalVariable(Tok(local.Tok), Tok(local.EndTok), local.Name, CloneType(local.OptionalType), local.IsGhost);
+        iv = new LocalVariable(Tok(local.Tok), Tok(local.EndTok), local.Name, CloneType(local.OptionalType), local.Usage);
       } else {
         Contract.Assume(false);  // unexpected IVariable
         iv = null;  // please compiler
@@ -631,7 +631,7 @@ namespace Microsoft.Dafny
 
       } else if (stmt is VarDeclStmt) {
         var s = (VarDeclStmt)stmt;
-        var lhss = s.Locals.ConvertAll(c => new LocalVariable(Tok(c.Tok), Tok(c.EndTok), c.Name, CloneType(c.OptionalType), c.IsGhost));
+        var lhss = s.Locals.ConvertAll(c => new LocalVariable(Tok(c.Tok), Tok(c.EndTok), c.Name, CloneType(c.OptionalType), c.Usage));
         r = new VarDeclStmt(Tok(s.Tok), Tok(s.EndTok), lhss, (ConcreteUpdateStatement)CloneStmt(s.Update));
 
       } else if (stmt is LetStmt) {
@@ -1337,7 +1337,7 @@ namespace Microsoft.Dafny
     public override BoundVar CloneBoundVar(BoundVar bv) {
       // The difference here from the overridden method is that we do CloneType(bv.Type) instead of CloneType(bv.SyntacticType)
       var bvNew = new BoundVar(Tok(bv.tok), bv.Name, CloneType(bv.Type));
-      bvNew.IsGhost = bv.IsGhost;
+      bvNew.Usage = bv.Usage;
       return bvNew;
     }
   }

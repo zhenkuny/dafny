@@ -271,14 +271,14 @@ namespace Microsoft.Dafny
 
       // The result type of the following bitvector methods is the type of the bitvector itself. However, we're representing all bitvector types as
       // a family of types rolled up in one ValuetypeDecl. Therefore, we use the special SelfType as the result type.
-      List<Formal> formals = new List<Formal> { new Formal(Token.NoToken, "w", Type.Nat(), true, false, false) };
+      List<Formal> formals = new List<Formal> { new Formal(Token.NoToken, "w", Type.Nat(), true, Usage.Ordinary, false) };
       var rotateLeft = new SpecialFunction(Token.NoToken, "RotateLeft", prog.BuiltIns.SystemModule, false, false, false, new List<TypeParameter>(), formals, new SelfType(),
         new List<MaybeFreeExpression>(), new List<FrameExpression>(), new List<MaybeFreeExpression>(), new Specification<Expression>(new List<Expression>(), null), null, null, null);
       rotateLeft.EnclosingClass = valuetypeDecls[(int)ValuetypeVariety.Bitvector];
       rotateLeft.AddVisibilityScope(prog.BuiltIns.SystemModule.VisibilityScope, false);
       valuetypeDecls[(int)ValuetypeVariety.Bitvector].Members.Add(rotateLeft.Name, rotateLeft);
 
-      formals = new List<Formal> { new Formal(Token.NoToken, "w", Type.Nat(), true, false, false) };
+      formals = new List<Formal> { new Formal(Token.NoToken, "w", Type.Nat(), true, Usage.Ordinary, false) };
       var rotateRight = new SpecialFunction(Token.NoToken, "RotateRight", prog.BuiltIns.SystemModule, false, false, false, new List<TypeParameter>(), formals, new SelfType(),
         new List<MaybeFreeExpression>(), new List<FrameExpression>(), new List<MaybeFreeExpression>(), new Specification<Expression>(new List<Expression>(), null), null, null, null);
       rotateRight.EnclosingClass = valuetypeDecls[(int)ValuetypeVariety.Bitvector];
@@ -1697,7 +1697,7 @@ namespace Microsoft.Dafny
             null, Predicate.BodyOriginKind.OriginalOrInherited, null, null);
           // --- here comes method MoveNext
           var moveNext = new Method(iter.tok, "MoveNext", false, false, new List<TypeParameter>(),
-            new List<Formal>(), new List<Formal>() { new Formal(iter.tok, "more", Type.Bool, false, false) },
+            new List<Formal>(), new List<Formal>() { new Formal(iter.tok, "more", Type.Bool, false, Usage.Ordinary) },
             new List<MaybeFreeExpression>(),
             new Specification<FrameExpression>(new List<FrameExpression>(), null),
             new List<MaybeFreeExpression>(),
@@ -2375,7 +2375,7 @@ namespace Microsoft.Dafny
             if (iter.Body != null) {
               CheckTypeInference(iter.Body, iter);
               if (prevErrCnt == reporter.Count(ErrorLevel.Error)) {
-                ComputeGhostInterest(iter.Body, false, iter);
+                ComputeGhostInterest(iter.Body, false, iter, null);
                 CheckExpression(iter.Body, this, iter);
               }
             }
@@ -2388,14 +2388,41 @@ namespace Microsoft.Dafny
                 if (member is Method) {
                   var m = (Method)member;
                   if (m.Body != null) {
-                    ComputeGhostInterest(m.Body, m.IsGhost, m);
+                    UsageContext usageContext = new UsageContext();
+                    foreach (Formal x in m.Ins) {
+                      if (x.IsLinear) usageContext.available.Add(x, true);
+                    }
+                    foreach (Formal x in m.Outs) {
+                      if (x.IsLinear) usageContext.available.Add(x, false);
+                    }
+                    ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
                     CheckExpression(m.Body, this, m);
+                    foreach (Formal x in m.Ins) {
+                      if (x.IsLinear && usageContext.available[x]) {
+                        reporter.Error(MessageSource.Resolver, x, "linear variable must be unassigned at method exit");
+                      }
+                    }
+                    foreach (Formal x in m.Outs) {
+                      if (x.IsLinear && !usageContext.available[x]) {
+                        reporter.Error(MessageSource.Resolver, x, "linear variable must be assigned at method exit");
+                      }
+                    }
                     DetermineTailRecursion(m);
                   }
                 } else if (member is Function) {
                   var f = (Function)member;
                   if (!f.IsGhost && f.Body != null) {
-                    CheckIsCompilable(f.Body);
+                    UsageContext usageContext = new UsageContext();
+                    bool isLinear = f.Result != null && f.Result.IsLinear;
+                    foreach (Formal x in f.Formals) {
+                      if (x.IsLinear) usageContext.available.Add(x, true);
+                    }
+                    CheckIsCompilable(f.Body, usageContext, isLinear ? Usage.Linear : Usage.Ordinary);
+                    foreach (Formal x in f.Formals) {
+                      if (x.IsLinear && usageContext.available[x]) {
+                        reporter.Error(MessageSource.Resolver, x, "linear variable must be unassigned at function exit");
+                      }
+                    }
                   }
                   DetermineTailRecursion(f);
                 }
@@ -5740,7 +5767,7 @@ namespace Microsoft.Dafny
       protected override void VisitOneExpr(Expression expr) {
         if (expr is StmtExpr) {
           var e = (StmtExpr)expr;
-          resolver.ComputeGhostInterest(e.S, true, CodeContext);
+          resolver.ComputeGhostInterest(e.S, true, CodeContext, null); // ghost, so UsageContext doesn't matter
         }
       }
       protected override void VisitOneStmt(Statement stmt) {
@@ -6654,21 +6681,23 @@ namespace Microsoft.Dafny
     // ----- ComputeGhostInterest ---------------------------------------------------------------------------
     // ------------------------------------------------------------------------------------------------------
 #region ComputeGhostInterest
-    public void ComputeGhostInterest(Statement stmt, bool mustBeErasable, ICodeContext codeContext) {
+    void ComputeGhostInterest(Statement stmt, bool mustBeErasable, ICodeContext codeContext, UsageContext usageContext) {
       Contract.Requires(stmt != null);
       Contract.Requires(codeContext != null);
-      var visitor = new GhostInterest_Visitor(codeContext, this);
+      var visitor = new GhostInterest_Visitor(codeContext, this, usageContext);
       visitor.Visit(stmt, mustBeErasable);
     }
     class GhostInterest_Visitor
     {
       readonly ICodeContext codeContext;
       readonly Resolver resolver;
-      public GhostInterest_Visitor(ICodeContext codeContext, Resolver resolver) {
+      readonly UsageContext usageContext;
+      public GhostInterest_Visitor(ICodeContext codeContext, Resolver resolver, UsageContext usageContext) {
         Contract.Requires(codeContext != null);
         Contract.Requires(resolver != null);
         this.codeContext = codeContext;
         this.resolver = resolver;
+        this.usageContext = usageContext;
       }
       protected void Error(Statement stmt, string msg, params object[] msgArgs) {
         Contract.Requires(stmt != null);
@@ -6777,7 +6806,7 @@ namespace Microsoft.Dafny
           if (mustBeErasable) {
             foreach (var local in s.Locals) {
               // a local variable in a specification-only context might as well be ghost
-              local.IsGhost = true;
+              local.MakeGhost();
             }
           }
           s.IsGhost = (s.Update == null || s.Update.IsGhost) && s.Locals.All(v => v.IsGhost);
@@ -6789,7 +6818,7 @@ namespace Microsoft.Dafny
           var s = (LetStmt)stmt;
           if (mustBeErasable) {
             foreach (var local in s.LocalVars) {
-              local.IsGhost = true;
+              local.MakeGhost();
             }
           }
           s.IsGhost = s.LocalVars.All(v => v.IsGhost);
@@ -6817,7 +6846,16 @@ namespace Microsoft.Dafny
             }
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
-              resolver.CheckIsCompilable(rhs.Expr);
+              var x = lhs as IdentifierExpr;
+              bool isLinear = x != null && x.Var.IsLinear;
+              Usage expectedUsage = isLinear ? Usage.Linear : Usage.Ordinary;
+              resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
+              if (isLinear) {
+                if (usageContext.available[x.Var]) {
+                  Error(x, "variable must be unavailable before assignment");
+                }
+                usageContext.available[x.Var] = true;
+              }
             } else if (s.Rhs is HavocRhs) {
               // cool
             } else {
@@ -6855,7 +6893,7 @@ namespace Microsoft.Dafny
               foreach (var e in s.Args) {
                 Contract.Assume(j < callee.Ins.Count);  // this should have already been checked by the resolver
                 if (!callee.Ins[j].IsGhost) {
-                  resolver.CheckIsCompilable(e);
+                  resolver.CheckIsCompilable(e, usageContext, callee.Ins[j].Usage);
                 }
                 j++;
               }
@@ -6863,6 +6901,8 @@ namespace Microsoft.Dafny
             j = 0;
             foreach (var e in s.Lhs) {
               var resolvedLhs = e.Resolved;
+              var x = resolvedLhs as IdentifierExpr;
+              bool isLinear = x != null && x.Var.IsLinear;
               if (callee.IsGhost || callee.Outs[j].IsGhost) {
                 // LHS must denote a ghost
                 if (resolvedLhs is IdentifierExpr) {
@@ -6884,6 +6924,15 @@ namespace Microsoft.Dafny
                   // this is an array update, and arrays are always non-ghost
                   Error(s, "actual out-parameter{0} is required to be a ghost variable", s.Lhs.Count == 1 ? "" : " " + j);
                 }
+              } else if (callee.Outs[j].IsLinear) {
+                if (!isLinear) {
+                  Error(x, "variable must be linear");
+                } else if (usageContext.available[x.Var]) {
+                  Error(x, "variable must be unavailable before assignment");
+                }
+                usageContext.available[x.Var] = true;
+              } else if (isLinear) {
+                Error(x, "variable must not be linear");
               }
               j++;
             }
@@ -9489,7 +9538,7 @@ namespace Microsoft.Dafny
               Type st = SubstType(formal.Type, subst);
               ConstrainSubtypeRelation(v.Type, st, s.Tok,
                 "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", v.Type, st);
-              v.IsGhost = formal.IsGhost;
+              v.Usage = formal.Usage;
 
               // update the type of the boundvars in the MatchCaseToken
               if (v.tok is MatchCaseToken) {
@@ -9735,7 +9784,7 @@ namespace Microsoft.Dafny
                 mcToken = new MatchCaseToken(bv.tok);
                 // clone the bv but with the MatchCaseToken
                 var bvNew = new BoundVar(mcToken, bv.Name, bv.Type);
-                bvNew.IsGhost = bv.IsGhost;
+                bvNew.Usage = bv.Usage;
                 arguments.Add(bvNew);
               } else {
                 mcToken = (MatchCaseToken)bv.tok;
@@ -12521,7 +12570,7 @@ namespace Microsoft.Dafny
               Type st = SubstType(formal.Type, subst);
               ConstrainSubtypeRelation(v.Type, st, me,
                 "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", v.Type, st);
-              v.IsGhost = formal.IsGhost;
+              v.Usage = formal.Usage;
 
               // update the type of the boundvars in the MatchCaseToken
               if (v.tok is MatchCaseToken) {
@@ -12739,7 +12788,7 @@ namespace Microsoft.Dafny
               mcToken = new MatchCaseToken(bv.tok);
               // clone the bv but with the MatchCaseToken
               var bvNew = new BoundVar(mcToken, bv.Name, bv.Type);
-              bvNew.IsGhost = bv.IsGhost;
+              bvNew.Usage = bv.Usage;
               arguments.Add(bvNew);
             } else {
               mcToken = (MatchCaseToken)bv.tok;
@@ -13771,26 +13820,64 @@ namespace Microsoft.Dafny
       }
     }
 
+    class UsageContext {
+      internal Dictionary<IVariable, bool> available = new Dictionary<IVariable, bool>();
+    }
+
     /// <summary>
     /// Generate an error for every non-ghost feature used in "expr".
     /// Requires "expr" to have been successfully resolved.
     /// </summary>
     void CheckIsCompilable(Expression expr) {
+      CheckIsCompilable(expr, null, Usage.Ordinary);
+    }
+
+    void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage) {
+      Usage usage = CheckIsCompilable(expr, usageContext);
+      if (expectedUsage == Usage.Shared) {
+        throw new Exception("not implemented: Usage.Shared");
+      }
+      if (expectedUsage != Usage.Ghost && usage != expectedUsage) {
+        if (expectedUsage == Usage.Linear) {
+          reporter.Error(MessageSource.Resolver, expr, "expected linear expression");
+        } else if (usage == Usage.Linear) {
+          reporter.Error(MessageSource.Resolver, expr, "expected ordinary expression, found linear expression");
+        }
+      }
+    }
+
+    Usage CheckIsCompilable(Expression expr, UsageContext usageContext) {
       Contract.Requires(expr != null);
       Contract.Requires(expr.WasResolved());  // this check approximates the requirement that "expr" be resolved
 
       if (expr is IdentifierExpr) {
         var e = (IdentifierExpr)expr;
+        if (e.Var != null && e.Var.IsLinear) {
+          bool ok = false;
+          if (usageContext != null) {
+            var available = usageContext.available;
+            if (available.ContainsKey(e.Var)) {
+              if (available[e.Var]) {
+                ok = true;
+                available[e.Var] = false;
+              }
+            }
+          }
+          if (!ok) {
+            reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here");
+          }
+        }
         if (e.Var != null && e.Var.IsGhost) {
           reporter.Error(MessageSource.Resolver, expr, "ghost variables are allowed only in specification contexts");
-          return;
+          return Usage.Ordinary;
         }
+        return e.Var.IsLinear ? Usage.Linear : Usage.Ordinary;
 
       } else if (expr is MemberSelectExpr) {
         var e = (MemberSelectExpr)expr;
         if (e.Member != null && e.Member.IsGhost) {
           reporter.Error(MessageSource.Resolver, expr, "ghost fields are allowed only in specification contexts");
-          return;
+          return Usage.Ordinary;
         }
 
       } else if (expr is FunctionCallExpr) {
@@ -13798,49 +13885,52 @@ namespace Microsoft.Dafny
         if (e.Function != null) {
           if (e.Function.IsGhost) {
             reporter.Error(MessageSource.Resolver, expr, "function calls are allowed only in specification contexts (consider declaring the function a 'function method')");
-            return;
+          return Usage.Ordinary;
           }
           // function is okay, so check all NON-ghost arguments
-          CheckIsCompilable(e.Receiver);
+          CheckIsCompilable(e.Receiver, usageContext, Usage.Ordinary);
           for (int i = 0; i < e.Function.Formals.Count; i++) {
-            if (!e.Function.Formals[i].IsGhost) {
-              CheckIsCompilable(e.Args[i]);
+            var usage = e.Function.Formals[i].Usage;
+            if (usage != Usage.Ghost) {
+              CheckIsCompilable(e.Args[i], usageContext, usage);
             }
           }
+          return e.Function.Result.Usage;
         }
-        return;
+        return Usage.Ordinary;
 
       } else if (expr is DatatypeValue) {
         var e = (DatatypeValue)expr;
         // check all NON-ghost arguments
         // note that if resolution is successful, then |e.Arguments| == |e.Ctor.Formals|
         for (int i = 0; i < e.Arguments.Count; i++) {
-          if (!e.Ctor.Formals[i].IsGhost) {
-            CheckIsCompilable(e.Arguments[i]);
+          var usage = e.Ctor.Formals[i].Usage;
+          if (usage != Usage.Ghost) {
+            CheckIsCompilable(e.Arguments[i], usageContext, usage);
           }
         }
-        return;
+        return Usage.Ordinary; // TODO
 
       } else if (expr is OldExpr) {
         reporter.Error(MessageSource.Resolver, expr, "old expressions are allowed only in specification and ghost contexts");
-        return;
+        return Usage.Ordinary;
 
       } else if (expr is UnaryOpExpr) {
         var e = (UnaryOpExpr)expr;
         if (e.Op == UnaryOpExpr.Opcode.Fresh) {
           reporter.Error(MessageSource.Resolver, expr, "fresh expressions are allowed only in specification and ghost contexts");
-          return;
+          return Usage.Ordinary;
         }
 
       } else if (expr is UnchangedExpr) {
         reporter.Error(MessageSource.Resolver, expr, "unchanged expressions are allowed only in specification and ghost contexts");
-        return;
+        return Usage.Ordinary;
 
       } else if (expr is StmtExpr) {
         var e = (StmtExpr)expr;
         // ignore the statement
-        CheckIsCompilable(e.E);
-        return;
+        CheckIsCompilable(e.E, usageContext, Usage.Ordinary);
+        return Usage.Ordinary;
 
       } else if (expr is BinaryExpr) {
         var e = (BinaryExpr)expr;
@@ -13848,7 +13938,7 @@ namespace Microsoft.Dafny
           case BinaryExpr.ResolvedOpcode.RankGt:
           case BinaryExpr.ResolvedOpcode.RankLt:
             reporter.Error(MessageSource.Resolver, expr, "rank comparisons are allowed only in specification and ghost contexts");
-            return;
+            return Usage.Ordinary;
           default:
             break;
         }
@@ -13859,7 +13949,7 @@ namespace Microsoft.Dafny
           case TernaryExpr.Opcode.PrefixEqOp:
           case TernaryExpr.Opcode.PrefixNeqOp:
             reporter.Error(MessageSource.Resolver, expr, "prefix equalities are allowed only in specification and ghost contexts");
-            return;
+            return Usage.Ordinary;
           default:
             break;
         }
@@ -13869,30 +13959,33 @@ namespace Microsoft.Dafny
           Contract.Assert(e.LHSs.Count == e.RHSs.Count);
           var i = 0;
           foreach (var ee in e.RHSs) {
+            foreach (var x in e.LHSs[i].Vars) {
+              if (x.IsLinear) throw new Exception("not implemented");
+            }
             if (!e.LHSs[i].Vars.All(bv => bv.IsGhost)) {
-              CheckIsCompilable(ee);
+              CheckIsCompilable(ee, usageContext, Usage.Ordinary);
             }
             i++;
           }
-          CheckIsCompilable(e.Body);
+          return CheckIsCompilable(e.Body, usageContext);
         } else {
           Contract.Assert(e.RHSs.Count == 1);
           var lhsVarsAreAllGhost = e.BoundVars.All(bv => bv.IsGhost);
           if (!lhsVarsAreAllGhost) {
-            CheckIsCompilable(e.RHSs[0]);
+            CheckIsCompilable(e.RHSs[0], usageContext, Usage.Ordinary);
           }
-          CheckIsCompilable(e.Body);
+          var usage = CheckIsCompilable(e.Body, usageContext);
 
           // fill in bounds for this to-be-compiled let-such-that expression
           Contract.Assert(e.RHSs.Count == 1);  // if we got this far, the resolver will have checked this condition successfully
           var constraint = e.RHSs[0];
           e.Constraint_Bounds = DiscoverBestBounds_MultipleVars(e.BoundVars.ToList<IVariable>(), constraint, true, ComprehensionExpr.BoundedPool.PoolVirtues.None);
+          return usage;
         }
-        return;
       } else if (expr is LambdaExpr) {
         var e = expr as LambdaExpr;
-        CheckIsCompilable(e.Body);
-        return;
+        CheckIsCompilable(e.Body, null, Usage.Ordinary); // cannot propagate linear variables into lambdas
+        return Usage.Ordinary;
       } else if (expr is ComprehensionExpr) {
         var e = (ComprehensionExpr)expr;
         var uncompilableBoundVars = e.UncompilableBoundVars();
@@ -13910,28 +14003,31 @@ namespace Microsoft.Dafny
           foreach (var bv in uncompilableBoundVars) {
             reporter.Error(MessageSource.Resolver, expr, "{0} in non-ghost contexts must be compilable, but Dafny's heuristics can't figure out how to produce or compile a bounded set of values for '{1}'", what, bv.Name);
           }
-          return;
+          return Usage.Ordinary;
         }
         // don't recurse down any attributes
-        if (e.Range != null) { CheckIsCompilable(e.Range); }
-        CheckIsCompilable(e.Term);
-        return;
+        if (e.Range != null) { CheckIsCompilable(e.Range, null, Usage.Ordinary); }
+        CheckIsCompilable(e.Term, null, Usage.Ordinary);
+        return Usage.Ordinary;
 
       } else if (expr is NamedExpr) {
         if (!moduleInfo.IsAbstract)
-          CheckIsCompilable(((NamedExpr)expr).Body);
-        return;
+          return CheckIsCompilable(((NamedExpr)expr).Body, usageContext);
+        return Usage.Ordinary;
       } else if (expr is ChainingExpression) {
         // We don't care about the different operators; we only want the operands, so let's get them directly from
         // the chaining expression
         var e = (ChainingExpression)expr;
-        e.Operands.ForEach(CheckIsCompilable);
-        return;
+        e.Operands.ForEach(ee => CheckIsCompilable(ee, usageContext, Usage.Ordinary));
+        return Usage.Ordinary;
+      } else if (expr is ConcreteSyntaxExpression) {
+        return CheckIsCompilable(((ConcreteSyntaxExpression)expr).ResolvedExpression, usageContext);
       }
 
       foreach (var ee in expr.SubExpressions) {
-        CheckIsCompilable(ee);
+        CheckIsCompilable(ee, usageContext, Usage.Ordinary);
       }
+      return Usage.Ordinary;
     }
 
     public void ResolveFunctionCallExpr(FunctionCallExpr e, ResolveOpts opts) {

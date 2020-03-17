@@ -1519,7 +1519,7 @@ namespace Microsoft.Dafny
       } else {
         bvNew = new BoundVar(Tok(bv.tok), bv.Name, CloneType(bv.Type));
       }
-      bvNew.IsGhost = bv.IsGhost;
+      bvNew.Usage = bv.Usage;
       return bvNew;
     }
 

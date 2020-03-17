@@ -1,0 +1,19 @@
+Linear0.dfy(47,4): Error: expected linear expression
+Linear0.dfy(52,4): Error: expected ordinary expression, found linear expression
+Linear0.dfy(55,45): Error: linear variable must be unassigned at function exit
+Linear0.dfy(62,4): Error: expected ordinary expression, found linear expression
+Linear0.dfy(62,11): Error: expected ordinary expression, found linear expression
+Linear0.dfy(62,9): Error: expected linear expression
+Linear0.dfy(67,4): Error: expected linear expression
+Linear0.dfy(72,15): Error: linear variable is unavailable here
+Linear0.dfy(75,28): Error: linear variable must be unassigned at function exit
+Linear0.dfy(83,9): Error: expected linear expression
+Linear0.dfy(90,9): Error: expected ordinary expression, found linear expression
+Linear0.dfy(91,12): Error: expected linear expression
+Linear0.dfy(91,11): Error: expected ordinary expression, found linear expression
+Linear0.dfy(94,36): Error: linear variable must be unassigned at method exit
+Linear0.dfy(101,58): Error: linear variable must be assigned at method exit
+Linear0.dfy(108,29): Error: linear variable must be assigned at method exit
+Linear0.dfy(115,20): Error: linear variable is unavailable here
+Linear0.dfy(118,19): Error: linear variable must be unassigned at method exit
+18 resolution/type errors detected in Linear0.dfy
