@@ -2399,7 +2399,7 @@ namespace Microsoft.Dafny
                     CheckExpression(m.Body, this, m);
                     foreach (Formal x in m.Ins) {
                       if (x.IsLinear && usageContext.available[x]) {
-                        reporter.Error(MessageSource.Resolver, x, "linear variable must be unassigned at method exit");
+                        reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
                       }
                     }
                     foreach (Formal x in m.Outs) {
@@ -2413,14 +2413,13 @@ namespace Microsoft.Dafny
                   var f = (Function)member;
                   if (!f.IsGhost && f.Body != null) {
                     UsageContext usageContext = new UsageContext();
-                    bool isLinear = f.Result != null && f.Result.IsLinear;
                     foreach (Formal x in f.Formals) {
                       if (x.IsLinear) usageContext.available.Add(x, true);
                     }
-                    CheckIsCompilable(f.Body, usageContext, isLinear ? Usage.Linear : Usage.Ordinary);
+                    CheckIsCompilable(f.Body, usageContext, f.Result != null ? f.Result.Usage : Usage.Ordinary);
                     foreach (Formal x in f.Formals) {
                       if (x.IsLinear && usageContext.available[x]) {
-                        reporter.Error(MessageSource.Resolver, x, "linear variable must be unassigned at function exit");
+                        reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at function exit");
                       }
                     }
                   }
@@ -6847,10 +6846,9 @@ namespace Microsoft.Dafny
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
               var x = lhs as IdentifierExpr;
-              bool isLinear = x != null && x.Var.IsLinear;
-              Usage expectedUsage = isLinear ? Usage.Linear : Usage.Ordinary;
+              Usage expectedUsage = x != null ? x.Var.Usage : Usage.Ordinary;
               resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
-              if (isLinear) {
+              if (x != null && x.Var.IsLinear) {
                 if (usageContext.available[x.Var]) {
                   Error(x, "variable must be unavailable before assignment");
                 }
@@ -6887,13 +6885,25 @@ namespace Microsoft.Dafny
             }
           } else {
             int j;
+            bool returnsShared = callee.Outs.Exists(o => o.IsShared);
+            List<IVariable> borrowed = new List<IVariable>();
             if (!callee.IsGhost) {
               resolver.CheckIsCompilable(s.Receiver);
               j = 0;
               foreach (var e in s.Args) {
                 Contract.Assume(j < callee.Ins.Count);  // this should have already been checked by the resolver
                 if (!callee.Ins[j].IsGhost) {
-                  resolver.CheckIsCompilable(e, usageContext, callee.Ins[j].Usage);
+                  var jUsage = callee.Ins[j].Usage;
+                  var x = ExprAsIdentifier(e);
+                  if (x != null && x.Var.IsLinear && jUsage == Usage.Shared) {
+                    // borrow shared j from linear x
+                    if (returnsShared) {
+                      Error(x, "expected shared variable, found linear variable (cannot borrow variable because method returns a shared result)");
+                    }
+                    borrowed.Add(x.Var);
+                    jUsage = Usage.Linear;
+                  }
+                  resolver.CheckIsCompilable(e, usageContext, jUsage);
                 }
                 j++;
               }
@@ -6902,7 +6912,8 @@ namespace Microsoft.Dafny
             foreach (var e in s.Lhs) {
               var resolvedLhs = e.Resolved;
               var x = resolvedLhs as IdentifierExpr;
-              bool isLinear = x != null && x.Var.IsLinear;
+              Usage xUsage = x != null ? x.Var.Usage : Usage.Ordinary;
+              Usage jUsage = callee.Outs[j].Usage;
               if (callee.IsGhost || callee.Outs[j].IsGhost) {
                 // LHS must denote a ghost
                 if (resolvedLhs is IdentifierExpr) {
@@ -6924,17 +6935,20 @@ namespace Microsoft.Dafny
                   // this is an array update, and arrays are always non-ghost
                   Error(s, "actual out-parameter{0} is required to be a ghost variable", s.Lhs.Count == 1 ? "" : " " + j);
                 }
-              } else if (callee.Outs[j].IsLinear) {
-                if (!isLinear) {
+              } else if (jUsage == Usage.Linear) {
+                if (xUsage != Usage.Linear) {
                   Error(x, "variable must be linear");
                 } else if (usageContext.available[x.Var]) {
                   Error(x, "variable must be unavailable before assignment");
                 }
                 usageContext.available[x.Var] = true;
-              } else if (isLinear) {
-                Error(x, "variable must not be linear");
+              } else if (xUsage != jUsage) {
+                Error(x, "expected {0} variable, found {1} variable", UsageName(jUsage), UsageName(xUsage));
               }
               j++;
+            }
+            foreach (var x in borrowed) {
+              usageContext.available[x] = true;
             }
           }
 
@@ -13824,6 +13838,21 @@ namespace Microsoft.Dafny
       internal Dictionary<IVariable, bool> available = new Dictionary<IVariable, bool>();
     }
 
+    static string UsageName(Usage u) {
+      return
+        (u == Usage.Ghost) ? "ghost" :
+        (u == Usage.Linear) ? "linear" :
+        (u == Usage.Shared) ? "shared" :
+        (u == Usage.Inout) ? "inout" :
+        "ordinary";
+    }
+
+    static IdentifierExpr ExprAsIdentifier(Expression expr) {
+      IdentifierExpr i = expr as IdentifierExpr;
+      ConcreteSyntaxExpression c = expr as ConcreteSyntaxExpression;
+      return (i != null) ? i : (c != null) ? ExprAsIdentifier(c.ResolvedExpression) : null;
+    }
+
     /// <summary>
     /// Generate an error for every non-ghost feature used in "expr".
     /// Requires "expr" to have been successfully resolved.
@@ -13834,15 +13863,9 @@ namespace Microsoft.Dafny
 
     void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage) {
       Usage usage = CheckIsCompilable(expr, usageContext);
-      if (expectedUsage == Usage.Shared) {
-        throw new Exception("not implemented: Usage.Shared");
-      }
       if (expectedUsage != Usage.Ghost && usage != expectedUsage) {
-        if (expectedUsage == Usage.Linear) {
-          reporter.Error(MessageSource.Resolver, expr, "expected linear expression");
-        } else if (usage == Usage.Linear) {
-          reporter.Error(MessageSource.Resolver, expr, "expected ordinary expression, found linear expression");
-        }
+        reporter.Error(MessageSource.Resolver, expr, "expected {0} expression, found {1} expression",
+          UsageName(expectedUsage), UsageName(usage));
       }
     }
 
@@ -13867,11 +13890,14 @@ namespace Microsoft.Dafny
             reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here");
           }
         }
+        if (e.Var != null && e.Var.IsShared && usageContext == null) {
+          reporter.Error(MessageSource.Resolver, expr, "shared variable is out of scope here");
+        }
         if (e.Var != null && e.Var.IsGhost) {
           reporter.Error(MessageSource.Resolver, expr, "ghost variables are allowed only in specification contexts");
           return Usage.Ordinary;
         }
-        return e.Var.IsLinear ? Usage.Linear : Usage.Ordinary;
+        return e.Var.Usage;
 
       } else if (expr is MemberSelectExpr) {
         var e = (MemberSelectExpr)expr;
@@ -13885,7 +13911,7 @@ namespace Microsoft.Dafny
         if (e.Function != null) {
           if (e.Function.IsGhost) {
             reporter.Error(MessageSource.Resolver, expr, "function calls are allowed only in specification contexts (consider declaring the function a 'function method')");
-          return Usage.Ordinary;
+            return Usage.Ordinary;
           }
           // function is okay, so check all NON-ghost arguments
           CheckIsCompilable(e.Receiver, usageContext, Usage.Ordinary);

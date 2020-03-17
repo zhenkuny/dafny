@@ -40,6 +40,24 @@ method N2(linear x_in:int, linear y_in:int) returns(linear x:int, linear y:int)
     x, y := N1(x_in, y_in);
 }
 
+method S0(linear l_in:int, shared s_in:int) returns(linear l:int)
+{
+  l := l_in;
+}
+
+method S1(linear l_in:int, shared s_in:int) returns(linear l:int, shared s1:int, shared s2:int)
+{
+  l := S0(l_in, s_in);
+  s1 := s_in;
+  s2 := s_in;
+}
+
+method S2(linear x_in:int, linear y_in:int) returns(linear x:int, linear y:int)
+{
+  x := S0(x_in, y_in);
+  y := y_in;
+}
+
 // ---------- fails ------------------------------------
 
 function method F1_a(x_in:int):linear int
@@ -121,3 +139,31 @@ method M2_b(linear x_in:int) returns(linear x:int)
     x := M1_e();
 }
 
+method S1_a(linear l_in:int, shared s_in:int) returns(shared s1:int, shared s2:int)
+{
+  s1 := l_in;
+  s2 := s_in;
+}
+
+method S1_b(shared s_in:int) returns(linear l:int, shared s1:int, shared s2:int)
+{
+  l := s_in;
+  s1 := s_in;
+  s2 := s_in;
+}
+
+method S2_a(linear x_in:int, linear y_in:int) returns(linear x:int, linear y:int, shared s1:int, shared s2:int)
+{
+  x, s1, s2 := S1(x_in, y_in);
+  y := y_in;
+}
+
+method Lambda0(linear x:int)
+{
+  var f := (i:int) => x;
+}
+
+method Lambda1(shared x:int)
+{
+  var f := (i:int) => x;
+}

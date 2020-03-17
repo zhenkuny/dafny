@@ -5095,6 +5095,9 @@ namespace Microsoft.Dafny {
     bool IsShared {
       get;
     }
+    Usage Usage {
+      get;
+    }
     IToken Tok {
       get;
     }
@@ -5158,6 +5161,11 @@ namespace Microsoft.Dafny {
       }
     }
     public bool IsShared {
+      get {
+        throw new NotImplementedException();
+      }
+    }
+    public Usage Usage {
       get {
         throw new NotImplementedException();
       }
@@ -6931,12 +6939,17 @@ namespace Microsoft.Dafny {
     }
     bool IVariable.IsLinear {
       get {
-        return false;
+        return this.Usage == Usage.Linear;
       }
     }
     bool IVariable.IsShared {
       get {
-        return false;
+        return this.Usage == Usage.Shared;
+      }
+    }
+    Usage IVariable.Usage {
+      get {
+        return this.Usage;
       }
     }
     /// <summary>
