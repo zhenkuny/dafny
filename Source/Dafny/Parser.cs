@@ -319,7 +319,7 @@ bool IsAlternative() {
 
 bool FollowedByColon() {
   IToken x = la;
-  while (x.kind == _ident || x.kind == _openparen || x.kind == _linear)
+  while (x.kind == _ident || x.kind == _openparen || x.kind == _linear || x.kind == _shared)
      x = scanner.Peek();
   return x.kind == _colon;
 }

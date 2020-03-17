@@ -13,6 +13,16 @@ function method F2(linear x_in:int):(linear x:int)
     F1(x_in)
 }
 
+function method F3(shared x_in:int, shared y_in:int):shared int
+{
+    x_in
+}
+
+function method F4(shared x_in:int):(shared x:int)
+{
+    F3(x_in, x_in)
+}
+
 method M1(linear x_in:int) returns(linear x:int)
     ensures x == x_in
 {
@@ -129,6 +139,21 @@ function method F2_a(linear x_in:int):(linear x:int)
 function method F2_b(linear x_in:int):(linear x:int)
 {
     F1_e()
+}
+
+function method F3_a(shared x_in:int, shared y_in:int):shared int
+{
+    7
+}
+
+function method F3_b(shared x_in:int, shared y_in:int):int
+{
+    x_in
+}
+
+function method F3_c(x_in:int, shared y_in:int):shared int
+{
+    x_in
 }
 
 method M1_a(x_in:int) returns(linear x:int)
