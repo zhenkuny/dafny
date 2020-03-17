@@ -2395,8 +2395,10 @@ namespace Microsoft.Dafny
                     foreach (Formal x in m.Outs) {
                       if (x.IsLinear) usageContext.available.Add(x, false);
                     }
+                    UsageContext outer = usageContext.Copy();
                     ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
                     CheckExpression(m.Body, this, m);
+                    PopUsageContext(m.Body.EndTok, outer, usageContext);
                     foreach (Formal x in m.Ins) {
                       if (x.IsLinear && usageContext.available[x]) {
                         reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
@@ -6809,8 +6811,18 @@ namespace Microsoft.Dafny
             }
           }
           s.IsGhost = (s.Update == null || s.Update.IsGhost) && s.Locals.All(v => v.IsGhost);
+          foreach (var local in s.Locals) {
+            if (local.Usage == Usage.Linear) {
+              usageContext.available.Add(local, false);
+            }
+          }
           if (s.Update != null) {
             Visit(s.Update, mustBeErasable);
+            foreach (var local in s.Locals) {
+              if (local.Usage == Usage.Linear) {
+                usageContext.available[local] = true;
+              }
+            }
           }
 
         } else if (stmt is LetStmt) {
@@ -6954,9 +6966,11 @@ namespace Microsoft.Dafny
 
         } else if (stmt is BlockStmt) {
           var s = (BlockStmt)stmt;
+          UsageContext outer = usageContext.Copy();
           s.IsGhost = mustBeErasable;  // set .IsGhost before descending into substatements (since substatements may do a 'break' out of this block)
           s.Body.Iter(ss => Visit(ss, mustBeErasable));
           s.IsGhost = s.IsGhost || s.Body.All(ss => ss.IsGhost);  // mark the block statement as ghost if all its substatements are ghost
+          resolver.PopUsageContext(stmt.EndTok, outer, usageContext);
 
         } else if (stmt is IfStmt) {
           var s = (IfStmt)stmt;
@@ -13836,6 +13850,26 @@ namespace Microsoft.Dafny
 
     class UsageContext {
       internal Dictionary<IVariable, bool> available = new Dictionary<IVariable, bool>();
+
+      internal UsageContext Copy() {
+        UsageContext uc = new UsageContext();
+        foreach (var k in available.Keys) {
+          uc.available.Add(k, available[k]);
+        }
+        return uc;
+      }
+    }
+
+    // Check that any extra variables in inner are unavailable, remove extra variables
+    void PopUsageContext(IToken tok, UsageContext outer, UsageContext inner) {
+      foreach (var k in new List<IVariable>(inner.available.Keys)) {
+        if (!outer.available.ContainsKey(k)) {
+          if (inner.available[k]) {
+            reporter.Error(MessageSource.Resolver, tok, "linear variable {0} must be unavailable at end of block", k.Name);
+          }
+          inner.available.Remove(k);
+        }
+      }
     }
 
     static string UsageName(Usage u) {
