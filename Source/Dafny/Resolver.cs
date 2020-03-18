@@ -2395,7 +2395,7 @@ namespace Microsoft.Dafny
                     foreach (Formal x in m.Outs) {
                       if (x.IsLinear) usageContext.available.Add(x, false);
                     }
-                    UsageContext outer = usageContext.Copy();
+                    UsageContext outer = UsageContext.Copy(usageContext);
                     ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
                     CheckExpression(m.Body, this, m);
                     PopUsageContext(m.Body.EndTok, outer, usageContext);
@@ -6966,7 +6966,7 @@ namespace Microsoft.Dafny
 
         } else if (stmt is BlockStmt) {
           var s = (BlockStmt)stmt;
-          UsageContext outer = usageContext.Copy();
+          UsageContext outer = UsageContext.Copy(usageContext);
           s.IsGhost = mustBeErasable;  // set .IsGhost before descending into substatements (since substatements may do a 'break' out of this block)
           s.Body.Iter(ss => Visit(ss, mustBeErasable));
           s.IsGhost = s.IsGhost || s.Body.All(ss => ss.IsGhost);  // mark the block statement as ghost if all its substatements are ghost
@@ -13858,10 +13858,16 @@ namespace Microsoft.Dafny
         }
         return uc;
       }
+
+      internal static UsageContext Copy(UsageContext uc) {
+        return (uc == null) ? null : uc.Copy();
+      }
     }
 
     // Check that any extra variables in inner are unavailable, remove extra variables
     void PopUsageContext(IToken tok, UsageContext outer, UsageContext inner) {
+      if (inner == null) inner = new UsageContext();
+      if (outer == null) outer = new UsageContext();
       foreach (var k in new List<IVariable>(inner.available.Keys)) {
         if (!outer.available.ContainsKey(k)) {
           if (inner.available[k]) {
@@ -13955,7 +13961,8 @@ namespace Microsoft.Dafny
               CheckIsCompilable(e.Args[i], usageContext, usage);
             }
           }
-          return e.Function.Result.Usage;
+          var result = e.Function.Result;
+          return (result != null) ? result.Usage : Usage.Ordinary;
         }
         return Usage.Ordinary;
 
