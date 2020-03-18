@@ -26,8 +26,8 @@ method Main()
    }
    else
    { assert false; }
-   // test disjoint operator
-   if(m !! map[3 := 3])
+   // test disjoint operator on .Keys sets
+   if(m.Keys !! map[3 := 3].Keys)
    {
       print "m3\n";
    }
@@ -116,30 +116,30 @@ method m8()
       a := a[i := i * i];
       i := i + 1;
    }
-   assert a !! map[-1:=2];
+   assert a.Keys !! map[-1:=2].Keys;
    m3(a);
 }
 method m9()
 {
-   var a, b := map[], map[];
-   assert a !! b;
+   var a: map<int,int>, b := map[], map[];
+   assert a.Keys !! b.Keys;
    b := map[2:=3,4:=2,5:=-6,6:=7];
-   assert a !! b;
-   assert b !! map[6:=3]; // ERROR, both share 6 in the domain.
+   assert a.Keys !! b.Keys;
+   assert b.Keys !! map[6:=3].Keys; // ERROR, both share 6 in the domain.
 }
 method m10()
 {
    var a, b := map[], map[];
-   assert a !! b;
+   assert a.Keys !! b.Keys;
    b := map[2:=3,4:=2,5:=-6,6:=7];
-   assert a !! b;
+   assert a.Keys !! b.Keys;
    a := map[3:=3,1:=2,9:=-6,8:=7];
-   assert a !! b;
+   assert a.Keys !! b.Keys;
 }
 method m11<U, V>(a: map<U, V>, b: map<U, V>)
    requires forall i :: !(i in a && i in b);
 {
-   assert a !! b;
+   assert a.Keys !! b.Keys;
 }
 
 method m12()
@@ -167,7 +167,7 @@ method m13()
 }
 
 function union<U, V>(m: map<U,V>, m': map<U,V>): map<U,V>
-   requires m !! m';
+   requires m.Keys !! m'.Keys
    // ensures forall i :: i in union(m, m') <==> i in m || i in m'
    ensures forall i :: i in union(m, m') ==> i in m.Keys + m'.Keys
    ensures forall i :: i in union(m, m') <== i in m.Keys + m'.Keys
@@ -188,7 +188,7 @@ method m14()
 
 class A { var x: int; }
 
-method m15(b: set<A>) 
+method m15(b: set<A>)
 {
   var m := map a | a in b :: a.x;
   var aa := new A;
@@ -242,4 +242,9 @@ method GeneralMaps3() {
   } else if * {
     var m := map u | -2 <= u < 6 :: f(u) := u;  // error: LHS may not be defined (also, LHS non-unique)
   }
+}
+
+function UnboxTest(s: seq<seq<int>>) : map<seq<int>, seq<int>>
+{
+  map i: int | 0 <= i < |s| :: s[i] := s[i] // fine, make sure unboxing doesn't unwrap the int from the nested seq<int> on the LHS
 }

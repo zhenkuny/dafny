@@ -139,6 +139,7 @@
     <Reference Include="BoogieParserHelper">
       <HintPath>..\..\..\boogie\Binaries\BoogieParserHelper.dll</HintPath>
     </Reference>
+    <PackageReference Include="Mono.Cecil" Version="0.11.1" />
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
@@ -150,6 +151,8 @@
     <Compile Include="Compiler-Csharp.cs" />
     <Compile Include="Compiler-go.cs" />
     <Compile Include="Compiler-js.cs" />
+    <Compile Include="Compiler-cpp.cs" />
+    <Compile Include="Compiler-java.cs" />
     <Compile Include="Reporting.cs" />
     <Compile Include="Triggers\QuantifiersCollection.cs" />
     <Compile Include="Triggers\QuantifierSplitter.cs" />

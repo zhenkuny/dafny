@@ -1,0 +1,60 @@
+datatype table = table(legs: int)
+
+function method TableSetLegs(linear t:table, num:int) : linear table
+  ensures TableSetLegs(t).legs == num
+
+function method set_leg_const(linear t: table) : linear table
+{
+  TableSetLegs(t, 4)
+  // Sugar: t.(legs := 4)
+}
+
+function method add_leg(linear t: table) : linear table
+{
+  TableSetLegs(t, t.legs + 1)       // Is the double use of t allowed here?
+  // Sugar: t.(legs := t.legs + 1)
+}
+
+datatype room = room(linear big_table: table, linear small_table: table)
+
+function method RoomGetBigTable(linear r:room) : (linear r':room, linear t:table)
+  requires r.has_big_table
+  ensures  t == r.big_table
+  ensures  r' == r.(has_big_table := false)
+
+function method RoomGetSmallTable(linear r:room) : (linear r':room, linear t:table)
+  requires r.has_small_table
+  ensures  t == r.small_table
+  ensures  r' == r.(has_small_table := false)
+
+function method RoomSetBigTable(linear r:room, linear t:table) : (linear r':room)
+  requires !r.has_big_table
+  ensures  r' == r.(has_big_table := true).(big_table := t);
+
+function method add_leg_big_table(linear r: room) : linear room
+{
+  var r', big := RoomGetBigTable(r);
+  var big' := add_leg(big);
+  RoomSetBigTable(r', big')
+  // Sugar: r.(big_table := add_leg(r.big_table))
+}
+
+// This should fail:
+function method add_leg_big_table_bad(linear r: room) : linear room
+{
+  var r', small := RoomGetSmallTable(r);
+  var small' := add_leg(small);
+  RoomSetBigTable(r', small')       // Failed precondition: !r'.has_big_table
+  // Sugar: r.(big_table := add_leg(r.small_table))
+}
+
+function method add_leg_first_table_okay(linear ts: lseq<table>) : lseq<table>
+	requires |ts| > 1;
+  requires lHas(ts)[0];
+{
+  var ts', t := LSeqGet(ts, 0);
+  var t' := add_leg(t);
+  LSeqUpdate(ts', 0, t')
+	// Sugar: ts[0 := add_leg(ts[0])]
+}
+

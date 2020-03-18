@@ -306,38 +306,38 @@ namespace Dafny
   public class MultiSet<T>
   {
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-    readonly ImmutableDictionary<T, int> dict;
+    readonly ImmutableDictionary<T, BigInteger> dict;
 #else
-    readonly Dictionary<T, int> dict;
+    readonly Dictionary<T, BigInteger> dict;
 #endif
     readonly BigInteger occurrencesOfNull;  // stupidly, a Dictionary in .NET cannot use "null" as a key
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-    MultiSet(ImmutableDictionary<T, int>.Builder d, BigInteger occurrencesOfNull) {
+    MultiSet(ImmutableDictionary<T, BigInteger>.Builder d, BigInteger occurrencesOfNull) {
       dict = d.ToImmutable();
       this.occurrencesOfNull = occurrencesOfNull;
     }
-    public static readonly MultiSet<T> Empty = new MultiSet<T>(ImmutableDictionary<T, int>.Empty.ToBuilder(), BigInteger.Zero);
+    public static readonly MultiSet<T> Empty = new MultiSet<T>(ImmutableDictionary<T, BigInteger>.Empty.ToBuilder(), BigInteger.Zero);
 #else
-    MultiSet(Dictionary<T, int> d, BigInteger occurrencesOfNull) {
+    MultiSet(Dictionary<T, BigInteger> d, BigInteger occurrencesOfNull) {
       this.dict = d;
       this.occurrencesOfNull = occurrencesOfNull;
     }
-    public static MultiSet<T> Empty = new MultiSet<T>(new Dictionary<T, int>(0), BigInteger.Zero);
+    public static MultiSet<T> Empty = new MultiSet<T>(new Dictionary<T, BigInteger>(0), BigInteger.Zero);
 #endif
     public static MultiSet<T> FromElements(params T[] values) {
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-      var d = ImmutableDictionary<T, int>.Empty.ToBuilder();
+      var d = ImmutableDictionary<T, BigInteger>.Empty.ToBuilder();
 #else
-      var d = new Dictionary<T, int>(values.Length);
+      var d = new Dictionary<T, BigInteger>(values.Length);
 #endif
       var occurrencesOfNull = BigInteger.Zero;
       foreach (T t in values) {
         if (t == null) {
           occurrencesOfNull++;
         } else {
-          var i = 0;
+          BigInteger i;
           if (!d.TryGetValue(t, out i)) {
-            i = 0;
+            i = BigInteger.Zero;
           }
           d[t] = i + 1;
         }
@@ -346,18 +346,18 @@ namespace Dafny
     }
     public static MultiSet<T> FromCollection(ICollection<T> values) {
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-      var d = ImmutableDictionary<T, int>.Empty.ToBuilder();
+      var d = ImmutableDictionary<T, BigInteger>.Empty.ToBuilder();
 #else
-      var d = new Dictionary<T, int>();
+      var d = new Dictionary<T, BigInteger>();
 #endif
       var occurrencesOfNull = BigInteger.Zero;
       foreach (T t in values) {
         if (t == null) {
           occurrencesOfNull++;
         } else {
-          var i = 0;
+          BigInteger i;
           if (!d.TryGetValue(t, out i)) {
-            i = 0;
+            i = BigInteger.Zero;
           }
           d[t] = i + 1;
         }
@@ -366,18 +366,18 @@ namespace Dafny
     }
     public static MultiSet<T> FromSeq(Sequence<T> values) {
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-      var d = ImmutableDictionary<T, int>.Empty.ToBuilder();
+      var d = ImmutableDictionary<T, BigInteger>.Empty.ToBuilder();
 #else
-      var d = new Dictionary<T, int>();
+      var d = new Dictionary<T, BigInteger>();
 #endif
       var occurrencesOfNull = BigInteger.Zero;
       foreach (T t in values.Elements) {
         if (t == null) {
           occurrencesOfNull++;
         } else {
-          var i = 0;
+          BigInteger i;
           if (!d.TryGetValue(t, out i)) {
-            i = 0;
+            i = BigInteger.Zero;
           }
           d[t] = i + 1;
         }
@@ -386,16 +386,16 @@ namespace Dafny
     }
     public static MultiSet<T> FromSet(Set<T> values) {
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-      var d = ImmutableDictionary<T, int>.Empty.ToBuilder();
+      var d = ImmutableDictionary<T, BigInteger>.Empty.ToBuilder();
 #else
-      var d = new Dictionary<T, int>();
+      var d = new Dictionary<T, BigInteger>();
 #endif
       var containsNull = false;
       foreach (T t in values.Elements) {
         if (t == null) {
           containsNull = true;
         } else {
-          d[t] = 1;
+          d[t] = BigInteger.One;
         }
       }
       return new MultiSet<T>(d, containsNull ? BigInteger.One : BigInteger.Zero);
@@ -434,7 +434,7 @@ namespace Dafny
       }
       foreach (var kv in dict) {
         var t = Dafny.Helpers.ToString(kv.Key);
-        for (int i = 0; i < kv.Value; i++) {
+        for (var i = BigInteger.Zero; i < kv.Value; i++) {
           s += sep + t;
           sep = ", ";
         }
@@ -501,9 +501,9 @@ namespace Dafny
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
         var r = dict.ToBuilder();
 #else
-        var r = new Dictionary<T, int>(dict);
+        var r = new Dictionary<T, BigInteger>(dict);
 #endif
-        r[(T)(object)t] = (int)i;
+        r[(T)(object)t] = i;
         return new MultiSet<T>(r, occurrencesOfNull);
       }
     }
@@ -513,21 +513,21 @@ namespace Dafny
       else if (other.dict.Count + other.occurrencesOfNull == 0)
         return this;
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-      var r = ImmutableDictionary<T, int>.Empty.ToBuilder();
+      var r = ImmutableDictionary<T, BigInteger>.Empty.ToBuilder();
 #else
-      var r = new Dictionary<T, int>();
+      var r = new Dictionary<T, BigInteger>();
 #endif
       foreach (T t in dict.Keys) {
-        var i = 0;
+        BigInteger i;
         if (!r.TryGetValue(t, out i)) {
-          i = 0;
+          i = BigInteger.Zero;
         }
         r[t] = i + dict[t];
       }
       foreach (T t in other.dict.Keys) {
-        var i = 0;
+        BigInteger i;
         if (!r.TryGetValue(t, out i)) {
-          i = 0;
+          i = BigInteger.Zero;
         }
         r[t] = i + other.dict[t];
       }
@@ -539,9 +539,9 @@ namespace Dafny
       else if (other.dict.Count == 0 && other.occurrencesOfNull == 0)
         return other;
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-      var r = ImmutableDictionary<T, int>.Empty.ToBuilder();
+      var r = ImmutableDictionary<T, BigInteger>.Empty.ToBuilder();
 #else
-      var r = new Dictionary<T, int>();
+      var r = new Dictionary<T, BigInteger>();
 #endif
       foreach (T t in dict.Keys) {
         if (other.dict.ContainsKey(t)) {
@@ -556,9 +556,9 @@ namespace Dafny
       else if (other.dict.Count == 0 && other.occurrencesOfNull == 0)
         return this;
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
-      var r = ImmutableDictionary<T, int>.Empty.ToBuilder();
+      var r = ImmutableDictionary<T, BigInteger>.Empty.ToBuilder();
 #else
-      var r = new Dictionary<T, int>();
+      var r = new Dictionary<T, BigInteger>();
 #endif
       foreach (T t in dict.Keys) {
         if (!other.dict.ContainsKey(t)) {
@@ -591,7 +591,7 @@ namespace Dafny
           yield return default(T);
         }
         foreach (var item in dict) {
-          for (int i = 0; i < item.Value; i++) {
+          for (var i = BigInteger.Zero; i < item.Value; i++) {
             yield return item.Key;
           }
         }
@@ -654,11 +654,18 @@ namespace Dafny
       }
       return new Map<U, V>(d, hasNullValue, nullValue);
     }
-    public static Map<U, V> FromCollection(List<Pair<U, V>> values) {
+    public static Map<U, V> FromCollection(IEnumerable<Pair<U, V>> values) {
 #if DAFNY_USE_SYSTEM_COLLECTIONS_IMMUTABLE
       var d = ImmutableDictionary<U, V>.Empty.ToBuilder();
 #else
-      var d = new Dictionary<U, V>(values.Count);
+      // Initialize the capacity if the size of the enumerable is known
+      Dictionary<U, V> d;
+      if (values is ICollection<Pair<U, V>>) {
+        var collection = (ICollection<Pair<U, V>>)values;
+        d = new Dictionary<U, V>(collection.Count);
+      } else {
+        d = new Dictionary<U, V>();
+      }
 #endif
       var hasNullValue = false;
       var nullValue = default(V);
@@ -685,7 +692,7 @@ namespace Dafny
     public bool Equals(Map<U, V> other) {
       if (hasNullValue != other.hasNullValue || dict.Count != other.dict.Count) {
         return false;
-      } else if (hasNullValue && !Dafny.Helpers.AreEqual(nullValue, other.nullValue)) {
+      } else if (hasNullValue && !object.Equals(nullValue, other.nullValue)) {
         return false;
       }
       foreach (U u in dict.Keys) {
@@ -694,7 +701,7 @@ namespace Dafny
         if (!other.dict.TryGetValue(u, out v2)) {
           return false; // other dictionary does not contain this element
         }
-        if (!Dafny.Helpers.AreEqual(v1, v2)) {
+        if (!object.Equals(v1, v2)) {
           return false;
         }
       }
@@ -729,20 +736,6 @@ namespace Dafny
         sep = ", ";
       }
       return s + "]";
-    }
-    public bool IsDisjointFrom(Map<U, V> other) {
-      if (hasNullValue && other.hasNullValue) {
-        return false;
-      }
-      foreach (U u in dict.Keys) {
-        if (other.dict.ContainsKey(u))
-          return false;
-      }
-      foreach (U u in other.dict.Keys) {
-        if (dict.ContainsKey(u))
-          return false;
-      }
-      return true;
     }
     public bool Contains<G>(G u) {
       return u == null ? hasNullValue : u is U && dict.ContainsKey((U)(object)u);
@@ -804,15 +797,11 @@ namespace Dafny
     }
   }
 
-  public class Sequence<T>
+  public abstract class Sequence<T>
   {
-    readonly T[] elmts;
-    public Sequence(T[] ee) {
-      elmts = ee;
-    }
     public static Sequence<T> Empty {
       get {
-        return new Sequence<T>(new T[0]);
+        return new ArraySequence<T>(new T[0]);
       }
     }
     public static Sequence<T> Create(BigInteger length, System.Func<BigInteger, T> init) {
@@ -821,53 +810,52 @@ namespace Dafny
       for (int i = 0; i < len; i++) {
         values[i] = init(new BigInteger(i));
       }
-      return new Sequence<T>(values);
+      return new ArraySequence<T>(values);
+    }
+    public static Sequence<T> FromArray(T[] values) {
+      return new ArraySequence<T>(values);
     }
     public static Sequence<T> FromElements(params T[] values) {
-      return new Sequence<T>(values);
+      return new ArraySequence<T>(values);
     }
     public static Sequence<char> FromString(string s) {
-      return new Sequence<char>(s.ToCharArray());
+      return new ArraySequence<char>(s.ToCharArray());
     }
     public static Sequence<T> _DafnyDefaultValue() {
       return Empty;
     }
     public int Count {
-      get { return elmts.Length; }
+      get { return (int)LongCount; }
     }
-    public long LongCount {
-      get { return elmts.LongLength; }
-    }
-    public T[] Elements {
-      get {
-        return elmts;
-      }
-    }
+    public abstract long LongCount { get; }
+    public abstract T[] Elements { get; }
+
     public IEnumerable<T> UniqueElements {
       get {
-        var st = Set<T>.FromElements(elmts);
+        var st = Set<T>.FromElements(Elements);
         return st.Elements;
       }
     }
+
     public T Select(ulong index) {
-      return elmts[index];
+      return Elements[index];
     }
     public T Select(long index) {
-      return elmts[index];
+      return Elements[index];
     }
     public T Select(uint index) {
-      return elmts[index];
+      return Elements[index];
     }
     public T Select(int index) {
-      return elmts[index];
+      return Elements[index];
     }
     public T Select(BigInteger index) {
-      return elmts[(int)index];
+      return Elements[(int)index];
     }
     public Sequence<T> Update(long index, T t) {
-      T[] a = (T[])elmts.Clone();
+      T[] a = (T[])Elements.Clone();
       a[index] = t;
-      return new Sequence<T>(a);
+      return new ArraySequence<T>(a);
     }
     public Sequence<T> Update(ulong index, T t) {
       return Update((long)index, t);
@@ -876,13 +864,14 @@ namespace Dafny
       return Update((long)index, t);
     }
     public bool Equals(Sequence<T> other) {
-      int n = elmts.Length;
-      return n == other.elmts.Length && EqualUntil(other, n);
+      int n = Elements.Length;
+      return n == other.Elements.Length && EqualUntil(other, n);
     }
     public override bool Equals(object other) {
       return other is Sequence<T> && Equals((Sequence<T>)other);
     }
     public override int GetHashCode() {
+      T[] elmts = Elements;
       if (elmts == null || elmts.Length == 0)
         return 0;
       var hashCode = 0;
@@ -892,16 +881,16 @@ namespace Dafny
       return hashCode;
     }
     public override string ToString() {
-      if (elmts is char[]) {
+      if (Elements is char[]) {
         var s = "";
-        foreach (var t in elmts) {
+        foreach (var t in Elements) {
           s += t.ToString();
         }
         return s;
       } else {
         var s = "[";
         var sep = "";
-        foreach (var t in elmts) {
+        foreach (var t in Elements) {
           s += sep + Dafny.Helpers.ToString(t);
           sep = ", ";
         }
@@ -909,47 +898,46 @@ namespace Dafny
       }
     }
     bool EqualUntil(Sequence<T> other, int n) {
+      T[] elmts = Elements, otherElmts = other.Elements;
       for (int i = 0; i < n; i++) {
-        if (!Dafny.Helpers.AreEqual(elmts[i], other.elmts[i]))
+        if (!object.Equals(elmts[i], otherElmts[i]))
           return false;
       }
       return true;
     }
     public bool IsProperPrefixOf(Sequence<T> other) {
-      int n = elmts.Length;
-      return n < other.elmts.Length && EqualUntil(other, n);
+      int n = Elements.Length;
+      return n < other.Elements.Length && EqualUntil(other, n);
     }
     public bool IsPrefixOf(Sequence<T> other) {
-      int n = elmts.Length;
-      return n <= other.elmts.Length && EqualUntil(other, n);
+      int n = Elements.Length;
+      return n <= other.Elements.Length && EqualUntil(other, n);
     }
     public Sequence<T> Concat(Sequence<T> other) {
-      if (elmts.Length == 0)
+      if (Count == 0)
         return other;
-      else if (other.elmts.Length == 0)
+      else if (other.Count == 0)
         return this;
-      T[] a = new T[elmts.Length + other.elmts.Length];
-      System.Array.Copy(elmts, 0, a, 0, elmts.Length);
-      System.Array.Copy(other.elmts, 0, a, elmts.Length, other.elmts.Length);
-      return new Sequence<T>(a);
+      return new ConcatSequence<T>(this, other);
     }
     public bool Contains<G>(G g) {
       if (g == null || g is T) {
         var t = (T)(object)g;
+        var elmts = Elements;
         int n = elmts.Length;
         for (int i = 0; i < n; i++) {
-          if (Dafny.Helpers.AreEqual(t, elmts[i]))
+          if (object.Equals(t, elmts[i]))
             return true;
         }
       }
       return false;
     }
     public Sequence<T> Take(long m) {
-      if (elmts.LongLength == m)
+      if (Elements.LongLength == m)
         return this;
       T[] a = new T[m];
-      System.Array.Copy(elmts, a, m);
-      return new Sequence<T>(a);
+      System.Array.Copy(Elements, a, m);
+      return new ArraySequence<T>(a);
     }
     public Sequence<T> Take(ulong n) {
       return Take((long)n);
@@ -960,9 +948,9 @@ namespace Dafny
     public Sequence<T> Drop(long m) {
       if (m == 0)
         return this;
-      T[] a = new T[elmts.Length - m];
-      System.Array.Copy(elmts, m, a, 0, elmts.Length - m);
-      return new Sequence<T>(a);
+      T[] a = new T[Elements.Length - m];
+      System.Array.Copy(Elements, m, a, 0, Elements.Length - m);
+      return new ArraySequence<T>(a);
     }
     public Sequence<T> Drop(ulong n) {
       return Drop((long)n);
@@ -971,6 +959,113 @@ namespace Dafny
       if (n.IsZero)
         return this;
       return Drop((long)n);
+    }
+    public Sequence<T> Subsequence(long lo, long hi) {
+      if (lo == 0 && hi == Elements.Length) {
+        return this;
+      }
+      T[] a = new T[hi - lo];
+      System.Array.Copy(Elements, lo, a, 0, hi - lo);
+      return new ArraySequence<T>(a);
+    }
+    public Sequence<T> Subsequence(long lo, ulong hi) {
+      return Subsequence(lo, (long)hi);
+    }
+    public Sequence<T> Subsequence(long lo, BigInteger hi) {
+      return Subsequence(lo, (long)hi);
+    }
+    public Sequence<T> Subsequence(ulong lo, long hi) {
+      return Subsequence((long)lo, hi);
+    }
+    public Sequence<T> Subsequence(ulong lo, ulong hi) {
+      return Subsequence((long)lo, (long)hi);
+    }
+    public Sequence<T> Subsequence(ulong lo, BigInteger hi) {
+      return Subsequence((long)lo, (long)hi);
+    }
+    public Sequence<T> Subsequence(BigInteger lo, long hi) {
+      return Subsequence((long)lo, hi);
+    }
+    public Sequence<T> Subsequence(BigInteger lo, ulong hi) {
+      return Subsequence((long)lo, (long)hi);
+    }
+    public Sequence<T> Subsequence(BigInteger lo, BigInteger hi) {
+      return Subsequence((long)lo, (long)hi);
+    }
+  }
+  internal class ArraySequence<T> : Sequence<T> {
+    private readonly T[] elmts;
+
+    internal ArraySequence(T[] ee) {
+      elmts = ee;
+    }
+    public override T[] Elements {
+      get {
+        return elmts;
+      }
+    }
+    public override long LongCount {
+      get {
+        return elmts.LongLength;
+      }
+    }
+  }
+  internal class ConcatSequence<T> : Sequence<T> {
+    // INVARIANT: Either left != null, right != null, and elmts == null or
+    // left == null, right == null, and elmts != null
+    private Sequence<T> left, right;
+    private T[] elmts = null;
+    private readonly long count;
+
+    internal ConcatSequence(Sequence<T> left, Sequence<T> right) {
+      this.left = left;
+      this.right = right;
+      this.count = left.LongCount + right.LongCount;
+    }
+
+    public override T[] Elements {
+      get {
+        if (elmts == null) {
+          elmts = ComputeElements();
+          // We don't need the original sequences anymore; let them be
+          // garbage-collected
+          left = null;
+          right = null;
+        }
+        return elmts;
+      }
+    }
+
+    public override long LongCount {
+      get {
+        return count;
+      }
+    }
+
+    private T[] ComputeElements() {
+      // Traverse the tree formed by all descendants which are ConcatSequences
+
+      var ans = new T[count];
+      var nextIndex = 0L;
+
+      var toVisit = new Stack<Sequence<T>>();
+      toVisit.Push(right);
+      toVisit.Push(left);
+
+      while (toVisit.Count != 0) {
+        var seq = toVisit.Pop();
+        var cs = seq as ConcatSequence<T>;
+        if (cs != null && cs.elmts == null) {
+          toVisit.Push(cs.right);
+          toVisit.Push(cs.left);
+        } else {
+          var array = seq.Elements;
+          array.CopyTo(ans, nextIndex);
+          nextIndex += array.LongLength;
+        }
+      }
+
+      return ans;
     }
   }
   public struct Pair<A, B>
@@ -983,8 +1078,9 @@ namespace Dafny
     }
   }
   public partial class Helpers {
+    [Obsolete("Use object.Equals(object, object) instead.")]
     public static bool AreEqual<G>(G a, G b) {
-      return a == null ? b == null : a.Equals(b);
+      return object.Equals(a, b);
     }
     public static int GetHashCode<G>(G g) {
       return g == null ? 1001 : g.GetHashCode();
@@ -1167,9 +1263,9 @@ namespace Dafny
       }
     }
     public static Sequence<T> SeqFromArray<T>(T[] array) {
-      return new Sequence<T>((T[])array.Clone());
+      return new ArraySequence<T>((T[])array.Clone());
     }
-    // In .NET version 4.5, it it possible to mark a method with "AggressiveInlining", which says to inline the
+    // In .NET version 4.5, it is possible to mark a method with "AggressiveInlining", which says to inline the
     // method if possible.  Method "ExpressionSequence" would be a good candidate for it:
     // [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public static U ExpressionSequence<T, U>(T t, U u)
@@ -1304,6 +1400,11 @@ namespace Dafny
       Normalize(this, that, out aa, out bb, out dd);
       return aa.CompareTo(bb);
     }
+    public int Sign {
+      get {
+        return num.Sign;
+      }
+    }
     public override int GetHashCode() {
       return num.GetHashCode() + 29 * den.GetHashCode();
     }
@@ -1373,7 +1474,7 @@ namespace @_System
     }
     public override bool Equals(object other) {
       var oth = other as _System.@Tuple2<T0,T1>;
-      return oth != null && Dafny.Helpers.AreEqual(this._0, oth._0) && Dafny.Helpers.AreEqual(this._1, oth._1);
+      return oth != null && object.Equals(this._0, oth._0) && object.Equals(this._1, oth._1);
     }
     public override int GetHashCode() {
       ulong hash = 5381;

@@ -1,6 +1,7 @@
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:cs "%s" > "%t"
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:js "%s" >> "%t"
 // RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:go "%s" >> "%t"
+// RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:java "%s" >> "%t"
 // RUN: %diff "%s.expect" "%t"
 
 datatype Color = Orange | Pink | Teal
@@ -64,9 +65,9 @@ method GimmieMore<R(0), S(0)>() returns (r: R, s: S) { }
 // ---------- type parameters ----------
 
 method Tp() {
-  var c := new Cl<int, seq<bool>>();
+  var c := new Cl<int, seq<bool>, char>('Q');
   c.Print();
-  var d := new Cl<bool, Color>();
+  var d := new Cl<bool, Color, int>(42);
   d.Print();
   var n: NonemptyList<bv7> := Gimmie();
   print n, "\n";
@@ -74,16 +75,18 @@ method Tp() {
 
 datatype Dt<G> = D0(G) | D1(G)
 
-class Cl<X(==,0),Y(0)> {
+class Cl<X(==,0),Y(0),Z> {
   var x: X
   var y: Y
+  var zed: Z
   var u: set<X>
 
-  constructor () {
+  constructor (zed : Z) {
+    this.zed := zed;
   }
 
   method Print() {
-    print x, " ", y, " ", u, " ";
+    print x, " ", y, " ", zed, " ", u, " ";
     var w: X;
     var d: Dt<X>;
     print w, " ", d, "\n";
@@ -128,7 +131,7 @@ method TraitClass() {
   x := HTrait.Cadr(a.h1); print x, " ";
   x := HTrait.Cadr(a.k0); print x, " ";
   x := HTrait.Cadr(a.k1); print x, "\n";
-  
+
   var b := new WClass.Make(true);
   var y;
   y := HTrait.Cadr(b.k0); print y, " ";
@@ -174,7 +177,7 @@ method Direct() {
   var b: Eight;
   var c: Odd;
   print a, " ", b, " ", c, "\n";
-  
+
   var k0: real --> bool;
   var k1: real ~> bool;
   var k2: () --> int;
