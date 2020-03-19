@@ -3045,22 +3045,22 @@ namespace Microsoft.Dafny
             if (m.Body != null) {
               UsageContext usageContext = new UsageContext();
               foreach (Formal x in m.Ins) {
-                if (x.IsLinear) usageContext.available.Add(x, true);
+                if (x.IsLinear) usageContext.available.Add(x, Available.Available);
               }
               foreach (Formal x in m.Outs) {
-                if (x.IsLinear) usageContext.available.Add(x, false);
+                if (x.IsLinear) usageContext.available.Add(x, Available.Consumed);
               }
               UsageContext outer = UsageContext.Copy(usageContext);
               ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
               CheckExpression(m.Body, this, m);
               PopUsageContext(m.Body.EndTok, outer, usageContext);
               foreach (Formal x in m.Ins) {
-                if (x.IsLinear && usageContext.available[x]) {
+                if (x.IsLinear && usageContext.available[x] != Available.Consumed) {
                   reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
                 }
               }
               foreach (Formal x in m.Outs) {
-                if (x.IsLinear && !usageContext.available[x]) {
+                if (x.IsLinear && usageContext.available[x] != Available.Available) {
                   reporter.Error(MessageSource.Resolver, x, "linear variable must be assigned at method exit");
                 }
               }
@@ -3071,11 +3071,11 @@ namespace Microsoft.Dafny
             if (!f.IsGhost && f.Body != null) {
               UsageContext usageContext = new UsageContext();
               foreach (Formal x in f.Formals) {
-                if (x.IsLinear) usageContext.available.Add(x, true);
+                if (x.IsLinear) usageContext.available.Add(x, Available.Available);
               }
               CheckIsCompilable(f.Body, usageContext, f.Result != null ? f.Result.Usage : Usage.Ordinary);
               foreach (Formal x in f.Formals) {
-                if (x.IsLinear && usageContext.available[x]) {
+                if (x.IsLinear && usageContext.available[x] != Available.Consumed) {
                   reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at function exit");
                 }
               }
@@ -6805,6 +6805,7 @@ namespace Microsoft.Dafny
       public void Visit(Statement stmt, bool mustBeErasable) {
         Contract.Requires(stmt != null);
         Contract.Assume(!codeContext.IsGhost || mustBeErasable);  // (this is really a precondition) codeContext.IsGhost ==> mustBeErasable
+        if (usageContext != null) usageContext.AssertNoBorrowed();
 
         if (stmt is PredicateStmt) {
           stmt.IsGhost = true;
@@ -6842,6 +6843,7 @@ namespace Microsoft.Dafny
           if (s.hiddenUpdate != null) {
             Visit(s.hiddenUpdate, mustBeErasable);
           }
+          // TODO linear: yield and return
 
         } else if (stmt is AssignSuchThatStmt) {
           var s = (AssignSuchThatStmt)stmt;
@@ -6861,6 +6863,9 @@ namespace Microsoft.Dafny
               }
             }
           }
+          if (s.Lhss.Exists(x => x is IdentifierExpr && HasLinearity(((IdentifierExpr)x).Var.Usage))) {
+            Error(s, "cannot assign-such-that to linear or shared variable");
+          }
 
         } else if (stmt is UpdateStmt) {
           var s = (UpdateStmt)stmt;
@@ -6868,7 +6873,11 @@ namespace Microsoft.Dafny
           s.IsGhost = s.ResolvedStatements.All(ss => ss.IsGhost);
 
         } else if (stmt is AssignOrReturnStmt) {
+          var s = (AssignOrReturnStmt)stmt;
           stmt.IsGhost = false; // TODO when do we want to allow this feature in ghost code? Note that return changes control flow
+          if (s.Lhss.Exists(x => x is IdentifierExpr && HasLinearity(((IdentifierExpr)x).Var.Usage))) {
+            Error(s, "cannot assign-or-return to linear or shared variable");
+          }
 
         } else if (stmt is VarDeclStmt) {
           var s = (VarDeclStmt)stmt;
@@ -6881,16 +6890,11 @@ namespace Microsoft.Dafny
           s.IsGhost = (s.Update == null || s.Update.IsGhost) && s.Locals.All(v => v.IsGhost);
           foreach (var local in s.Locals) {
             if (local.Usage == Usage.Linear) {
-              usageContext.available.Add(local, false);
+              usageContext.available.Add(local, Available.Consumed);
             }
           }
           if (s.Update != null) {
             Visit(s.Update, mustBeErasable);
-            foreach (var local in s.Locals) {
-              if (local.Usage == Usage.Linear) {
-                usageContext.available[local] = true;
-              }
-            }
           }
 
         } else if (stmt is LetStmt) {
@@ -6901,6 +6905,9 @@ namespace Microsoft.Dafny
             }
           }
           s.IsGhost = s.LocalVars.All(v => v.IsGhost);
+          if (s.LocalVars.ToList().Exists(x => HasLinearity(x.Usage))) {
+            throw new Exception("not implemented: linear/shared patterns");
+          }
 
         } else if (stmt is AssignStmt) {
           var s = (AssignStmt)stmt;
@@ -6919,20 +6926,25 @@ namespace Microsoft.Dafny
           } else {
             if (gk == AssignStmt.NonGhostKind.Field) {
               var mse = (MemberSelectExpr)lhs;
-              resolver.CheckIsCompilable(mse.Obj);
+              resolver.CheckIsCompilable(mse.Obj, usageContext, mse.Member.IsGhost ? Usage.Ghost : Usage.Ordinary);
             } else if (gk == AssignStmt.NonGhostKind.ArrayElement) {
-              resolver.CheckIsCompilable(lhs);
+              resolver.CheckIsCompilable(lhs, usageContext, Usage.Ordinary);
+            }
+            var x = lhs as IdentifierExpr;
+            if (x != null && HasLinearity(x.Var.Usage) && !(s.Rhs is ExprRhs)) {
+              Error(s, "only expressions can be assigned to linear or shared variables");
             }
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
-              var x = lhs as IdentifierExpr;
               Usage expectedUsage = x != null ? x.Var.Usage : Usage.Ordinary;
               resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
               if (x != null && x.Var.IsLinear) {
-                if (usageContext.available[x.Var]) {
+                if (usageContext.available[x.Var] != Available.Consumed) {
                   Error(x, "variable must be unavailable before assignment");
                 }
-                usageContext.available[x.Var] = true;
+                usageContext.available[x.Var] = Available.Available;
+              } else if (x != null && x.Var.IsShared && usageContext.Borrows()) {
+                Error(rhs.Expr, "cannot borrow variable because expression returns a shared result");
               }
             } else if (s.Rhs is HavocRhs) {
               // cool
@@ -6973,20 +6985,13 @@ namespace Microsoft.Dafny
               foreach (var e in s.Args) {
                 Contract.Assume(j < callee.Ins.Count);  // this should have already been checked by the resolver
                 if (!callee.Ins[j].IsGhost) {
-                  var jUsage = callee.Ins[j].Usage;
-                  var x = ExprAsIdentifier(e);
-                  if (x != null && x.Var.IsLinear && jUsage == Usage.Shared) {
-                    // borrow shared j from linear x
-                    if (returnsShared) {
-                      Error(x, "expected shared variable, found linear variable (cannot borrow variable because method returns a shared result)");
-                    }
-                    borrowed.Add(x.Var);
-                    jUsage = Usage.Linear;
-                  }
-                  resolver.CheckIsCompilable(e, usageContext, jUsage);
+                  resolver.CheckIsCompilable(e, usageContext, callee.Ins[j].Usage);
                 }
                 j++;
               }
+            }
+            if (returnsShared && usageContext.Borrows()) {
+              Error(s, "cannot borrow variable because method returns a shared result");
             }
             j = 0;
             foreach (var e in s.Lhs) {
@@ -7018,17 +7023,14 @@ namespace Microsoft.Dafny
               } else if (jUsage == Usage.Linear) {
                 if (xUsage != Usage.Linear) {
                   Error(x, "variable must be linear");
-                } else if (usageContext.available[x.Var]) {
+                } else if (usageContext.available[x.Var] != Available.Consumed) {
                   Error(x, "variable must be unavailable before assignment");
                 }
-                usageContext.available[x.Var] = true;
+                usageContext.available[x.Var] = Available.Available;
               } else if (xUsage != jUsage) {
                 Error(x, "expected {0} variable, found {1} variable", UsageName(jUsage), UsageName(xUsage));
               }
               j++;
-            }
-            foreach (var x in borrowed) {
-              usageContext.available[x] = true;
             }
           }
 
@@ -7046,6 +7048,7 @@ namespace Microsoft.Dafny
           if (!mustBeErasable && s.IsGhost) {
             resolver.reporter.Info(MessageSource.Resolver, s.Tok, "ghost if");
           }
+          // TODO linear: visit Guard, Unborrow, make sure Thn and Els behave same
           Visit(s.Thn, s.IsGhost);
           if (s.Els != null) {
             Visit(s.Els, s.IsGhost);
@@ -7059,6 +7062,7 @@ namespace Microsoft.Dafny
           if (!mustBeErasable && s.IsGhost) {
             resolver.reporter.Info(MessageSource.Resolver, s.Tok, "ghost if");
           }
+          // TODO linear
           s.Alternatives.Iter(alt => alt.Body.Iter(ss => Visit(ss, s.IsGhost)));
           s.IsGhost = s.IsGhost || s.Alternatives.All(alt => alt.Body.All(ss => ss.IsGhost));
 
@@ -7074,6 +7078,7 @@ namespace Microsoft.Dafny
           if (s.IsGhost && s.Mod.Expressions != null) {
             s.Mod.Expressions.Iter(resolver.DisallowNonGhostFieldSpecifiers);
           }
+          // TODO linear
           if (s.Body != null) {
             Visit(s.Body, s.IsGhost);
             if (s.Body.IsGhost && !s.Decreases.Expressions.Exists(e => e is WildcardExpr)) {
@@ -7084,6 +7089,7 @@ namespace Microsoft.Dafny
         } else if (stmt is AlternativeLoopStmt) {
           var s = (AlternativeLoopStmt)stmt;
           s.IsGhost = mustBeErasable || s.Alternatives.Exists(alt => resolver.UsesSpecFeatures(alt.Guard));
+          // TODO linear
           if (!mustBeErasable && s.IsGhost) {
             resolver.reporter.Info(MessageSource.Resolver, s.Tok, "ghost while");
           }
@@ -7104,6 +7110,7 @@ namespace Microsoft.Dafny
           }
           s.IsGhost = s.IsGhost || s.Body == null || s.Body.IsGhost;
 
+          // TODO linear
           if (!s.IsGhost) {
             // Since we've determined this is a non-ghost forall statement, we now check that the bound variables have compilable bounds.
             var uncompilableBoundVars = s.UncompilableBoundVars();
@@ -7132,6 +7139,7 @@ namespace Microsoft.Dafny
           }
 
         } else if (stmt is MatchStmt) {
+          // TODO linear
           var s = (MatchStmt)stmt;
           s.IsGhost = mustBeErasable || resolver.UsesSpecFeatures(s.Source);
           if (!mustBeErasable && s.IsGhost) {
@@ -7151,6 +7159,7 @@ namespace Microsoft.Dafny
         } else {
           Contract.Assert(false); throw new cce.UnreachableException();
         }
+        if (usageContext != null) usageContext.Unborrow();
       }
     }
 #endregion
@@ -14031,8 +14040,32 @@ namespace Microsoft.Dafny
       }
     }
 
+    
+    
+    
+    enum Available {
+      Available, // if x is available, it can be borrowed or consumed (A --> B, A --> C)
+      Borrowed,  // if x is borrowed, it can be borrowed again (but not consumed) (B --> B)
+      Consumed,  // if x is consumed, it cannot be consumed or borrowed
+      // Borrowed is used to implement Wadler's "let!(x) y = e1 in e2" expression,
+      // in which linear x is borrowed (appears as "shared") inside e1 before being
+      // consumed by e2.  (See Wadler, "Linear types can change the world!")
+      // We infer "!(x)" rather than asking the user to write it explicitly.
+      // If an Available linear variable x is used as "shared" in e1, we change x to Borrowed in e1.
+      // If we find that e1 has borrowed x (changed x Available to x Borrowed),
+      // then we can introduce "!(x)" if all these conditions hold:
+      // - y is not shared (this isn't let!, but simple copying of shared e1 into shared y)
+      // - e1 is not shared (for soundness: can't leak shared x into non-shared y)
+      // - e2 consumes x (for soundness: this enforces that sharing strictly precedes consumption,
+      //   assuming call-by-value evaluation, even if expression evaluation is otherwise unordered)
+      // If e2 does not consume x, x stays Borrowed.
+      // Borrowed is only meaningful in expressions; it does not propagate across statements.
+      // If statement s contains expressions that borrow x, x is reset to Available after s is checked.
+      // (In other words, if s does not consume x, s can borrow x temporarily, releasing x after s finishes.)
+    }
+
     class UsageContext {
-      internal Dictionary<IVariable, bool> available = new Dictionary<IVariable, bool>();
+      internal Dictionary<IVariable, Available> available = new Dictionary<IVariable, Available>();
 
       internal UsageContext Copy() {
         UsageContext uc = new UsageContext();
@@ -14045,6 +14078,26 @@ namespace Microsoft.Dafny
       internal static UsageContext Copy(UsageContext uc) {
         return (uc == null) ? null : uc.Copy();
       }
+
+      internal bool Borrows() {
+        return available.Values.Contains(Available.Borrowed);
+      }
+
+      // Assert that there are no borrowed variables (before each statement)
+      internal void AssertNoBorrowed() {
+        if (Borrows()) {
+          throw new Exception("internal error: found unexpected Borrowed variable");
+        }
+      }
+
+      // Replace Borrowed with Available (after each statement)
+      internal void Unborrow() {
+        foreach (var k in available.Keys.ToList()) {
+          if (available[k] == Available.Borrowed) {
+            available[k] = Available.Available;
+          }
+        }
+      }
     }
 
     // Check that any extra variables in inner are unavailable, remove extra variables
@@ -14053,12 +14106,33 @@ namespace Microsoft.Dafny
       if (outer == null) outer = new UsageContext();
       foreach (var k in new List<IVariable>(inner.available.Keys)) {
         if (!outer.available.ContainsKey(k)) {
-          if (inner.available[k]) {
+          if (inner.available[k] != Available.Consumed) {
             reporter.Error(MessageSource.Resolver, tok, "linear variable {0} must be unavailable at end of block", k.Name);
           }
           inner.available.Remove(k);
         }
       }
+    }
+
+    // Find all variables that are Available in outer but Borrowed in inner.
+    // Make them Available in inner and return them.
+    // outer and inner should have the same keys.
+    // (used as part of inferring "let!(x)")
+    static List<IVariable> RemoveInnerBorrowed(UsageContext outer, UsageContext inner) {
+      List<IVariable> borrow = new List<IVariable>();
+      if (inner == null) inner = new UsageContext();
+      if (outer == null) outer = new UsageContext();
+      foreach (var k in new List<IVariable>(inner.available.Keys)) {
+        if (outer.available[k] == Available.Available && inner.available[k] == Available.Borrowed) {
+          inner.available[k] = Available.Available;
+          borrow.Add(k);
+        }
+      }
+      return borrow;
+    }
+
+    static bool HasLinearity(Usage u) {
+      return u != Usage.Ghost && u != Usage.Ordinary;
     }
 
     static string UsageName(Usage u) {
@@ -14085,10 +14159,19 @@ namespace Microsoft.Dafny
     }
 
     void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage) {
-      Usage usage = CheckIsCompilable(expr, usageContext);
-      if (expectedUsage != Usage.Ghost && usage != expectedUsage) {
-        reporter.Error(MessageSource.Resolver, expr, "expected {0} expression, found {1} expression",
-          UsageName(expectedUsage), UsageName(usage));
+      IdentifierExpr x = ExprAsIdentifier(expr);
+      if (expectedUsage == Usage.Shared && x != null && x.Var.Usage == Usage.Linear) {
+        // Try to borrow x
+        if (usageContext.available[x.Var] == Available.Consumed) {
+          reporter.Error(MessageSource.Resolver, expr, "tried to borrow variable, but it was already unavailable");
+        }
+        usageContext.available[x.Var] = Available.Borrowed;
+      } else {
+        Usage usage = CheckIsCompilable(expr, usageContext);
+        if (expectedUsage != Usage.Ghost && usage != expectedUsage) {
+          reporter.Error(MessageSource.Resolver, expr, "expected {0} expression, found {1} expression",
+            UsageName(expectedUsage), UsageName(usage));
+        }
       }
     }
 
@@ -14103,9 +14186,9 @@ namespace Microsoft.Dafny
           if (usageContext != null) {
             var available = usageContext.available;
             if (available.ContainsKey(e.Var)) {
-              if (available[e.Var]) {
+              if (available[e.Var] == Available.Available) {
                 ok = true;
-                available[e.Var] = false;
+                available[e.Var] = Available.Consumed;
               }
             }
           }
@@ -14208,21 +14291,51 @@ namespace Microsoft.Dafny
         if (e.Exact) {
           Contract.Assert(e.LHSs.Count == e.RHSs.Count);
           var i = 0;
+          bool isShared = e.BoundVars.ToList().Exists(x => x.Usage == Usage.Shared);
+          var uc0 = UsageContext.Copy(usageContext);
           foreach (var ee in e.RHSs) {
-            foreach (var x in e.LHSs[i].Vars) {
-              if (x.IsLinear) throw new Exception("not implemented");
+            Usage usage = Usage.Ordinary;
+            var xs = e.LHSs[i].Vars.ToList();
+            if (xs.Count() == 1) {
+              usage = xs[0].Usage;
+            } else if (xs.Exists(x => HasLinearity(x.Usage))) {
+              throw new Exception("not implemented: linear patterns");
+            } else {
+              usage = Usage.Ordinary;
             }
-            if (!e.LHSs[i].Vars.All(bv => bv.IsGhost)) {
-              CheckIsCompilable(ee, usageContext, Usage.Ordinary);
+            if (!xs.All(bv => bv.IsGhost)) {
+              CheckIsCompilable(ee, usageContext, usage);
             }
             i++;
           }
-          return CheckIsCompilable(e.Body, usageContext);
+          var borrow = RemoveInnerBorrowed(uc0, usageContext);
+          foreach (var x in e.BoundVars) {
+            if (x.Usage == Usage.Linear) {
+              usageContext.available.Add(x, Available.Available);
+            }
+          }
+          Usage u = CheckIsCompilable(e.Body, usageContext);
+          foreach (var x in borrow) {
+            if (usageContext.available[x] == Available.Consumed) {
+              // If Body consumed x, try to introduce let!(x) here
+              if (isShared) {
+                reporter.Error(MessageSource.Resolver, expr, "cannot borrow {0} when assigning to shared variable", x);
+              }
+            } else {
+              // Otherwise, we don't introduce let!(x) here; just propagate the fact that x was Borrowed
+              usageContext.available[x] = Available.Borrowed;
+            }
+          }
+          PopUsageContext(e.tok, uc0, usageContext);
+          return u;
         } else {
           Contract.Assert(e.RHSs.Count == 1);
           var lhsVarsAreAllGhost = e.BoundVars.All(bv => bv.IsGhost);
           if (!lhsVarsAreAllGhost) {
             CheckIsCompilable(e.RHSs[0], usageContext, Usage.Ordinary);
+          }
+          if (e.BoundVars.ToList().Exists(x => HasLinearity(x.Usage))) {
+            reporter.Error(MessageSource.Resolver, expr, "inexact let bindings cannot be linear or shared");
           }
           var usage = CheckIsCompilable(e.Body, usageContext);
 
@@ -14233,10 +14346,12 @@ namespace Microsoft.Dafny
           return usage;
         }
       } else if (expr is LambdaExpr) {
+        // TODO linear: disallow linear/shared bindings
         var e = expr as LambdaExpr;
         CheckIsCompilable(e.Body, null, Usage.Ordinary); // cannot propagate linear variables into lambdas
         return Usage.Ordinary;
       } else if (expr is ComprehensionExpr) {
+        // TODO linear: disallow linear/shared bindings
         var e = (ComprehensionExpr)expr;
         var uncompilableBoundVars = e.UncompilableBoundVars();
         if (uncompilableBoundVars.Count != 0) {

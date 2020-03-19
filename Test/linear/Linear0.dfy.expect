@@ -19,9 +19,10 @@ Linear0.dfy(180,58): Error: linear variable must be assigned at method exit
 Linear0.dfy(187,29): Error: linear variable must be assigned at method exit
 Linear0.dfy(194,20): Error: linear variable is unavailable here
 Linear0.dfy(197,19): Error: linear variable must be unavailable at method exit
-Linear0.dfy(205,8): Error: expected shared expression, found linear expression
+Linear0.dfy(205,8): Error: cannot borrow variable because expression returns a shared result
+Linear0.dfy(203,19): Error: linear variable must be unavailable at method exit
 Linear0.dfy(211,7): Error: expected linear expression, found shared expression
-Linear0.dfy(218,24): Error: expected shared variable, found linear variable (cannot borrow variable because method returns a shared result)
+Linear0.dfy(218,17): Error: cannot borrow variable because method returns a shared result
 Linear0.dfy(225,25): Error: linear variable l0 must be unavailable at end of block
 Linear0.dfy(234,0): Error: linear variable l0 must be unavailable at end of block
 Linear0.dfy(241,7): Error: linear variable is unavailable here
@@ -30,4 +31,4 @@ Linear0.dfy(246,22): Error: expected ordinary expression, found linear expressio
 Linear0.dfy(244,22): Error: linear variable must be unavailable at method exit
 Linear0.dfy(251,22): Error: shared variable is out of scope here
 Linear0.dfy(251,22): Error: expected ordinary expression, found shared expression
-32 resolution/type errors detected in Linear0.dfy
+33 resolution/type errors detected in Linear0.dfy
