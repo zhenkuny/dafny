@@ -13427,7 +13427,7 @@ namespace Microsoft.Dafny {
               rhs.Type = bv.Type;
               rhss.Add(rhs);
             }
-            var expr = new LetExpr(e.tok, e.LHSs, rhss, e.Body, true);
+            var expr = new LetExpr(e.tok, e.LHSs, rhss, e.Body, true, e.Usage);
             expr.Type = e.Type; // resolve here
             e.setTranslationDesugaring(this, expr);
           }
@@ -13665,9 +13665,9 @@ namespace Microsoft.Dafny {
       public Dictionary<IVariable, Expression> substMap;
       public Dictionary<TypeParameter, Type> typeMap;
 
-      public SubstLetExpr(IToken tok, List<CasePattern<BoundVar>> lhss, List<Expression> rhss, Expression body, bool exact,
+      public SubstLetExpr(IToken tok, List<CasePattern<BoundVar>> lhss, List<Expression> rhss, Expression body, bool exact, Usage usage,
          LetExpr orgExpr, Dictionary<IVariable, Expression> substMap, Dictionary<TypeParameter, Type> typeMap)
-        : base(tok, lhss, rhss, body, exact)
+        : base(tok, lhss, rhss, body, exact, usage)
       {
         this.orgExpr = orgExpr;
         this.substMap = substMap;
@@ -17861,7 +17861,7 @@ namespace Microsoft.Dafny {
             }
             // Put things together
             if (anythingChanged || body != e.Body) {
-              newExpr = new LetExpr(e.tok, newCasePatterns, rhss, body, e.Exact);
+              newExpr = new LetExpr(e.tok, newCasePatterns, rhss, body, e.Exact, e.Usage);
             }
           } else {
             var rhs = Substitute(e.RHSs[0]);
@@ -17872,7 +17872,7 @@ namespace Microsoft.Dafny {
             // keep copies of the substitution maps so we can reuse them at desugaring time
             var newSubstMap = new Dictionary<IVariable, Expression>(substMap);
             var newTypeMap = new Dictionary<TypeParameter, Type>(typeMap);
-            var newLet = new SubstLetExpr(e.tok, e.LHSs, new List<Expression>{ rhs }, body, e.Exact, e, newSubstMap, newTypeMap);
+            var newLet = new SubstLetExpr(e.tok, e.LHSs, new List<Expression>{ rhs }, body, e.Exact, e.Usage, e, newSubstMap, newTypeMap);
             newExpr = newLet;
           }
 
@@ -17897,7 +17897,7 @@ namespace Microsoft.Dafny {
             cases.Add(newCaseExpr);
           }
           if (anythingChanged) {
-            var newME = new MatchExpr(expr.tok, src, cases, e.UsesOptionalBraces);
+            var newME = new MatchExpr(expr.tok, src, cases, e.UsesOptionalBraces, e.Usage);
             newME.MissingCases.AddRange(e.MissingCases);
             newExpr = newME;
           }
@@ -18288,7 +18288,7 @@ namespace Microsoft.Dafny {
           r = rr;
         } else if (stmt is MatchStmt) {
           var s = (MatchStmt)stmt;
-          var rr = new MatchStmt(s.Tok, s.EndTok, Substitute(s.Source), s.Cases.ConvertAll(SubstMatchCaseStmt), s.UsesOptionalBraces);
+          var rr = new MatchStmt(s.Tok, s.EndTok, Substitute(s.Source), s.Cases.ConvertAll(SubstMatchCaseStmt), s.UsesOptionalBraces, s.Usage);
           rr.MissingCases.AddRange(s.MissingCases);
           r = rr;
         } else if (stmt is AssignSuchThatStmt) {

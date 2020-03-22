@@ -215,6 +215,11 @@ bool IsGets() {
   return la.kind == _gets;
 }
 
+bool IsMatch() {
+  IToken x = scanner.Peek();
+  return la.kind == _match || (x.kind == _match && (la.kind == _linear || la.kind == _shared));
+}
+
 // an existential guard starts with an identifier and is then followed by
 // * a colon (if the first identifier is given an explicit type),
 // * a comma (if there's a list of bound variables and the first one is not given an explicit type),
@@ -768,6 +773,7 @@ TOKENS
   ghost = "ghost".
   linear = "linear".
   shared = "shared".
+  match = "match".
   inout = "inout".
   witness = "witness".
   lbracecolon = "{:".
@@ -1089,10 +1095,12 @@ DatatypeDecl<DeclModifierData dmod, ModuleDefinition/*!*/ module, out DatatypeDe
      List<DatatypeCtor/*!*/> ctors = new List<DatatypeCtor/*!*/>();
      IToken bodyStart = Token.NoToken;  // dummy assignment
      bool co = false;
+     bool linear = false;
      CheckDeclModifiers(dmod, "Datatypes or codatatypes", AllowedDeclModifiers.None);
      var members = new List<MemberDecl>();
   .)
   SYNC
+  [ "linear"         (. linear = true; .) ]
   ( "datatype"
   | "codatatype"     (. co = true; .)
   )
@@ -1106,7 +1114,7 @@ DatatypeDecl<DeclModifierData dmod, ModuleDefinition/*!*/ module, out DatatypeDe
   (. if (co) {
        dt = new CoDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs);
      } else {
-       dt = new IndDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs);
+       dt = new IndDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs, linear);
      }
      dt.BodyStartTok = bodyStart;
      dt.BodyEndTok = t;
@@ -1331,7 +1339,6 @@ TypeIdentOptional<out IToken/*!*/ id, out string/*!*/ identName, out Type/*!*/ t
      string name = null; id = Token.NoToken; ty = new BoolType()/*dummy*/; usage = Usage.Ordinary; .)
   [ "ghost"                            (. usage = Usage.Ghost; .)
   | "linear"                           (. usage = Usage.Linear; .)
-  | "shared"                           (. usage = Usage.Shared; .)
   ]
   ( TypeAndToken<out id, out ty, false>
     [ ":"
@@ -2125,10 +2132,10 @@ OneStmt<out Statement/*!*/ s>
   | PrintStmt<out s>
   | RevealStmt<out s>
   | UpdateStmt<out s>
+  | IF(IsMatch()) MatchStmt<out s>
   | VarDeclStatement<out s>
   | IfStmt<out s>
   | WhileStmt<out s>
-  | MatchStmt<out s>
   | ForallStmt<out s>
   | CalcStmt<out s>
   | ModifyStmt<out s>
@@ -2393,7 +2400,7 @@ VarDeclStatement<.out Statement/*!*/ s.>
     Expression<out e, false, true>
 
     ";"
-    (. s = new LetStmt(e.tok, e.tok, pat, e); .)
+    (. s = new LetStmt(e.tok, e.tok, pat, e, usage); .)
   )
   .
 IfStmt<out Statement/*!*/ ifStmt>
@@ -2598,7 +2605,11 @@ MatchStmt<out Statement/*!*/ s>
      IToken x;  Expression/*!*/ e;  MatchCaseStmt/*!*/ c;
      List<MatchCaseStmt/*!*/> cases = new List<MatchCaseStmt/*!*/>();
      bool usesOptionalBraces = false;
+     Usage usage = Usage.Ordinary;
   .)
+  [ "linear"                                (. usage = Usage.Linear; .)
+  | "shared"                                (. usage = Usage.Shared; .)
+  ]
   "match"                     (. x = t; .)
   Expression<out e, true, true>
   ( IF(la.kind == _lbrace)  /* always favor brace-enclosed match body to a case-less match */
@@ -2609,7 +2620,7 @@ MatchStmt<out Statement/*!*/ s>
           CaseStatement<out c> (. cases.Add(c); .)
         }
   )
-  (. s = new MatchStmt(x, t, e, cases, usesOptionalBraces); .)
+  (. s = new MatchStmt(x, t, e, cases, usesOptionalBraces, usage); .)
   .
 CaseStatement<out MatchCaseStmt/*!*/ c>
 = (. Contract.Ensures(Contract.ValueAtReturn(out c) != null);
@@ -3487,11 +3498,11 @@ EndlessExpression<out Expression e, bool allowSemi, bool allowLambda, bool allow
                                                                foreach (var v in exists.BoundVars) {
                                                                  LHSs.Add(new CasePattern<BoundVar>(e.tok, v));
                                                                }
-                                                               e0 = new LetExpr(e.tok, LHSs, new List<Expression>() { exists.Term }, e0, false);
+                                                               e0 = new LetExpr(e.tok, LHSs, new List<Expression>() { exists.Term }, e0, false, Usage.Ordinary);
                                                              }
                                                              e = new ITEExpr(x, isExistentialGuard, e, e0, e1);
                                                          .)
-  | MatchExpression<out e, allowSemi, allowLambda, allowBitwiseOps>
+  | IF(IsMatch()) MatchExpression<out e, allowSemi, allowLambda, allowBitwiseOps>
   | QuantifierGuts<out e, allowSemi, allowLambda>  /* types are such that we can allow bitwise operations in the quantifier body */
   | "set"                           (. x = t; .)
     SetComprehensionExpr<x, true, out e, allowSemi, allowLambda, allowBitwiseOps>
@@ -3581,7 +3592,7 @@ LetExprWithLHS<out Expression e, bool allowSemi, bool allowLambda, bool allowBit
       }
       e = new LetOrFailExpr(x, lhs, rhs, e);
     } else {
-      e = new LetExpr(x, letLHSs, letRHSs, e, exact, attrs);
+      e = new LetExpr(x, letLHSs, letRHSs, e, exact, usage, attrs);
     }
   .)
   .
@@ -3615,7 +3626,11 @@ MatchExpression<out Expression e, bool allowSemi, bool allowLambda, bool allowBi
 = (. Contract.Ensures(Contract.ValueAtReturn(out e) != null); IToken/*!*/ x;  MatchCaseExpr/*!*/ c;
      List<MatchCaseExpr/*!*/> cases = new List<MatchCaseExpr/*!*/>();
      bool usesOptionalBraces = false;
+     Usage usage = Usage.Ordinary;
   .)
+  [ "linear"                                (. usage = Usage.Linear; .)
+  | "shared"                                (. usage = Usage.Shared; .)
+  ]
   "match"                     (. x = t; .)
   Expression<out e, allowSemi, allowLambda, allowBitwiseOps>
   ( IF(la.kind == _lbrace)  /* always favor brace-enclosed match body to a case-less match */
@@ -3626,7 +3641,7 @@ MatchExpression<out Expression e, bool allowSemi, bool allowLambda, bool allowBi
           CaseExpression<out c, allowSemi, allowLambda, allowBitwiseOps> (. cases.Add(c); .)
         }
   )
-  (. e = new MatchExpr(x, e, cases, usesOptionalBraces); .)
+  (. e = new MatchExpr(x, e, cases, usesOptionalBraces, usage); .)
   .
 CaseExpression<out MatchCaseExpr c, bool allowSemi, bool allowLambda, bool allowBitwiseOps>
 = (. Contract.Ensures(Contract.ValueAtReturn(out c) != null); IToken/*!*/ x, id;

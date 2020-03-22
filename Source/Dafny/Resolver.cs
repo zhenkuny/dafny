@@ -2384,8 +2384,17 @@ namespace Microsoft.Dafny
             ResolveClassMemberBodies(cl);
           } else if (d is DatatypeDecl) {
             var dt = (DatatypeDecl)d;
+            var idt = d as IndDatatypeDecl;
+            bool isLinear = idt != null && idt.IsLinear;
             foreach (var ctor in dt.Ctors) {
               foreach (var formal in ctor.Formals) {
+                if (formal.IsLinear) {
+                  if (!isLinear) {
+                    reporter.Error(MessageSource.Resolver, formal, "use 'linear datatype' to allow linear fields", UsageName(formal.Usage));
+                  }
+                } else if (HasLinearity(formal.Usage)) {
+                  reporter.Error(MessageSource.Resolver, formal, "{0} not allowed", UsageName(formal.Usage));
+                }
                 AddTypeDependencyEdges((ICallable)d, formal.Type);
               }
             }
@@ -6757,7 +6766,7 @@ namespace Microsoft.Dafny
     {
       readonly ICodeContext codeContext;
       readonly Resolver resolver;
-      readonly UsageContext usageContext;
+      UsageContext usageContext;
       public GhostInterest_Visitor(ICodeContext codeContext, Resolver resolver, UsageContext usageContext) {
         Contract.Requires(codeContext != null);
         Contract.Requires(resolver != null);
@@ -6905,8 +6914,16 @@ namespace Microsoft.Dafny
             }
           }
           s.IsGhost = s.LocalVars.All(v => v.IsGhost);
-          if (s.LocalVars.ToList().Exists(x => HasLinearity(x.Usage))) {
-            throw new Exception("not implemented: linear/shared patterns");
+          if (!s.IsGhost) {
+            resolver.CheckIsCompilable(s.RHS, usageContext, s.Usage);
+          }
+          if (s.Usage == Usage.Shared && usageContext.Borrows()) {
+            Error(s.RHS, "cannot borrow variable because expression returns a shared result");
+          }
+          foreach (var local in s.LocalVars) {
+            if (local.Usage == Usage.Linear) {
+              usageContext.available[local] = Available.Available;
+            }
           }
 
         } else if (stmt is AssignStmt) {
@@ -7048,13 +7065,20 @@ namespace Microsoft.Dafny
           if (!mustBeErasable && s.IsGhost) {
             resolver.reporter.Info(MessageSource.Resolver, s.Tok, "ghost if");
           }
-          // TODO linear: visit Guard, Unborrow, make sure Thn and Els behave same
+          if (!s.IsGhost && s.Guard != null) {
+            resolver.CheckIsCompilable(s.Guard, usageContext, s.IsGhost ? Usage.Ghost : Usage.Ordinary);
+          }
+          if (usageContext != null) usageContext.Unborrow();
+          UsageContext uc2 = UsageContext.Copy(usageContext);
           Visit(s.Thn, s.IsGhost);
+          UsageContext uc1 = usageContext;
+          usageContext = uc2;
           if (s.Els != null) {
             Visit(s.Els, s.IsGhost);
           }
           // if both branches were all ghost, then we can mark the enclosing statement as ghost as well
           s.IsGhost = s.IsGhost || (s.Thn.IsGhost && (s.Els == null || s.Els.IsGhost));
+          resolver.MergeUsageContexts(s.Tok, uc1, uc2);
 
         } else if (stmt is AlternativeStmt) {
           var s = (AlternativeStmt)stmt;
@@ -7145,7 +7169,33 @@ namespace Microsoft.Dafny
           if (!mustBeErasable && s.IsGhost) {
             resolver.reporter.Info(MessageSource.Resolver, s.Tok, "ghost match");
           }
-          s.Cases.Iter(kase => kase.Body.Iter(ss => Visit(ss, s.IsGhost)));
+          if (!s.IsGhost) {
+            resolver.CheckIsCompilable(s.Source, usageContext, s.Usage);
+          }
+          if (s.Usage == Usage.Shared && usageContext.Borrows()) {
+            Error(s.Source, "cannot borrow variable because expression returns a shared result");
+          }
+          if (usageContext != null) usageContext.Unborrow();
+          bool isFirst = true;
+          var uc1 = UsageContext.Copy(usageContext);
+          foreach (var c in s.Cases) {
+            UsageContext uc2 = UsageContext.Copy(usageContext);
+            if (!isFirst) {
+              usageContext = UsageContext.Copy(uc1);
+            }
+            foreach (var x in c.Arguments) {
+              if (x.Usage == Usage.Linear) {
+                usageContext.available.Add(x, Available.Available);
+              }
+            }
+            c.Body.Iter(ss => Visit(ss, s.IsGhost));
+            if (usageContext != null) usageContext.Unborrow();
+            resolver.PopUsageContext(c.tok, uc1, usageContext);
+            if (!isFirst) {
+              resolver.MergeUsageContexts(s.Tok, uc2, usageContext);
+            }
+            isFirst = false;
+          }
           s.IsGhost = s.IsGhost || s.Cases.All(kase => kase.Body.All(ss => ss.IsGhost));
 
         } else if (stmt is SkeletonStatement) {
@@ -9191,7 +9241,7 @@ namespace Microsoft.Dafny
           }
         }
         ResolveExpression(s.RHS, new ResolveOpts(codeContext, true));
-        ResolveCasePattern(s.LHS, s.RHS.Type, codeContext);
+        ResolveCasePattern(s.LHS, s.RHS.Type, codeContext, s.Usage, s.Usage);
         // Check for duplicate names now, because not until after resolving the case pattern do we know if identifiers inside it refer to bound variables or nullary constructors
         var c = 0;
         foreach (var bv in s.LHS.Vars) {
@@ -9663,7 +9713,7 @@ namespace Microsoft.Dafny
               Type st = SubstType(formal.Type, subst);
               ConstrainSubtypeRelation(v.Type, st, s.Tok,
                 "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", v.Type, st);
-              v.Usage = formal.Usage;
+              v.Usage = ConstructorArgUsage(s.Usage, formal.Usage);
 
               // update the type of the boundvars in the MatchCaseToken
               if (v.tok is MatchCaseToken) {
@@ -9779,7 +9829,7 @@ namespace Microsoft.Dafny
               BoundVar v = pat.Var;
               arguments.Insert(0, v);
             } else {
-              body = DesugarMatchCasePattern(mc, pat, sourceVar, body, keepOrigToken);
+              body = DesugarMatchCasePattern(mc, pat, sourceVar, body, keepOrigToken, s.Usage);
               patterns.Add(new Tuple<CasePattern<BoundVar>, BoundVar>(pat, sourceVar));
               arguments.Insert(0, sourceVar);
             }
@@ -9863,7 +9913,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    List<Statement> DesugarMatchCasePattern(MatchCaseStmt mc, CasePattern<BoundVar> pat, BoundVar v, List<Statement> body, bool keepToken) {
+    List<Statement> DesugarMatchCasePattern(MatchCaseStmt mc, CasePattern<BoundVar> pat, BoundVar v, List<Statement> body, bool keepToken, Usage usage) {
       // convert
       //    case Cons(y, Cons(z, zs)) => body
       // to
@@ -9878,7 +9928,7 @@ namespace Microsoft.Dafny
         AutoGeneratedTokenCloner cloner = new AutoGeneratedTokenCloner();
         source = cloner.CloneExpr(source);
       }
-      list.Add(new MatchStmt(pat.tok, pat.tok, source, cases, false));
+      list.Add(new MatchStmt(pat.tok, pat.tok, source, cases, false, usage));
       return list;
     }
 
@@ -12241,7 +12291,7 @@ namespace Microsoft.Dafny
           var i = 0;
           foreach (var lhs in e.LHSs) {
             var rhsType = i < e.RHSs.Count ? e.RHSs[i].Type : new InferredTypeProxy();
-            ResolveCasePattern(lhs, rhsType, opts.codeContext);
+            ResolveCasePattern(lhs, rhsType, opts.codeContext, e.Usage, e.Usage);
             // Check for duplicate names now, because not until after resolving the case pattern do we know if identifiers inside it refer to bound variables or nullary constructors
             var c = 0;
             foreach (var v in lhs.Vars) {
@@ -12443,13 +12493,13 @@ namespace Microsoft.Dafny
     }
 
     // TODO search for occurrences of "new LetExpr" which could benefit from this helper
-    private LetExpr LetPatIn(IToken tok, CasePattern<BoundVar> lhs, Expression rhs, Expression body) {
-      return new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { rhs }, body, true);
+    private LetExpr LetPatIn(IToken tok, CasePattern<BoundVar> lhs, Usage usage, Expression rhs, Expression body) {
+      return new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { rhs }, body, true, usage);
     }
 
-    private LetExpr LetVarIn(IToken tok, string name, Type tp, Expression rhs, Expression body) {
+    private LetExpr LetVarIn(IToken tok, string name, Type tp, Usage usage, Expression rhs, Expression body) {
       var lhs = new CasePattern<BoundVar>(tok, new BoundVar(tok, name, tp));
-      return LetPatIn(tok, lhs, rhs, body);
+      return LetPatIn(tok, lhs, usage, rhs, body);
     }
 
     /// <summary>
@@ -12460,7 +12510,7 @@ namespace Microsoft.Dafny
       var temp = FreshTempVarName("valueOrError", opts.codeContext);
       var tempType = new InferredTypeProxy();
       // "var temp := E;"
-      expr.ResolvedExpression = LetVarIn(expr.tok, temp, tempType, expr.Rhs,
+      expr.ResolvedExpression = LetVarIn(expr.tok, temp, tempType, Usage.Ordinary, expr.Rhs,
         // "if temp.IsFailure()"
         new ITEExpr(expr.tok, false, VarDotFunction(expr.tok, temp, "IsFailure"),
           // "then temp.PropagateFailure()"
@@ -12470,7 +12520,7 @@ namespace Microsoft.Dafny
             // "F"
             ? expr.Body
             // "var x: T := temp.Extract(); F"
-            : LetPatIn(expr.tok, expr.Lhs, VarDotFunction(expr.tok, temp, "Extract"), expr.Body)));
+            : LetPatIn(expr.tok, expr.Lhs, Usage.Ordinary, VarDotFunction(expr.tok, temp, "Extract"), expr.Body)));
 
       ResolveExpression(expr.ResolvedExpression, opts);
       bool expectExtract = (expr.Lhs != null);
@@ -12692,11 +12742,11 @@ namespace Microsoft.Dafny
       foreach (var entry in rhsBindings) {
         if (entry.Value.Item1 != null) {
           var lhs = new CasePattern<BoundVar>(tok, entry.Value.Item1);
-          rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { entry.Value.Item3 }, rewrite, true);
+          rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { entry.Value.Item3 }, rewrite, true, Usage.Ordinary);
         }
       }
       var dVarPat = new CasePattern<BoundVar>(tok, dVar);
-      rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { dVarPat }, new List<Expression>() { root }, rewrite, true);
+      rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { dVarPat }, new List<Expression>() { root }, rewrite, true, Usage.Ordinary);
       Contract.Assert(rewrite != null);
       ResolveExpression(rewrite, opts);
       return rewrite;
@@ -12790,7 +12840,7 @@ namespace Microsoft.Dafny
               Type st = SubstType(formal.Type, subst);
               ConstrainSubtypeRelation(v.Type, st, me,
                 "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", v.Type, st);
-              v.Usage = formal.Usage;
+              v.Usage = ConstructorArgUsage(me.Usage, formal.Usage);
 
               // update the type of the boundvars in the MatchCaseToken
               if (v.tok is MatchCaseToken) {
@@ -12904,7 +12954,7 @@ namespace Microsoft.Dafny
               BoundVar v = pat.Var;
               arguments.Insert(0, v);
             } else {
-              body = DesugarMatchCasePattern(mc, pat, sourceVar, body, keepOrigToken);
+              body = DesugarMatchCasePattern(mc, pat, sourceVar, body, keepOrigToken, me.Usage);
               patterns.Add(new Tuple<CasePattern<BoundVar>, BoundVar>(pat, sourceVar));
               arguments.Insert(0, sourceVar);
             }
@@ -12957,7 +13007,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    Expression DesugarMatchCasePattern(MatchCaseExpr mc, CasePattern<BoundVar> pat, BoundVar v, Expression body, bool keepToken) {
+    Expression DesugarMatchCasePattern(MatchCaseExpr mc, CasePattern<BoundVar> pat, BoundVar v, Expression body, bool keepToken, Usage usage) {
       // convert
       //    case Cons(y, Cons(z, zs)) => body
       // to
@@ -12971,7 +13021,7 @@ namespace Microsoft.Dafny
         AutoGeneratedTokenCloner cloner = new AutoGeneratedTokenCloner();
         source = cloner.CloneExpr(source);
       }
-      return new MatchExpr(pat.tok, source, cases, false);
+      return new MatchExpr(pat.tok, source, cases, false, usage);
     }
 
 
@@ -13093,7 +13143,7 @@ namespace Microsoft.Dafny
       mc.UpdateBody(clone);
     }
 
-    void ResolveCasePattern<VT>(CasePattern<VT> pat, Type sourceType, ICodeContext context) where VT: IVariable {
+    void ResolveCasePattern<VT>(CasePattern<VT> pat, Type sourceType, ICodeContext context, Usage uOuter, Usage uFormal) where VT: IVariable {
       Contract.Requires(pat != null);
       Contract.Requires(sourceType != null);
       Contract.Requires(context != null);
@@ -13128,6 +13178,18 @@ namespace Microsoft.Dafny
         // The reason is that the purpose of the pattern on the left is really just to provide a skeleton to introduce bound variables in.
         AddAssignableConstraint(v.Tok, v.Type, sourceType, "type of corresponding source/RHS ({1}) does not match type of bound variable ({0})");
         pat.AssembleExpr(null);
+        Usage usage = ConstructorArgUsage(uOuter, uFormal);
+        var x = v as LocalVariable;
+        var bv = v as BoundVar;
+        if (HasLinearity(usage) && x == null && bv == null) {
+          reporter.Error(MessageSource.Resolver, pat.tok, "linear/shared not supported here");
+        }
+        if (x != null) {
+          x.Usage = usage;
+        }
+        if (bv != null) {
+          bv.Usage = usage;
+        }
         return;
       }
       if (dtd == null) {
@@ -13164,7 +13226,7 @@ namespace Microsoft.Dafny
             if (j < ctor.Formals.Count) {
               var formal = ctor.Formals[j];
               Type st = SubstType(formal.Type, subst);
-              ResolveCasePattern(arg, st, context);
+              ResolveCasePattern(arg, st, context, uOuter, formal.Usage);
             }
             j++;
           }
@@ -14100,16 +14162,54 @@ namespace Microsoft.Dafny
       }
     }
 
+    void MaybeIntroduceLetBang(IToken tok, Usage usage, UsageContext usageContext, List<IVariable> borrow) {
+      foreach (var x in borrow) {
+        if (usageContext.available[x] == Available.Consumed) {
+          // If Body consumed x, try to introduce let!(x) here
+          if (usage == Usage.Shared) {
+            reporter.Error(MessageSource.Resolver, tok, "cannot borrow {0} when assigning to shared variable", x.Name);
+          }
+        } else {
+          // Otherwise, we don't introduce let!(x) here; just propagate the fact that x was Borrowed
+          usageContext.available[x] = Available.Borrowed;
+        }
+      }
+    }
+
     // Check that any extra variables in inner are unavailable, remove extra variables
     void PopUsageContext(IToken tok, UsageContext outer, UsageContext inner) {
       if (inner == null) inner = new UsageContext();
       if (outer == null) outer = new UsageContext();
-      foreach (var k in new List<IVariable>(inner.available.Keys)) {
+      foreach (var k in inner.available.Keys.ToList()) {
         if (!outer.available.ContainsKey(k)) {
           if (inner.available[k] != Available.Consumed) {
             reporter.Error(MessageSource.Resolver, tok, "linear variable {0} must be unavailable at end of block", k.Name);
           }
           inner.available.Remove(k);
+        }
+      }
+    }
+
+    // uc1 and uc2 are the contexts after executing the "then" and "else" branches of a conditional.
+    // Check that they are consistent with each other with respect to Consumed.
+    // Make them consistent with each other with respect to Borrowed.
+    // requires: uc1 and uc2 have same keys in available
+    void MergeUsageContexts(IToken tok, UsageContext uc1, UsageContext uc2) {
+      if (uc1 == null) uc1 = new UsageContext();
+      if (uc2 == null) uc2 = new UsageContext();
+      foreach (var k in uc1.available.Keys.Concat(uc2.available.Keys)) {
+        // double-check same keys:
+        var a1 = uc1.available[k];
+        var a2 = uc2.available[k];
+      }
+      foreach (var k in uc1.available.Keys.ToList()) {
+        var a1 = uc1.available[k];
+        var a2 = uc2.available[k];
+        if ((a1 == Available.Consumed || a2 == Available.Consumed) && a1 != a2) {
+          reporter.Error(MessageSource.Resolver, tok, "in conditional, linear variable {0} must be available after both branches or unavailable after both branches", k.Name);
+        } else if (a1 == Available.Borrowed || a2 == Available.Borrowed) {
+          uc1.available[k] = Available.Borrowed;
+          uc2.available[k] = Available.Borrowed;
         }
       }
     }
@@ -14129,6 +14229,17 @@ namespace Microsoft.Dafny
         }
       }
       return borrow;
+    }
+
+    static Usage ConstructorArgUsage(Usage outer, Usage formal) {
+      if (outer == Usage.Ghost || formal == Usage.Ghost) {
+        return Usage.Ghost;
+      } else if (outer == Usage.Ordinary || formal == Usage.Ordinary) {
+        return Usage.Ordinary;
+      } else {
+        if (outer != formal && formal == Usage.Shared) throw new Exception("internal error: " + outer + " " + formal);
+        return outer;
+      }
     }
 
     static bool HasLinearity(Usage u) {
@@ -14211,6 +14322,22 @@ namespace Microsoft.Dafny
           reporter.Error(MessageSource.Resolver, expr, "ghost fields are allowed only in specification contexts");
           return Usage.Ordinary;
         }
+        var d = e.Member as DatatypeDestructor;
+        var s = e.Member as SpecialField;
+        if (d != null || s != null) {
+          bool linearDestructor = (d == null) ? false : d.CorrespondingFormals.Exists(x => x.IsLinear);
+          var id = ExprAsIdentifier(e.Obj);
+          if (id != null && (id.Var.IsLinear || id.Var.IsShared) && (d == null || d.CorrespondingFormals.Count == 1)) {
+            // Try to share id
+            CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
+            return linearDestructor ? Usage.Shared : Usage.Ordinary;
+          } else if (linearDestructor) {
+            reporter.Error(MessageSource.Resolver, expr, "cannot select from linear expression");
+          } else {
+            CheckIsCompilable(e.Obj, usageContext, Usage.Ordinary);
+            return Usage.Ordinary;
+          }
+        }
 
       } else if (expr is FunctionCallExpr) {
         var e = (FunctionCallExpr)expr;
@@ -14234,6 +14361,8 @@ namespace Microsoft.Dafny
 
       } else if (expr is DatatypeValue) {
         var e = (DatatypeValue)expr;
+        var dt = e.Ctor.EnclosingDatatype as IndDatatypeDecl;
+        bool isLinear = dt != null && dt.IsLinear;
         // check all NON-ghost arguments
         // note that if resolution is successful, then |e.Arguments| == |e.Ctor.Formals|
         for (int i = 0; i < e.Arguments.Count; i++) {
@@ -14242,7 +14371,7 @@ namespace Microsoft.Dafny
             CheckIsCompilable(e.Arguments[i], usageContext, usage);
           }
         }
-        return Usage.Ordinary; // TODO
+        return isLinear ? Usage.Linear : Usage.Ordinary;
 
       } else if (expr is OldExpr) {
         reporter.Error(MessageSource.Resolver, expr, "old expressions are allowed only in specification and ghost contexts");
@@ -14291,20 +14420,11 @@ namespace Microsoft.Dafny
         if (e.Exact) {
           Contract.Assert(e.LHSs.Count == e.RHSs.Count);
           var i = 0;
-          bool isShared = e.BoundVars.ToList().Exists(x => x.Usage == Usage.Shared);
           var uc0 = UsageContext.Copy(usageContext);
           foreach (var ee in e.RHSs) {
-            Usage usage = Usage.Ordinary;
             var xs = e.LHSs[i].Vars.ToList();
-            if (xs.Count() == 1) {
-              usage = xs[0].Usage;
-            } else if (xs.Exists(x => HasLinearity(x.Usage))) {
-              throw new Exception("not implemented: linear patterns");
-            } else {
-              usage = Usage.Ordinary;
-            }
             if (!xs.All(bv => bv.IsGhost)) {
-              CheckIsCompilable(ee, usageContext, usage);
+              CheckIsCompilable(ee, usageContext, e.Usage);
             }
             i++;
           }
@@ -14315,17 +14435,7 @@ namespace Microsoft.Dafny
             }
           }
           Usage u = CheckIsCompilable(e.Body, usageContext);
-          foreach (var x in borrow) {
-            if (usageContext.available[x] == Available.Consumed) {
-              // If Body consumed x, try to introduce let!(x) here
-              if (isShared) {
-                reporter.Error(MessageSource.Resolver, expr, "cannot borrow {0} when assigning to shared variable", x);
-              }
-            } else {
-              // Otherwise, we don't introduce let!(x) here; just propagate the fact that x was Borrowed
-              usageContext.available[x] = Available.Borrowed;
-            }
-          }
+          MaybeIntroduceLetBang(expr.tok, e.Usage, usageContext, borrow);
           PopUsageContext(e.tok, uc0, usageContext);
           return u;
         } else {
@@ -14387,6 +14497,56 @@ namespace Microsoft.Dafny
         return Usage.Ordinary;
       } else if (expr is ConcreteSyntaxExpression) {
         return CheckIsCompilable(((ConcreteSyntaxExpression)expr).ResolvedExpression, usageContext);
+      } else if (expr is ITEExpr) {
+        ITEExpr e = (ITEExpr)expr;
+        var uc0 = UsageContext.Copy(usageContext);
+        CheckIsCompilable(e.Test, usageContext, Usage.Ordinary);
+        var borrow = RemoveInnerBorrowed(uc0, usageContext);
+        UsageContext uc2 = UsageContext.Copy(usageContext);
+        Usage u1 = CheckIsCompilable(e.Thn, usageContext);
+        UsageContext uc1 = usageContext;
+        Usage u2 = CheckIsCompilable(e.Els, uc2);
+        MergeUsageContexts(e.tok, uc1, uc2);
+        foreach (var x in borrow) {
+          // If Thn/Els consumed x, (conceptually) introduce let!(x) here
+          if (uc1.available[x] != Available.Consumed) {
+            // Otherwise, we don't introduce let!(x) here; just propagate the fact that x was Borrowed
+            usageContext.available[x] = Available.Borrowed;
+          }
+        }
+        if (u1 != u2) {
+          reporter.Error(MessageSource.Resolver, expr, "In conditional, left branch is {0}, right branch is {1} (both must be same)", UsageName(u1), UsageName(u2));
+        }
+        return u1;
+      } else if (expr is MatchExpr) {
+        MatchExpr e = (MatchExpr)expr;
+        var uc0 = UsageContext.Copy(usageContext);
+        CheckIsCompilable(e.Source, usageContext, e.Usage);
+        var borrow = RemoveInnerBorrowed(uc0, usageContext);
+        Usage usage = Usage.Ordinary;
+        bool isFirst = true;
+        var uc1 = UsageContext.Copy(usageContext);
+        foreach (var c in e.Cases) {
+          UsageContext uc2 = isFirst ? usageContext : UsageContext.Copy(uc1);
+          foreach (var x in c.Arguments) {
+            if (x.Usage == Usage.Linear) {
+              uc2.available.Add(x, Available.Available);
+            }
+          }
+          Usage u = CheckIsCompilable(c.Body, uc2);
+          MaybeIntroduceLetBang(expr.tok, e.Usage, uc2, borrow);
+          PopUsageContext(c.tok, uc1, uc2);
+          if (isFirst) {
+            usage = u;
+          } else {
+            if (u != usage) {
+              reporter.Error(MessageSource.Resolver, c.tok, "In case, previous branch is {0}, current branch is {1} (both must be same)", UsageName(usage), UsageName(u));
+            }
+            MergeUsageContexts(e.tok, uc2, usageContext);
+          }
+          isFirst = false;
+        }
+        return usage;
       }
 
       foreach (var ee in expr.SubExpressions) {

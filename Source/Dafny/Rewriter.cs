@@ -1288,7 +1288,7 @@ namespace Microsoft.Dafny
           newMatches.Add(c);
         }
 
-        reqs.Add(Expression.CreateMatch(e.tok, e.Source, newMatches, e.Type));
+        reqs.Add(Expression.CreateMatch(e.tok, e.Source, newMatches, e.Type, e.Usage));
       } else if (expr is SeqConstructionExpr) {
         var e = (SeqConstructionExpr)expr;
         reqs.AddRange(generateAutoReqs(e.N));
@@ -1341,7 +1341,7 @@ namespace Microsoft.Dafny
           }
           var new_reqs = generateAutoReqs(e.Body);
           if (new_reqs.Count > 0) {
-            reqs.Add(Expression.CreateLet(e.tok, e.LHSs, e.RHSs, andify(e.tok, new_reqs), e.Exact));
+            reqs.Add(Expression.CreateLet(e.tok, e.LHSs, e.RHSs, andify(e.tok, new_reqs), e.Exact, Usage.Ordinary));
           }
         } else {
           // TODO: Still need to figure out what the right choice is here:

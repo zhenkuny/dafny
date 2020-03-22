@@ -3996,12 +3996,13 @@ namespace Microsoft.Dafny {
     public override string WhatKind { get { return "datatype"; } }
     public DatatypeCtor DefaultCtor;  // set during resolution
     public bool[] TypeParametersUsedInConstructionByDefaultCtor;  // set during resolution; has same length as the number of type arguments
+    public bool IsLinear;
 
     public enum ES { NotYetComputed, Never, ConsultTypeArguments }
     public ES EqualitySupport = ES.NotYetComputed;
 
     public IndDatatypeDecl(IToken tok, string name, ModuleDefinition module, List<TypeParameter> typeArgs,
-      [Captured] List<DatatypeCtor> ctors, List<MemberDecl> members, Attributes attributes)
+      [Captured] List<DatatypeCtor> ctors, List<MemberDecl> members, Attributes attributes, bool linear)
       : base(tok, name, module, typeArgs, ctors, members, attributes) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
@@ -4010,6 +4011,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(cce.NonNullElements(ctors));
       Contract.Requires(cce.NonNullElements(members));
       Contract.Requires(1 <= ctors.Count);
+      IsLinear = linear;
     }
   }
 
@@ -4026,7 +4028,7 @@ namespace Microsoft.Dafny {
     }
 
     private TupleTypeDecl(ModuleDefinition systemModule, List<TypeParameter> typeArgs, Attributes attributes)
-      : base(Token.NoToken, BuiltIns.TupleTypeName(typeArgs.Count), systemModule, typeArgs, CreateConstructors(typeArgs), new List<MemberDecl>(), attributes) {
+      : base(Token.NoToken, BuiltIns.TupleTypeName(typeArgs.Count), systemModule, typeArgs, CreateConstructors(typeArgs), new List<MemberDecl>(), attributes, false) {
       Contract.Requires(systemModule != null);
       Contract.Requires(typeArgs != null);
       Dims = typeArgs.Count;
@@ -6685,11 +6687,13 @@ namespace Microsoft.Dafny {
   {
     public readonly CasePattern<LocalVariable> LHS;
     public readonly Expression RHS;
+    public readonly Usage Usage;
 
-    public LetStmt(IToken tok, IToken endTok, CasePattern<LocalVariable> lhs, Expression rhs)
+    public LetStmt(IToken tok, IToken endTok, CasePattern<LocalVariable> lhs, Expression rhs, Usage usage)
       : base(tok, endTok) {
       LHS = lhs;
       RHS = rhs;
+      Usage = usage;
     }
 
     public override IEnumerable<Expression> SubExpressions {
@@ -7796,8 +7800,9 @@ namespace Microsoft.Dafny {
     public readonly List<DatatypeCtor> MissingCases = new List<DatatypeCtor>();  // filled in during resolution
     public readonly bool UsesOptionalBraces;
     public MatchStmt OrigUnresolved;  // the resolver makes this clone of the MatchStmt before it starts desugaring it
+    public readonly Usage Usage;
 
-    public MatchStmt(IToken tok, IToken endTok, Expression source, [Captured] List<MatchCaseStmt> cases, bool usesOptionalBraces)
+    public MatchStmt(IToken tok, IToken endTok, Expression source, [Captured] List<MatchCaseStmt> cases, bool usesOptionalBraces, Usage usage)
       : base(tok, endTok) {
       Contract.Requires(tok != null);
       Contract.Requires(endTok != null);
@@ -7806,6 +7811,7 @@ namespace Microsoft.Dafny {
       this.source = source;
       this.cases = cases;
       this.UsesOptionalBraces = usesOptionalBraces;
+      this.Usage = usage;
     }
 
     public Expression Source {
@@ -8464,8 +8470,8 @@ namespace Microsoft.Dafny {
     /// <summary>
     /// Create a match expression with a resolved type
     /// </summary>
-    public static Expression CreateMatch(IToken tok, Expression src, List<MatchCaseExpr> cases, Type type) {
-      MatchExpr e = new MatchExpr(tok, src, cases, false);
+    public static Expression CreateMatch(IToken tok, Expression src, List<MatchCaseExpr> cases, Type type, Usage usage) {
+      MatchExpr e = new MatchExpr(tok, src, cases, false, usage);
       e.Type = type;  // resolve here
 
       return e;
@@ -8474,7 +8480,7 @@ namespace Microsoft.Dafny {
     /// <summary>
     /// Create a let expression with a resolved type and fresh variables
     /// </summary>
-    public static Expression CreateLet(IToken tok, List<CasePattern<BoundVar>> LHSs, List<Expression> RHSs, Expression body, bool exact) {
+    public static Expression CreateLet(IToken tok, List<CasePattern<BoundVar>> LHSs, List<Expression> RHSs, Expression body, bool exact, Usage usage) {
       Contract.Requires(tok  != null);
       Contract.Requires(LHSs != null && RHSs != null);
       Contract.Requires(LHSs.Count == RHSs.Count);
@@ -8489,7 +8495,7 @@ namespace Microsoft.Dafny {
       newLHSs.Iter(p => newVars.AddRange(p.Vars));
       body = VarSubstituter(oldVars.ConvertAll<NonglobalVariable>(x => (NonglobalVariable)x), newVars, body);
 
-      var let = new LetExpr(tok, newLHSs, RHSs, body, exact);
+      var let = new LetExpr(tok, newLHSs, RHSs, body, exact, usage);
       let.Type = body.Type;  // resolve here
       return let;
     }
@@ -9830,6 +9836,7 @@ namespace Microsoft.Dafny {
     public readonly bool Exact;  // Exact==true means a regular let expression; Exact==false means an assign-such-that expression
     public readonly Attributes Attributes;
     public List<ComprehensionExpr.BoundedPool> Constraint_Bounds;  // initialized and filled in by resolver; null for Exact=true and for when expression is in a ghost context
+    public readonly Usage Usage;
     // invariant Constraint_Bounds == null || Constraint_Bounds.Count == BoundVars.Count;
     private Expression translationDesugaring;  // filled in during translation, lazily; to be accessed only via Translation.LetDesugaring; always null when Exact==true
     private Translator lastTranslatorUsed; // avoid clashing desugaring between translators
@@ -9847,12 +9854,13 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public LetExpr(IToken tok, List<CasePattern<BoundVar>> lhss, List<Expression> rhss, Expression body, bool exact, Attributes attrs = null)
+    public LetExpr(IToken tok, List<CasePattern<BoundVar>> lhss, List<Expression> rhss, Expression body, bool exact, Usage usage, Attributes attrs = null)
       : base(tok) {
       LHSs = lhss;
       RHSs = rhss;
       Body = body;
       Exact = exact;
+      Usage = usage;
       Attributes = attrs;
     }
     public override IEnumerable<Expression> SubExpressions {
@@ -10596,6 +10604,7 @@ namespace Microsoft.Dafny {
     public readonly List<DatatypeCtor> MissingCases = new List<DatatypeCtor>();  // filled in during resolution
     public readonly bool UsesOptionalBraces;
     public MatchExpr OrigUnresolved;  // the resolver makes this clone of the MatchExpr before it starts desugaring it
+    public readonly Usage Usage;
 
     [ContractInvariantMethod]
     void ObjectInvariant() {
@@ -10604,7 +10613,7 @@ namespace Microsoft.Dafny {
       Contract.Invariant(cce.NonNullElements(MissingCases));
     }
 
-    public MatchExpr(IToken tok, Expression source, [Captured] List<MatchCaseExpr> cases, bool usesOptionalBraces)
+    public MatchExpr(IToken tok, Expression source, [Captured] List<MatchCaseExpr> cases, bool usesOptionalBraces, Usage usage)
       : base(tok) {
       Contract.Requires(tok != null);
       Contract.Requires(source != null);
@@ -10612,6 +10621,7 @@ namespace Microsoft.Dafny {
       this.source = source;
       this.cases = cases;
       this.UsesOptionalBraces = usesOptionalBraces;
+      this.Usage = usage;
     }
 
     public Expression Source {
