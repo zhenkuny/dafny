@@ -6,8 +6,8 @@
 linear datatype lOption<A> = LNone | LSome(linear a:A)
 linear datatype nlPair<A, B> = NlPair(a:A, linear b:B)
 linear datatype llPair<A, B> = LlPair(linear a:A, linear b:B)
-linear datatype list<A> = Nil | Cons(hd:int, tl:list)
 linear datatype nlList<A> = NlNil | NlCons(hd:A, linear tl:nlList<A>)
+datatype list<A> = Nil | Cons(hd:int, tl:list)
 
 function method AllocInt(x:int):linear int
 function method FreeInt(linear x:int):int

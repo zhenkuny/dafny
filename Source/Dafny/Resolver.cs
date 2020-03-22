@@ -6852,7 +6852,14 @@ namespace Microsoft.Dafny
           if (s.hiddenUpdate != null) {
             Visit(s.hiddenUpdate, mustBeErasable);
           }
-          // TODO linear: yield and return
+          Method method = codeContext as Method;
+          if (method != null) {
+            bool linearInOut = method.Ins.Concat(method.Outs).ToList().Exists(x => x.IsLinear);
+            bool linearHere = usageContext != null && usageContext.available.Count > 0;
+            if (linearInOut || linearHere) {
+              Error(stmt, "{0} statement is not allowed when using linear", kind);
+            }
+          }
 
         } else if (stmt is AssignSuchThatStmt) {
           var s = (AssignSuchThatStmt)stmt;
@@ -7102,11 +7109,18 @@ namespace Microsoft.Dafny
           if (s.IsGhost && s.Mod.Expressions != null) {
             s.Mod.Expressions.Iter(resolver.DisallowNonGhostFieldSpecifiers);
           }
-          // TODO linear
+          if (!s.IsGhost && s.Guard != null) {
+            resolver.CheckIsCompilable(s.Guard, usageContext, s.IsGhost ? Usage.Ghost : Usage.Ordinary);
+          }
+          if (usageContext != null) usageContext.Unborrow();
           if (s.Body != null) {
+            UsageContext uc1 = UsageContext.Copy(usageContext);
             Visit(s.Body, s.IsGhost);
             if (s.Body.IsGhost && !s.Decreases.Expressions.Exists(e => e is WildcardExpr)) {
               s.IsGhost = true;
+            }
+            if (!s.IsGhost) {
+              resolver.MergeUsageContexts(s.Tok, uc1, usageContext, true);
             }
           }
 
@@ -14194,7 +14208,7 @@ namespace Microsoft.Dafny
     // Check that they are consistent with each other with respect to Consumed.
     // Make them consistent with each other with respect to Borrowed.
     // requires: uc1 and uc2 have same keys in available
-    void MergeUsageContexts(IToken tok, UsageContext uc1, UsageContext uc2) {
+    void MergeUsageContexts(IToken tok, UsageContext uc1, UsageContext uc2, bool isWhile = false) {
       if (uc1 == null) uc1 = new UsageContext();
       if (uc2 == null) uc2 = new UsageContext();
       foreach (var k in uc1.available.Keys.Concat(uc2.available.Keys)) {
@@ -14206,7 +14220,11 @@ namespace Microsoft.Dafny
         var a1 = uc1.available[k];
         var a2 = uc2.available[k];
         if ((a1 == Available.Consumed || a2 == Available.Consumed) && a1 != a2) {
-          reporter.Error(MessageSource.Resolver, tok, "in conditional, linear variable {0} must be available after both branches or unavailable after both branches", k.Name);
+          if (isWhile) {
+            reporter.Error(MessageSource.Resolver, tok, "in while, linear variable {0} must be have same availability before and after the loop body", k.Name);
+          } else {
+            reporter.Error(MessageSource.Resolver, tok, "in conditional, linear variable {0} must be available after both branches or unavailable after both branches", k.Name);
+          }
         } else if (a1 == Available.Borrowed || a2 == Available.Borrowed) {
           uc1.available[k] = Available.Borrowed;
           uc2.available[k] = Available.Borrowed;
