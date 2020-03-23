@@ -153,12 +153,12 @@ function method MakeEven(linear l:nlList<int>):linear nlList<int>
 }
 
 /*
-A variable binding expression like "var x := e1; e2" may freely borrow a linear variable x inside e1
-as long as it eventually consumes x in e2.
+A variable binding expression like "var x := e1; e2" may freely borrow a linear variable l inside e1
+as long as it eventually consumes l in e2.
 Note that borrowing must strictly precede consumption;
-it would be illegal, for example, for "var x := e1; e2" to consume x in e1
+it would be illegal, for example, for "var x := e1; e2" to consume l in e1
 and then try to borrow it in e2.
-It would also be illegal to consume x and borrow x side by side,
+It would also be illegal to consume l and borrow l side by side,
 since expression evaluation order is underspecified:
   f(Length(l), IncrAll(l)) // not allowed -- IncrAll could deallocate l before Length reads it, depending on the compiler
 To work around this limitation, simply use a temporary variable:
@@ -187,6 +187,21 @@ function method Share2(linear l:nlList<int>):linear nlList<int>
     );
     NlCons(w + x + y + z, l)
 }
+/*
+There's an important restriction on borrowing in "var x := e1; e2":
+a linear variable l may be shared within e1 (and then consumed in e2),
+but if e1 borrows any linear variables, x cannot be a shared variable,
+so that e1 cannot pass any shared values through x into e2.
+For example, "shared var x := l; f(Length(x), IncrAll(l))" is illegal.
+This prevents a shared l and a consumed l from living side by side inside e2.
+The Share2 method above contains "var y:int := e1; e2",
+where e1 = "(shared var s := l; ...)".
+This demonstrates that sharing is allowed within e1,
+where e1's local variables like s, s1, and s2 are shared,
+but y cannot be marked "shared".
+
+Finally, fields of datatypes may be marked linear or ghost, but not shared.
+*/
 
 /*
 Unfortunately, it is not yet possible for statements to
