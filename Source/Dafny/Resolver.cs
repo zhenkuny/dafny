@@ -6984,7 +6984,11 @@ namespace Microsoft.Dafny
                 }
               }
               if (rhs.InitCall != null) {
-                rhs.InitCall.Args.ForEach(resolver.CheckIsCompilable);
+                foreach (var inArg in rhs.InitCall.Method.Ins.Zip(rhs.InitCall.Args)) {
+                  if (!inArg.Item1.IsGhost) {
+                    resolver.CheckIsCompilable(inArg.Item2, usageContext, inArg.Item1.Usage);
+                  }
+                }
               }
             }
           }
@@ -7002,7 +7006,6 @@ namespace Microsoft.Dafny
           } else {
             int j;
             bool returnsShared = callee.Outs.Exists(o => o.IsShared);
-            List<IVariable> borrowed = new List<IVariable>();
             if (!callee.IsGhost) {
               resolver.CheckIsCompilable(s.Receiver);
               j = 0;

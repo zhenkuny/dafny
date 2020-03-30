@@ -322,7 +322,7 @@ function method lseq_peek<A>(shared s:lseq<A>, i:nat):(shared a:A)
     peek(lseq_share(s, i))
 }
 
-method lseq_get<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear a:A)
+method lseq_take<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear a:A)
     requires i < |lseqs(s1)|
     requires has(lseqs(s1)[i])
     ensures a == read(lseqs(s1)[i])
@@ -334,7 +334,7 @@ method lseq_get<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear a
     a := take(x2);
 }
 
-method lseq_set<A>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq<A>)
+method lseq_give<A>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq<A>)
     requires i < |lseqs(s1)|
     requires !has(lseqs(s1)[i])
     ensures lseqs(s2) == lseqs(s1)[i := give(a)]
@@ -366,9 +366,9 @@ method SeqExample<A>(linear s_in:lseq<nlList<A>>) returns(linear s:lseq<nlList<A
         {
             // The hard way to do it:
             linear var l:nlList<A>;
-            s, l := lseq_get(s, i);
+            s, l := lseq_take(s, i);
             lens := seq_set(lens, i, Length(l));
-            s := lseq_set(s, i, l);
+            s := lseq_give(s, i, l);
         }
         else
         {
@@ -377,4 +377,89 @@ method SeqExample<A>(linear s_in:lseq<nlList<A>>) returns(linear s:lseq<nlList<A
         }
         i := i + 1;
     }
+}
+
+/*
+Linear datatypes can contain ordinary fields.
+The opposite is not allowed: you can't put a linear field in an ordinary datatype,
+because ordinary datatypes can be duplicated and discarded,
+which duplicates and discards the datatype's fields.
+However, we can define a special ordinary adapter object that holds linear data.
+The adapter object lives in the heap.
+Since the heap can't be duplicated, the object can't be duplicated and its linear data can't be duplicated.
+The linear data in the object is only usable via a Swap method that swaps
+one linear value for another:
+*/
+class BoxedLinear<A>
+{
+    function Read():A
+        reads this
+    constructor(linear a:A)
+        ensures Read() == a
+    method Swap(linear a1:A) returns(linear a2:A)
+        modifies this
+        ensures a2 == old(Read())
+        ensures Read() == a1
+}
+/*
+Note, however, that this adapter doesn't stop an object from being silently discarded
+during garbage collection, so it's possible to leak linear data using this adapter.
+*/
+class MaybeLinear<A>
+{
+    var box:BoxedLinear<maybe<A>>;
+    function Has():bool
+        reads this, box
+    {
+        has(box.Read())
+    }
+    function Read():A
+        reads this, box
+    {
+        read(box.Read())
+    }
+    constructor Empty()
+        ensures !Has()
+        ensures fresh(this.box)
+    {
+        box := new BoxedLinear(empty());
+    }
+    constructor(linear a:A)
+        ensures Read() == a
+        ensures Has()
+        ensures fresh(this.box)
+    {
+        box := new BoxedLinear(give(a));
+    }
+    method Take() returns(linear a:A)
+        modifies this, box
+        requires Has()
+        ensures !Has()
+        ensures a == old(Read())
+    {
+        linear var x := box.Swap(empty());
+        a := take(x);
+    }
+    method Give(linear a:A)
+        modifies this, box
+        requires !Has()
+        ensures Has()
+        ensures a == Read()
+    {
+        linear var x := box.Swap(give(a));
+        var _ := discard(x);
+    }
+}
+
+method MaybeLinearExample<A>(linear a_in:A) returns(linear a:A)
+{
+    a := a_in;
+    var box1 := new MaybeLinear<A>(a);
+    var box2 := new MaybeLinear<A>.Empty();
+    var box3 := box1; // box1 is not linear, so we can duplicate it
+    a := box1.Take();
+
+    // This following would fail, because box3 == box1 and we already took the A out of box1:
+    // linear var b := box3.Take();
+    // box3.Give(b);
 }
