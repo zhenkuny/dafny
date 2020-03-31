@@ -4406,7 +4406,7 @@ List<Expression> decreases, ref Attributes decAttrs, ref Attributes modAttrs, st
 			ShiftTerm(out e1, allowSemi, allowLambda, allowBitwiseOps);
 			if (k == null) {
 			 e = new BinaryExpr(x, op, e0, e1);
-			 if (op == BinaryExpr.Opcode.In) e = new PlaceholderExpression(x, e);
+			 if (op == BinaryExpr.Opcode.In || op == BinaryExpr.Opcode.NotIn) e = new PlaceholderExpression(x, e);
 			} else {
 			 Contract.Assert(op == BinaryExpr.Opcode.Eq || op == BinaryExpr.Opcode.Neq);
 			 e = new TernaryExpr(x, op == BinaryExpr.Opcode.Eq ? TernaryExpr.Opcode.PrefixEqOp : TernaryExpr.Opcode.PrefixNeqOp, k, e0, e1);

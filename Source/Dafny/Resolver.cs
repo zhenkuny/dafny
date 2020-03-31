@@ -12090,19 +12090,8 @@ namespace Microsoft.Dafny
             expr.Type = e.E.Type;
             break;
           case UnaryOpExpr.Opcode.Cardinality:
-            var u = e.E.Type as UserDefinedType;
-            if (u != null) {
-              u = u.NormalizeExpand() as UserDefinedType;
-            }
-            if (u != null && !u.IsArrayType) {
-              var apply = new ApplySuffix(e.tok, new NameSegment(Token.NoToken, "operator'cardinality?" + u.Name, null),
-                new List<Expression>{e.E});
-              ResolveApplySuffix(apply, opts, false);
-              if (apply.ResolvedExpression != null) {
-                e.PlaceholderReplacement = apply.ResolvedExpression;
-                e.Type = apply.ResolvedExpression.Type;
-                return;
-              }
+            if (ReplaceOverload(opts, e, e.E.Type, "cardinality", new List<Expression>{e.E})) {
+              return;
             }
             AddXConstraint(expr.tok, "Sizeable", e.E.Type, "size operator expects a collection argument (instead got {0})");
             expr.Type = Type.Int;
@@ -12253,19 +12242,13 @@ namespace Microsoft.Dafny
 
           case BinaryExpr.Opcode.In:
           case BinaryExpr.Opcode.NotIn:
-            var u = e.E1.Type as UserDefinedType;
-            if (u != null) {
-              u = u.NormalizeExpand() as UserDefinedType;
-            }
-            if (e.Op == BinaryExpr.Opcode.In && u != null && !u.IsArrayType) {
-              var apply = new ApplySuffix(e.tok, new NameSegment(Token.NoToken, "operator'in?" + u.Name, null),
-                new List<Expression>{e.E1, e.E0});
-              ResolveApplySuffix(apply, opts, false);
-              if (apply.ResolvedExpression != null) {
-                e.PlaceholderReplacement = apply.ResolvedExpression;
-                e.Type = apply.ResolvedExpression.Type;
-                return;
+            if (ReplaceOverload(opts, e, e.E1.Type, "in", new List<Expression>{e.E1, e.E0})) {
+              if (e.Op == BinaryExpr.Opcode.NotIn) {
+                var not = new UnaryOpExpr(e.tok, UnaryOpExpr.Opcode.Not, e.PlaceholderReplacement);
+                ResolveExpression(not, opts);
+                e.PlaceholderReplacement = not;
               }
+              return;
             }
             AddXConstraint(expr.tok, "Innable", e.E1.Type, e.E0.Type, "second argument to \"" + BinaryExpr.OpcodeString(e.Op) + "\" must be a set, multiset, or sequence with elements of type {1}, or a map with domain {1} (instead got {0})");
             expr.Type = Type.Bool;
@@ -15392,19 +15375,8 @@ namespace Microsoft.Dafny
       Contract.Assert(e.Seq.Type != null);  // follows from postcondition of ResolveExpression
 
       if (e.SelectOne) {
-        var u = e.Seq.Type as UserDefinedType;
-        if (u != null) {
-          u = u.NormalizeExpand() as UserDefinedType;
-        }
-        if (u != null && !u.IsArrayType) {
-          var apply = new ApplySuffix(e.tok, new NameSegment(Token.NoToken, "operator'subscript?" + u.Name, null),
-            new List<Expression>{e.Seq, e.E0});
-          ResolveApplySuffix(apply, opts, false);
-          if (apply.ResolvedExpression != null) {
-            e.PlaceholderReplacement = apply.ResolvedExpression;
-            e.Type = apply.ResolvedExpression.Type;
-            return;
-          }
+        if (ReplaceOverload(opts, e, e.Seq.Type, "subscript", new List<Expression>{e.Seq, e.E0})) {
+          return;
         }
         AddXConstraint(e.tok, "Indexable", e.Seq.Type, "element selection requires a sequence, array, multiset, or map (got {0})");
         ResolveExpression(e.E0, opts);
@@ -15581,6 +15553,24 @@ namespace Microsoft.Dafny
         default:
           Contract.Assert(false); throw new cce.UnreachableException();  // unexpected operator
       }
+    }
+
+    bool ReplaceOverload(ResolveOpts opts, Expression e, Type t, string overload, List<Expression> args) {
+      var u = t as UserDefinedType;
+      if (u != null) {
+        u = u.NormalizeExpand() as UserDefinedType;
+      }
+      if (u != null && !u.IsArrayType) {
+        var f = new NameSegment(Token.NoToken, "operator'" + overload + "?" + u.Name, null);
+        var apply = new ApplySuffix(e.tok, f, args);
+        ResolveApplySuffix(apply, opts, false);
+        if (apply.ResolvedExpression != null) {
+          e.PlaceholderReplacement = apply.ResolvedExpression;
+          e.Type = apply.ResolvedExpression.Type;
+          return true;
+        }
+      }
+      return false;
     }
 
     /// <summary>

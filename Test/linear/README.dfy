@@ -314,18 +314,18 @@ function method lseq_share<A>(shared s:lseq<A>, i:nat):(shared a:maybe<A>)
     requires i < |lseqs(s)|
     ensures a == lseqs(s)[i]
 
-function operator(| |)<A>(s:lseq<A>):nat
+function{:inline true} operator(| |)<A>(s:lseq<A>):nat
 {
     |lseqs(s)|
 }
 
-function operator([])<A>(s:lseq<A>, i:nat):A
+function{:inline true} operator([])<A>(s:lseq<A>, i:nat):A
     requires i < |s|
 {
     read(lseqs(s)[i])
 }
 
-function operator(in)<A>(s:lseq<A>, i:nat):bool
+function{:inline true} operator(in)<A>(s:lseq<A>, i:nat):bool
     requires i < |s|
 {
     has(lseqs(s)[i])
@@ -333,14 +333,14 @@ function operator(in)<A>(s:lseq<A>, i:nat):bool
 
 function method lseq_peek<A>(shared s:lseq<A>, i:nat):(shared a:A)
     requires i < |s|
-    requires has(lseqs(s)[i])
-    ensures a == peek(lseqs(s)[i])
+    requires i in s
+    ensures a == s[i]
 {
     peek(lseq_share(s, i))
 }
 
 method lseq_take<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear a:A)
-    requires i < |lseqs(s1)|
+    requires i < |s1|
     requires i in s1
     ensures a == s1[i]
     ensures lseqs(s2) == lseqs(s1)[i := empty()]
@@ -353,7 +353,7 @@ method lseq_take<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear 
 
 method lseq_give<A>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq<A>)
     requires i < |s1|
-    requires !(i in s1)
+    requires i !in s1
     ensures lseqs(s2) == lseqs(s1)[i := give(a)]
 {
     linear var x1:maybe<A> := give(a);
@@ -363,7 +363,7 @@ method lseq_give<A>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq
 }
 
 method SeqExample<A>(linear s_in:lseq<nlList<A>>) returns(linear s:lseq<nlList<A>>, linear lens:seq<int>)
-    requires forall i:nat | i < |s_in| :: has(lseqs(s_in)[i])
+    requires forall i:nat | i < |s_in| :: i in s_in
     ensures lseqs(s) == lseqs(s_in)
     ensures |lens| == |s|
     ensures forall i:nat | i < |lens| :: lens[i] == Length(s[i])

@@ -14661,8 +14661,12 @@ namespace Microsoft.Dafny {
 
         } else if (expr is FunctionCallExpr) {
           FunctionCallExpr e = (FunctionCallExpr)expr;
+          bool isInline = false;
           if (e.Function is SpecialFunction) {
             return TrExprSpecialFunctionCall(e);
+          } else if (Attributes.ContainsBool(e.Function.Attributes, "inline", ref isInline) && isInline) {
+            var body = translator.GetSubstitutedBody(e, e.Function);
+            return TrExpr(body);
           } else {
             Bpl.Expr layerArgument;
             var etran = this;
