@@ -1201,6 +1201,10 @@ namespace Microsoft.Dafny {
         }
       } else {
         AddTypeDecl(d.SelfSynonymDecl());
+        var dd = d as TopLevelDeclWithMembers;
+        if (dd != null) {
+          AddClassMembers(dd, true);
+        }
       }
     }
 
@@ -3486,7 +3490,7 @@ namespace Microsoft.Dafny {
           // exists k':ORDINAL | _k' LESS _k :: pp(_k', args)
           // Here, instead of using the usual ORD#Less, we use the semantically equivalent ORD#LessThanLimit, because this
           // allows us to write a good trigger for a targeted monotonicity axiom.  That axiom, in turn, makes the
-          // automatica verification more powerful for inductive lemmas that have more than one focal-predicate term.
+          // automatic verification more powerful for inductive lemmas that have more than one focal-predicate term.
           var smaller = new BinaryExpr(kprime.tok, BinaryExpr.Opcode.Lt, kprime, k) {
             ResolvedOp = BinaryExpr.ResolvedOpcode.LessThanLimit,
             Type = Type.Bool
@@ -6547,9 +6551,6 @@ namespace Microsoft.Dafny {
       } else if (expr is ConcreteSyntaxExpression) {
         var e = (ConcreteSyntaxExpression)expr;
         return CanCallAssumption(e.ResolvedExpression, etran);
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr)expr;
-        return CanCallAssumption(e.ResolvedExpression, etran);
       } else if (expr is BoogieFunctionCall) {
         var e = (BoogieFunctionCall)expr;
         return CanCallAssumption(e.Args, etran);
@@ -7712,11 +7713,6 @@ namespace Microsoft.Dafny {
         CheckWellformedWithResult(e.ResolvedExpression, options, result, resultType, locals, builder, etran);
         result = null;
 
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr)expr;
-        CheckWellformedWithResult(e.ResolvedExpression, options, result, resultType, locals, builder, etran);
-        result = null;
-
       } else if (expr is BoogieFunctionCall) {
         var e = (BoogieFunctionCall)expr;
         foreach (var arg in e.Args) {
@@ -8001,6 +7997,8 @@ namespace Microsoft.Dafny {
         Bpl.Expr be;
         if (expr.Type.IsNumericBased() || expr.Type.IsBitVectorType) {
           be = ConvertExpression(expr.tok, o, expr.Type, toType);
+        } else if (expr.Type.IsBigOrdinalType) {
+          be = FunctionCall(expr.tok, "ORD#Offset", Bpl.Type.Int, o);
         } else {
           be = o;
         }
@@ -9891,6 +9889,26 @@ namespace Microsoft.Dafny {
             builder.Add(TrAssumeCmd(stmt.Tok, etran.TrExpr(s.Expr)));
             stmtContext = StmtType.NONE;
           }
+        } else if (stmt is ExpectStmt) {
+          AddComment(builder, stmt, "expect statement");
+          ExpectStmt s = (ExpectStmt)stmt;
+          stmtContext = StmtType.ASSUME;
+          TrStmt_CheckWellformed(s.Expr, builder, locals, etran, false);
+
+          // Need to check the message is well-formed, assuming the expected expression
+          // does NOT hold:
+          //
+          // if Not(TrExpr[[ s.Expr ]]) {
+          //  CheckWellformed[[ s.Message ]]
+          //  assume false;
+          // }
+          BoogieStmtListBuilder thnBuilder = new BoogieStmtListBuilder(this);
+          TrStmt_CheckWellformed(s.Message, thnBuilder, locals, etran, false);
+          thnBuilder.Add(TrAssumeCmd(stmt.Tok, new Bpl.LiteralExpr(stmt.Tok, false), etran.TrAttributes(stmt.Attributes, null)));
+          Bpl.StmtList thn = thnBuilder.Collect(s.Tok);
+          builder.Add(new Bpl.IfCmd(stmt.Tok, Bpl.Expr.Not(etran.TrExpr(s.Expr)), thn, null, null));
+
+          stmtContext = StmtType.NONE;  // done with translating expect stmt.
         } else if (stmt is AssumeStmt) {
           AddComment(builder, stmt, "assume statement");
           AssumeStmt s = (AssumeStmt)stmt;
@@ -14855,7 +14873,7 @@ namespace Microsoft.Dafny {
           var oe1 = e1;
           var lit0 = translator.GetLit(e0);
           var lit1 = translator.GetLit(e1);
-          bool liftLit = lit0 != null && lit1 != null;
+          bool liftLit = translator.IsLit(e0) && translator.IsLit(e1);
           // NOTE(namin): We usually avoid keeping literals, because their presence might mess up triggers that do not expect them.
           //              Still for equality-related operations, it's useful to keep them instead of lifting them, so that they can be propagated.
           bool keepLits = false;
@@ -15234,8 +15252,22 @@ namespace Microsoft.Dafny {
             List<Bpl.Variable> lhss;
             List<Bpl.Expr> rhss;
             TrLetExprPieces(e, out lhss, out rhss);
+            // in the translation of body, treat a let-bound variable as IsLit if its RHS definition is IsLit
+            Contract.Assert(lhss.Count == rhss.Count);  // this is a postcondition of TrLetExprPieces
+            var previousCount = translator.letBoundVariablesWithLitRHS.Count;
+            for (var i = 0; i < lhss.Count; i++) {
+              if (translator.IsLit(rhss[i])) {
+                translator.letBoundVariablesWithLitRHS.Add(lhss[i].Name);
+              }
+              i++;
+            }
+            var body = TrExpr(e.Body);
+            foreach (var v in lhss) {
+              translator.letBoundVariablesWithLitRHS.Remove(v.Name);
+            }
+            Contract.Assert(previousCount == translator.letBoundVariablesWithLitRHS.Count);
             // in the following, use the token for Body instead of the token for the whole let expression; this gives better error locations
-            return new Bpl.LetExpr(e.Body.tok, lhss, rhss, null, TrExpr(e.Body));
+            return new Bpl.LetExpr(e.Body.tok, lhss, rhss, null, body);
           }
         } else if (expr is NamedExpr) {
           return TrExpr(((NamedExpr)expr).Body);
@@ -15433,10 +15465,6 @@ namespace Microsoft.Dafny {
 
         } else if (expr is ConcreteSyntaxExpression) {
           var e = (ConcreteSyntaxExpression)expr;
-          return TrExpr(e.ResolvedExpression);
-
-        } else if (expr is RevealExpr) {
-          var e = (RevealExpr)expr;
           return TrExpr(e.ResolvedExpression);
 
         } else if (expr is BoxingCastExpr) {
@@ -16086,7 +16114,12 @@ namespace Microsoft.Dafny {
       return GetLit(expr) ?? expr;
     }
 
+    readonly ISet<string> letBoundVariablesWithLitRHS = new HashSet<string>();
+
     bool IsLit(Bpl.Expr expr) {
+      if (expr is Bpl.IdentifierExpr ie) {
+        return letBoundVariablesWithLitRHS.Contains(ie.Name);
+      }
       return GetLit(expr) != null;
     }
 
@@ -16682,10 +16715,6 @@ namespace Microsoft.Dafny {
 
       } else if (expr is ConcreteSyntaxExpression) {
         var e = (ConcreteSyntaxExpression)expr;
-        return TrSplitExpr(e.ResolvedExpression, splits, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
-
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr)expr;
         return TrSplitExpr(e.ResolvedExpression, splits, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
 
       } else if (expr is LetExpr) {
@@ -17964,10 +17993,6 @@ namespace Microsoft.Dafny {
           var e = (ConcreteSyntaxExpression)expr;
           return Substitute(e.ResolvedExpression);
 
-        } else if (expr is RevealExpr) {
-          var e = (RevealExpr)expr;
-          return Substitute(e.ResolvedExpression);
-
         } else if (expr is BoogieFunctionCall) {
           var e = (BoogieFunctionCall)expr;
           bool anythingChanged = false;
@@ -18225,6 +18250,9 @@ namespace Microsoft.Dafny {
         } else if (stmt is AssertStmt) {
           var s = (AssertStmt)stmt;
           r = new AssertStmt(s.Tok, s.EndTok, Substitute(s.Expr), SubstBlockStmt(s.Proof), s.Label, SubstAttributes(s.Attributes));
+        } else if (stmt is ExpectStmt) {
+          var s = (ExpectStmt)stmt;
+          r = new ExpectStmt(s.Tok, s.EndTok, Substitute(s.Expr), Substitute(s.Message), SubstAttributes(s.Attributes));
         } else if (stmt is AssumeStmt) {
           var s = (AssumeStmt)stmt;
           r = new AssumeStmt(s.Tok, s.EndTok, Substitute(s.Expr), SubstAttributes(s.Attributes));
