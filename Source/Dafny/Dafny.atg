@@ -431,6 +431,27 @@ bool IsIdentColonOrBar() {
   return la.kind == _ident && (x.kind == _colon || x.kind == _verticalbar);
 }
 
+bool IsOperatorSubscript() {
+  scanner.ResetPeek();
+  Token x0 = scanner.Peek();
+  Token x1 = scanner.Peek();
+  return la.kind == _operator && (x0.kind == _openparen && x1.kind == _lbracket);
+}
+
+bool IsOperatorCardinality() {
+  scanner.ResetPeek();
+  Token x0 = scanner.Peek();
+  Token x1 = scanner.Peek();
+  return la.kind == _operator && (x0.kind == _openparen && x1.kind == _verticalbar);
+}
+
+bool IsOperatorIn() {
+  scanner.ResetPeek();
+  Token x0 = scanner.Peek();
+  Token x1 = scanner.Peek();
+  return la.kind == _operator && (x0.kind == _openparen && x1.kind == _in);
+}
+
 bool SemiFollowsCall(bool allowSemi, Expression e) {
   return allowSemi && la.kind == _semicolon && (e is ApplySuffix || (e is RevealExpr && (((RevealExpr)e).Expr is ApplySuffix)));
 }
@@ -693,6 +714,7 @@ TOKENS
   arrayToken = "array" [posDigit {digit}].
   arrayToken_q = "array" [posDigit {digit}] '?'.
   bvToken = "bv" ( '0' | posDigit {digit} ).
+  operator = "operator".
   bool = "bool".
   char = "char".
   int = "int".
@@ -3055,6 +3077,7 @@ RelationalExpression<out Expression e, bool allowSemi, bool allowLambda, bool al
     ShiftTerm<out e1, allowSemi, allowLambda, allowBitwiseOps>
                                    (. if (k == null) {
                                         e = new BinaryExpr(x, op, e0, e1);
+                                        if (op == BinaryExpr.Opcode.In) e = new PlaceholderExpression(x, e);
                                       } else {
                                         Contract.Assert(op == BinaryExpr.Opcode.Eq || op == BinaryExpr.Opcode.Neq);
                                         e = new TernaryExpr(x, op == BinaryExpr.Opcode.Eq ? TernaryExpr.Opcode.PrefixEqOp : TernaryExpr.Opcode.PrefixNeqOp, k, e0, e1);
@@ -3317,7 +3340,7 @@ ConstAtomExpression<out Expression e, bool allowSemi, bool allowLambda>
     [ "@" LabelIdent<out oldAt> ]
     "(" Expression<out e, true, true> ")"      (. e = new OldExpr(x, e, oldAt?.val); .)
   | "|"                                        (. x = t; .)
-      Expression<out e, true, true, false>     (. e = new UnaryOpExpr(x, UnaryOpExpr.Opcode.Cardinality, e); .)
+      Expression<out e, true, true, false>     (. e = new PlaceholderExpression(x, new UnaryOpExpr(x, UnaryOpExpr.Opcode.Cardinality, e)); .)
     "|"
   | ( "int"                                    (. x = t; toType = new IntType(); .)
     | "real"                                   (. x = t; toType = new RealType(); .)
@@ -3891,7 +3914,7 @@ Suffix<ref Expression e>
              e = new SeqDisplayExpr(x, seqs);
            } else if (e1 == null) {
              Contract.Assert(e0 != null);
-             e = new SeqSelectExpr(x, true, e, e0, null);
+             e = new PlaceholderExpression(x, new SeqSelectExpr(x, true, e, e0, null));
            } else {
              Contract.Assert(e0 != null);
              e = new SeqUpdateExpr(x, e, e0, e1);
@@ -4070,11 +4093,15 @@ TypeNameOrCtorSuffix<out IToken id>
 // Identifier, disallowing leading underscores
 NoUSIdent<out IToken/*!*/ x>
 = (. Contract.Ensures(Contract.ValueAtReturn(out x) != null); .)
-  ident            (. x = t;
+  ( ident          (. x = t;
                       if (x.val.StartsWith("_")) {
                         SemErr("cannot declare identifier beginning with underscore");
                       }
                    .)
+  | IF(IsOperatorSubscript()) operator '(' '[' ']' ')' (. x = t; x.val = "operator$subscript"; .)
+  | IF(IsOperatorCardinality()) operator '(' '|' '|' ')' (. x = t; x.val = "operator$cardinality"; .)
+  | operator '(' "in" ')' (. x = t; x.val = "operator$in"; .)
+  )
   .
 
 // Identifier, disallowing leading underscores, except possibly the "wildcard" identifier "_"

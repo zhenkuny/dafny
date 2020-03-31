@@ -314,8 +314,25 @@ function method lseq_share<A>(shared s:lseq<A>, i:nat):(shared a:maybe<A>)
     requires i < |lseqs(s)|
     ensures a == lseqs(s)[i]
 
+function operator(| |)<A>(s:lseq<A>):nat
+{
+    |lseqs(s)|
+}
+
+function operator([])<A>(s:lseq<A>, i:nat):A
+    requires i < |s|
+{
+    read(lseqs(s)[i])
+}
+
+function operator(in)<A>(s:lseq<A>, i:nat):bool
+    requires i < |s|
+{
+    has(lseqs(s)[i])
+}
+
 function method lseq_peek<A>(shared s:lseq<A>, i:nat):(shared a:A)
-    requires i < |lseqs(s)|
+    requires i < |s|
     requires has(lseqs(s)[i])
     ensures a == peek(lseqs(s)[i])
 {
@@ -324,8 +341,8 @@ function method lseq_peek<A>(shared s:lseq<A>, i:nat):(shared a:A)
 
 method lseq_take<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear a:A)
     requires i < |lseqs(s1)|
-    requires has(lseqs(s1)[i])
-    ensures a == read(lseqs(s1)[i])
+    requires i in s1
+    ensures a == s1[i]
     ensures lseqs(s2) == lseqs(s1)[i := empty()]
 {
     linear var x1:maybe<A> := empty();
@@ -335,8 +352,8 @@ method lseq_take<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear 
 }
 
 method lseq_give<A>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq<A>)
-    requires i < |lseqs(s1)|
-    requires !has(lseqs(s1)[i])
+    requires i < |s1|
+    requires !(i in s1)
     ensures lseqs(s2) == lseqs(s1)[i := give(a)]
 {
     linear var x1:maybe<A> := give(a);
@@ -346,10 +363,10 @@ method lseq_give<A>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq
 }
 
 method SeqExample<A>(linear s_in:lseq<nlList<A>>) returns(linear s:lseq<nlList<A>>, linear lens:seq<int>)
-    requires forall i:nat | i < |lseqs(s_in)| :: has(lseqs(s_in)[i])
+    requires forall i:nat | i < |s_in| :: has(lseqs(s_in)[i])
     ensures lseqs(s) == lseqs(s_in)
-    ensures |lens| == |lseqs(s)|
-    ensures forall i:nat | i < |lens| :: lens[i] == Length(read(lseqs(s)[i]))
+    ensures |lens| == |s|
+    ensures forall i:nat | i < |lens| :: lens[i] == Length(s[i])
 {
     // Compute length of every list in s_in
     s := s_in;
@@ -360,7 +377,7 @@ method SeqExample<A>(linear s_in:lseq<nlList<A>>) returns(linear s:lseq<nlList<A
         invariant i <= len
         invariant lseqs(s) == lseqs(s_in)
         invariant |lens| == len
-        invariant forall j:nat | j < i :: lens[j] == Length(read(lseqs(s)[j]))
+        invariant forall j:nat | j < i :: lens[j] == Length(s[j])
     {
         if (*)
         {

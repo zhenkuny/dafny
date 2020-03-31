@@ -11753,6 +11753,12 @@ namespace Microsoft.Dafny
         e.ResolvedExpression = e.E;
         e.Type = e.E.Type;
 
+      } else if (expr is PlaceholderExpression) {
+        var e = (PlaceholderExpression)expr;
+        ResolveExpression(e.Expr, opts);
+        e.ResolvedExpression = e.Expr;
+        e.Type = e.Expr.Type;
+
       } else if (expr is ChainingExpression) {
         var e = (ChainingExpression)expr;
         ResolveExpression(e.E, opts);
@@ -12084,6 +12090,20 @@ namespace Microsoft.Dafny
             expr.Type = e.E.Type;
             break;
           case UnaryOpExpr.Opcode.Cardinality:
+            var u = e.E.Type as UserDefinedType;
+            if (u != null) {
+              u = u.NormalizeExpand() as UserDefinedType;
+            }
+            if (u != null && !u.IsArrayType) {
+              var apply = new ApplySuffix(e.tok, new NameSegment(Token.NoToken, "operator'cardinality?" + u.Name, null),
+                new List<Expression>{e.E});
+              ResolveApplySuffix(apply, opts, false);
+              if (apply.ResolvedExpression != null) {
+                e.PlaceholderReplacement = apply.ResolvedExpression;
+                e.Type = apply.ResolvedExpression.Type;
+                return;
+              }
+            }
             AddXConstraint(expr.tok, "Sizeable", e.E.Type, "size operator expects a collection argument (instead got {0})");
             expr.Type = Type.Int;
             break;
@@ -12233,6 +12253,20 @@ namespace Microsoft.Dafny
 
           case BinaryExpr.Opcode.In:
           case BinaryExpr.Opcode.NotIn:
+            var u = e.E1.Type as UserDefinedType;
+            if (u != null) {
+              u = u.NormalizeExpand() as UserDefinedType;
+            }
+            if (e.Op == BinaryExpr.Opcode.In && u != null && !u.IsArrayType) {
+              var apply = new ApplySuffix(e.tok, new NameSegment(Token.NoToken, "operator'in?" + u.Name, null),
+                new List<Expression>{e.E1, e.E0});
+              ResolveApplySuffix(apply, opts, false);
+              if (apply.ResolvedExpression != null) {
+                e.PlaceholderReplacement = apply.ResolvedExpression;
+                e.Type = apply.ResolvedExpression.Type;
+                return;
+              }
+            }
             AddXConstraint(expr.tok, "Innable", e.E1.Type, e.E0.Type, "second argument to \"" + BinaryExpr.OpcodeString(e.Op) + "\" must be a set, multiset, or sequence with elements of type {1}, or a map with domain {1} (instead got {0})");
             expr.Type = Type.Bool;
             break;
@@ -15358,6 +15392,20 @@ namespace Microsoft.Dafny
       Contract.Assert(e.Seq.Type != null);  // follows from postcondition of ResolveExpression
 
       if (e.SelectOne) {
+        var u = e.Seq.Type as UserDefinedType;
+        if (u != null) {
+          u = u.NormalizeExpand() as UserDefinedType;
+        }
+        if (u != null && !u.IsArrayType) {
+          var apply = new ApplySuffix(e.tok, new NameSegment(Token.NoToken, "operator'subscript?" + u.Name, null),
+            new List<Expression>{e.Seq, e.E0});
+          ResolveApplySuffix(apply, opts, false);
+          if (apply.ResolvedExpression != null) {
+            e.PlaceholderReplacement = apply.ResolvedExpression;
+            e.Type = apply.ResolvedExpression.Type;
+            return;
+          }
+        }
         AddXConstraint(e.tok, "Indexable", e.Seq.Type, "element selection requires a sequence, array, multiset, or map (got {0})");
         ResolveExpression(e.E0, opts);
         AddXConstraint(e.E0.tok, "ContainerIndex", e.Seq.Type, e.E0.Type, "incorrect type for selection into {0} (got {1})");

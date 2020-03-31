@@ -2508,6 +2508,11 @@ namespace Microsoft.Dafny {
         PrintExpression(ite.Els, !parensNeeded && isFollowedBySemicolon);
         if (parensNeeded) { wr.Write(")"); }
 
+      } else if (expr is PlaceholderExpression) {
+        var e = (PlaceholderExpression)expr;
+        // printing of parentheses is done optimally, not according to the parentheses in the given program
+        PrintExpr(e.Expr, contextBindingStrength, fragileContext, isRightmost, isFollowedBySemicolon, indent, keyword);
+
       } else if (expr is ParensExpression) {
         var e = (ParensExpression)expr;
         // printing of parentheses is done optimally, not according to the parentheses in the given program

@@ -5523,6 +5523,14 @@ namespace Microsoft.Dafny {
       Contract.Invariant(Decreases != null);
     }
 
+    static string makeName(string name, List<Formal> formals) {
+      if (name.StartsWith("operator$") && formals.Count > 0 && formals[0].Type is UserDefinedType) {
+        var t = (UserDefinedType)(formals[0].Type);
+        return name.Replace("$", "'") + "?" + t.Name;
+      }
+      return name;
+    }
+
     /// <summary>
     /// Note, functions are "ghost" by default; a non-ghost function is called a "function method".
     /// </summary>
@@ -5530,7 +5538,7 @@ namespace Microsoft.Dafny {
                     List<TypeParameter> typeArgs, List<Formal> formals, Formal result, Type resultType,
                     List<MaybeFreeExpression> req, List<FrameExpression> reads, List<MaybeFreeExpression> ens, Specification<Expression> decreases,
                     Expression body, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, isGhost, attributes) {
+      : base(tok, makeName(name, formals), hasStaticKeyword, isGhost, attributes) {
 
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
@@ -8030,6 +8038,7 @@ namespace Microsoft.Dafny {
   public abstract class Expression
   {
     public readonly IToken tok;
+    public Expression PlaceholderReplacement;
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(tok != null);
@@ -10949,6 +10958,18 @@ namespace Microsoft.Dafny {
           yield return ResolvedExpression;
         }
       }
+    }
+  }
+
+  public class PlaceholderExpression : ConcreteSyntaxExpression
+  {
+    readonly Expression E;
+    public PlaceholderExpression(IToken tok, Expression e)
+      : base(tok) {
+      E = e;
+    }
+    public Expression Expr {
+      get { return Resolved ?? E.PlaceholderReplacement ?? E; }
     }
   }
 
