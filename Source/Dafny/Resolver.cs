@@ -15555,6 +15555,7 @@ namespace Microsoft.Dafny
     }
 
     bool ReplaceOverload(ResolveOpts opts, Expression e, Type t, string overload, List<Expression> args) {
+      t = PartiallyResolveTypeForMemberSelection(e.tok, t);
       var u = t as UserDefinedType;
       if (u != null) {
         u = u.NormalizeExpand() as UserDefinedType;
