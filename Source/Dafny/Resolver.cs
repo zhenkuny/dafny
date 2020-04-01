@@ -14429,8 +14429,7 @@ namespace Microsoft.Dafny
       } else if (expr is StmtExpr) {
         var e = (StmtExpr)expr;
         // ignore the statement
-        CheckIsCompilable(e.E, usageContext, Usage.Ordinary);
-        return Usage.Ordinary;
+        return CheckIsCompilable(e.E, usageContext);
 
       } else if (expr is BinaryExpr) {
         var e = (BinaryExpr)expr;
@@ -15561,7 +15560,7 @@ namespace Microsoft.Dafny
         u = u.NormalizeExpand() as UserDefinedType;
       }
       if (u != null && !u.IsArrayType) {
-        var f = new NameSegment(Token.NoToken, "operator'" + overload + "?" + u.Name, null);
+        var f = new NameSegment(e.tok, "operator'" + overload + "?" + u.Name, null);
         var apply = new ApplySuffix(e.tok, f, args);
         ResolveApplySuffix(apply, opts, false);
         if (apply.ResolvedExpression != null) {

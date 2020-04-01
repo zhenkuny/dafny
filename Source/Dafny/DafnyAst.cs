@@ -5458,6 +5458,7 @@ namespace Microsoft.Dafny {
     public bool SignatureIsOmitted { get { return SignatureEllipsis != null; } }  // is "false" for all Function objects that survive into resolution
     public readonly IToken SignatureEllipsis;
     public bool IsBuiltin;
+    public bool IsInline;
     public Function OverriddenFunction;
     public bool containsQuantifier;
     public bool ContainsQuantifier {
@@ -5531,6 +5532,16 @@ namespace Microsoft.Dafny {
       return name;
     }
 
+    static Attributes removeInline(Attributes attrs) {
+      if (attrs == null) {
+        return attrs;
+      } else if (attrs.Name == "inline") {
+        return removeInline(attrs.Prev);
+      } else {
+        return new Attributes(attrs.Name, attrs.Args, removeInline(attrs.Prev));
+      }
+    }
+
     /// <summary>
     /// Note, functions are "ghost" by default; a non-ghost function is called a "function method".
     /// </summary>
@@ -5538,7 +5549,7 @@ namespace Microsoft.Dafny {
                     List<TypeParameter> typeArgs, List<Formal> formals, Formal result, Type resultType,
                     List<MaybeFreeExpression> req, List<FrameExpression> reads, List<MaybeFreeExpression> ens, Specification<Expression> decreases,
                     Expression body, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, makeName(name, formals), hasStaticKeyword, isGhost, attributes) {
+      : base(tok, makeName(name, formals), hasStaticKeyword, isGhost, removeInline(attributes)) {
 
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
@@ -5561,6 +5572,7 @@ namespace Microsoft.Dafny {
       this.Decreases = decreases;
       this.Body = body;
       this.SignatureEllipsis = signatureEllipsis;
+      this.IsInline = Attributes.ContainsBool(attributes, "inline", ref this.IsInline) && this.IsInline;
 
       if (attributes != null) {
         List<Expression> args = Attributes.FindExpressions(attributes, "fuel");
