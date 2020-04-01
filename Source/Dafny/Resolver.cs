@@ -2468,12 +2468,12 @@ namespace Microsoft.Dafny
                     reporter.Error(MessageSource.Resolver, other,
                       "shared destructors must have the same type, but '{0}' has type '{1}' in constructor '{2}' and type '{3}' in constructor '{4}'",
                       rolemodel.Name, rolemodel.Type, dtor.EnclosingCtors[0].Name, other.Type, dtor.EnclosingCtors[i].Name);
-                  } else if (rolemodel.IsGhost != other.IsGhost) {
+                  } else if (rolemodel.Usage != other.Usage) {
                     reporter.Error(MessageSource.Resolver, other,
                       "shared destructors must agree on whether or not they are ghost, but '{0}' is {1} in constructor '{2}' and {3} in constructor '{4}'",
                       rolemodel.Name,
-                      rolemodel.IsGhost ? "ghost" : "non-ghost", dtor.EnclosingCtors[0].Name,
-                      other.IsGhost ? "ghost" : "non-ghost", dtor.EnclosingCtors[i].Name);
+                      UsageName(rolemodel.Usage).Replace("ordinary", "non-ghost"), dtor.EnclosingCtors[0].Name,
+                      UsageName(other.Usage).Replace("ordinary", "non-ghost"), dtor.EnclosingCtors[i].Name);
                   }
                 }
               }
@@ -14365,7 +14365,7 @@ namespace Microsoft.Dafny
         if (d != null || s != null) {
           bool linearDestructor = (d == null) ? false : d.CorrespondingFormals.Exists(x => x.IsLinear);
           var id = ExprAsIdentifier(e.Obj);
-          if (id != null && (id.Var.IsLinear || id.Var.IsShared) && (d == null || d.CorrespondingFormals.Count == 1)) {
+          if (id != null && (id.Var.IsLinear || id.Var.IsShared)) {
             // Try to share id
             CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
             return linearDestructor ? Usage.Shared : Usage.Ordinary;
