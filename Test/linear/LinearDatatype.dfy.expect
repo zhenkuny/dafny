@@ -84,11 +84,11 @@ LinearDatatype.dfy(400,11): Error: in conditional, linear variable r must be ava
 LinearDatatype.dfy(409,11): Error: in conditional, linear variable r must be available after both branches or unavailable after both branches
 LinearDatatype.dfy(407,53): Error: linear variable must be unavailable at function exit
 LinearDatatype.dfy(418,11): Error: in conditional, linear variable r must be available after both branches or unavailable after both branches
+LinearDatatype.dfy(416,44): Error: linear variable must be unavailable at method exit
 LinearDatatype.dfy(427,11): Error: in conditional, linear variable r must be available after both branches or unavailable after both branches
-LinearDatatype.dfy(425,44): Error: linear variable must be unavailable at method exit
 LinearDatatype.dfy(436,11): Error: in conditional, linear variable x must be available after both branches or unavailable after both branches
-LinearDatatype.dfy(434,52): Error: linear variable must be assigned at method exit
 LinearDatatype.dfy(445,11): Error: in conditional, linear variable x must be available after both branches or unavailable after both branches
+LinearDatatype.dfy(443,52): Error: linear variable must be assigned at method exit
 LinearDatatype.dfy(455,33): Error: cannot borrow variable because expression returns a shared result
 LinearDatatype.dfy(461,22): Error: expected linear expression, found shared expression
 LinearDatatype.dfy(462,0): Error: linear variable ltl must be unavailable at end of block

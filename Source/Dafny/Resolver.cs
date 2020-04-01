@@ -3060,7 +3060,7 @@ namespace Microsoft.Dafny
                 if (x.IsLinear) usageContext.available.Add(x, Available.Consumed);
               }
               UsageContext outer = UsageContext.Copy(usageContext);
-              ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
+              usageContext = ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
               CheckExpression(m.Body, this, m);
               PopUsageContext(m.Body.EndTok, outer, usageContext);
               foreach (Formal x in m.Ins) {
@@ -6756,17 +6756,18 @@ namespace Microsoft.Dafny
     // ----- ComputeGhostInterest ---------------------------------------------------------------------------
     // ------------------------------------------------------------------------------------------------------
 #region ComputeGhostInterest
-    void ComputeGhostInterest(Statement stmt, bool mustBeErasable, ICodeContext codeContext, UsageContext usageContext) {
+    UsageContext ComputeGhostInterest(Statement stmt, bool mustBeErasable, ICodeContext codeContext, UsageContext usageContext) {
       Contract.Requires(stmt != null);
       Contract.Requires(codeContext != null);
       var visitor = new GhostInterest_Visitor(codeContext, this, usageContext);
       visitor.Visit(stmt, mustBeErasable);
+      return visitor.usageContext;
     }
     class GhostInterest_Visitor
     {
       readonly ICodeContext codeContext;
       readonly Resolver resolver;
-      UsageContext usageContext;
+      internal UsageContext usageContext;
       public GhostInterest_Visitor(ICodeContext codeContext, Resolver resolver, UsageContext usageContext) {
         Contract.Requires(codeContext != null);
         Contract.Requires(resolver != null);
