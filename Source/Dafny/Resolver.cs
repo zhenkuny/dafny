@@ -11067,6 +11067,11 @@ namespace Microsoft.Dafny
       if (!(t is TypeProxy)) {
         return t;  // we're good
       }
+      bool isOverload = memberName == "_#overload";
+      string origMemberName = memberName;
+      if (isOverload) {
+        memberName = null;
+      }
 
       // simplify constraints
       PrintTypeConstraintState(10);
@@ -11074,7 +11079,7 @@ namespace Microsoft.Dafny
         var proxySpecializations = new HashSet<TypeProxy>();
         GetRelatedTypeProxies(t, proxySpecializations);
         var anyNewConstraintsAssignable = ConvertAssignableToSubtypeConstraints(proxySpecializations);
-        var anyNewConstraintsEquatable = TightenUpEquatable(proxySpecializations);
+        var anyNewConstraintsEquatable = isOverload ? false : TightenUpEquatable(proxySpecializations);
         if ((strength > 1 && !anyNewConstraintsAssignable && !anyNewConstraintsEquatable) || strength == 10) {
           if (t is TypeProxy) {
             // One more try
@@ -11117,6 +11122,9 @@ namespace Microsoft.Dafny
       // Look for a meet of head symbols among the proxy's subtypes
       Type meet = null;
       if (MeetOfAllSubtypes(proxy, ref meet, new HashSet<TypeProxy>()) && meet != null) {
+        if (isOverload && meet.IsArrayType) {
+          return t; // arrays are sensitive, don't touch them if we don't need to
+        }
         bool isRoot, isLeaf, headIsRoot, headIsLeaf;
         CheckEnds(meet, out isRoot, out isLeaf, out headIsRoot, out headIsLeaf);
         if (meet.IsDatatype) {
@@ -11203,7 +11211,7 @@ namespace Microsoft.Dafny
             Contract.Assert(proxy != join);
             proxy.T = join;
             Contract.Assert(t.NormalizeExpand() == join);
-            return PartiallyResolveTypeForMemberSelection(tok, t, memberName, strength + 1);
+            return PartiallyResolveTypeForMemberSelection(tok, t, origMemberName, strength + 1);
           }
         }
         if (DafnyOptions.O.TypeInferenceDebug) {
@@ -11221,7 +11229,7 @@ namespace Microsoft.Dafny
       if (DafnyOptions.O.TypeInferenceDebug) {
         Console.WriteLine("  ----> found no improvement using simple things, trying harder once more");
       }
-      return PartiallyResolveTypeForMemberSelection(tok, t, memberName, strength + 1);
+      return PartiallyResolveTypeForMemberSelection(tok, t, origMemberName, strength + 1);
     }
 
     private Type/*?*/ GetBaseTypeFromProxy(TypeProxy proxy, Dictionary<TypeProxy,Type/*?*/> determinedProxies) {
@@ -15556,7 +15564,7 @@ namespace Microsoft.Dafny
     }
 
     bool ReplaceOverload(ResolveOpts opts, Expression e, Type t, string overload, List<Expression> args) {
-      t = PartiallyResolveTypeForMemberSelection(e.tok, t);
+      t = PartiallyResolveTypeForMemberSelection(e.tok, t, "_#overload");
       var u = t as UserDefinedType;
       if (u != null) {
         u = u.NormalizeExpand() as UserDefinedType;
