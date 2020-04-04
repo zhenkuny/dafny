@@ -15,6 +15,19 @@ import prompt_toolkit as pt # Install via:  pip3 install prompt_toolkit
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.validation import Validator
 
+# From http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#colors
+def color(s, color):
+    colors = { "black"   : 30,
+               "red"     : 31,
+               "green"   : 32,
+               "yellow"  : 33,
+               "blue"    : 34,
+               "magenta" : 35,
+               "cyan"    : 36,
+               "white"   : 37,
+               "reset"   :  0}
+    return u"\u001b[%sm%s\u001b[%sm" % (colors[color], s, colors["reset"])
+
 class Task:
     def __init__(self, args, file_label, sourceIsFile, file_name):
         self.args = args
@@ -29,12 +42,17 @@ class Task:
                 "source" :       self.file_name}
 
 class DafnyServer:
-    def __init__(self, server_path):
+    def __init__(self, server_path, no_color, dfy_args, dfy_file_name):
+        self.no_color = no_color
+        self.dfy_args = dfy_args
+        self.dfy_file_name = dfy_file_name
+
         self.encoding = 'utf-8'
         self.SUCCESS = "SUCCESS"
         self.FAILURE = "FAILURE"
         self.SERVER_EOM_TAG = "[[DAFNY-SERVER: EOM]]"
         self.CLIENT_EOM_TAG = "[[DAFNY-CLIENT: EOM]]"
+
         try:
             self.pipe = subprocess.Popen(server_path, 
                                          stdin = subprocess.PIPE, 
@@ -74,7 +92,7 @@ class DafnyServer:
         self.write(self.CLIENT_EOM_TAG)
         self.pipe.stdin.flush()
 
-    def recv_response(self):
+    def recv_response(self, add_color=False):
         response = ""
         while True:
             line = self.pipe.stdout.readline().decode(self.encoding)
@@ -88,6 +106,12 @@ class DafnyServer:
             elif line.startswith("Verification completed successfully!"):
                 pass # Suppress this unhelpful value
             else:
+                if add_color:
+                    if "Error" in line:
+                        line = color(line, "red") 
+                    if "verified" in line:
+                        line = color(line, "green") 
+
                 response = response + line
         #print(response)
         return response
@@ -124,7 +148,7 @@ class DafnyServer:
 
     def do_verification(self, task):
         self.send_verification_query(task)
-        response = self.recv_response()
+        response = self.recv_response(add_color=not self.no_color)
         return response
 
 def parse_args(args):
@@ -155,14 +179,12 @@ def is_number(text):
 def in_bounds(n, lbound=None, ubound=None):
     return (lbound is None or lbound <= int(n)) and (ubound is None or int(n) < ubound)
 
-def do_file(session, data):
-    server, dfy_args, dfy_file_name = data
-    task = Task(dfy_args, dfy_file_name, True, dfy_file_name)
+def do_file(session, server):
+    task = Task(server.dfy_args, server.dfy_file_name, True, server.dfy_file_name)
     print(server.do_verification(task))
 
-def do_function_method(session, data):
-    server, dfy_args, dfy_file_name = data
-    task = Task(dfy_args, dfy_file_name, True, dfy_file_name)
+def do_function_method(session, server):
+    task = Task(server.dfy_args, server.dfy_file_name, True, server.dfy_file_name)
     names = server.get_functions_methods(task)
     print("\nFound:")
     for name in names:
@@ -174,8 +196,8 @@ def do_function_method(session, data):
                           complete_while_typing=True,
                           validate_while_typing=False,
                           validator=Validators.set_validator(set(names)))
-    args = dfy_args + ["/proc:*%s*" % name]
-    task = Task(args, dfy_file_name, True, dfy_file_name)
+    args = server.dfy_args + ["/proc:*%s*" % name]
+    task = Task(args, server.dfy_file_name, True, server.dfy_file_name)
     print(server.do_verification(task))
 
 class Validators:
@@ -209,14 +231,14 @@ def dispatcher(session, options, data):
     _, func = options[selection]
     func(session, data)
 
-def event_loop(server, dfy_args, dfy_file_name):
+def event_loop(server):
     our_history = pt.history.FileHistory(".cmd_history")
     session = pt.PromptSession(history=our_history, key_bindings=bindings)
     actions = [('Verify the File', do_file),
                ('Verify one Method/Function',do_function_method)] 
     while True:
         try: 
-            dispatcher(session, actions, (server, dfy_args, dfy_file_name))
+            dispatcher(session, actions, server)
         except EOFError:
             break
         else:
@@ -237,10 +259,10 @@ def main():
                         required=False, help=arg_file_help)
     parser.add_argument('-s', '--server', action='store', default=default_server_path, required=False,
                         help="Path to the DafnyServer.  Defaults to %s" % default_server_path)
+    parser.add_argument('--no-color', action='store_true', default=False, required=False,
+                        help="Don't add color to verification results")
     
     args = parser.parse_args()
-
-    server = DafnyServer(args.server)
 
     dfy_args = []
     if not args.args is None:
@@ -248,13 +270,15 @@ def main():
     elif os.path.isfile(args.arg_file):
         dfy_args = read_arg_file(args.arg_file)
 
-    event_loop(server, dfy_args, args.dfy)
+    server = DafnyServer(args.server, args.no_color, dfy_args, args.dfy)
+
+    event_loop(server)
 
 #    label = args.dfy
 #    task = Task(dfy_args, label, True, args.dfy)
     #print(server.get_version())
     #print(server.get_functions_methods(task))
-    print(server.do_verification(task))
+    #print(server.do_verification(task))
     #sys.stdin.readline()
     #server.send_version_query()
     #server.send_verification_query(task)
