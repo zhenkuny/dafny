@@ -127,17 +127,43 @@ class DafnyServer:
         response = self.recv_response()
         return response
 
+def parse_args(args):
+    a = args.split(' ')
+    #print("Using Dafny arguments: %s" % a)
+    return a
+
+def read_arg_file(file_name):
+    with open(file_name, 'r') as arg_file:
+        arg_line = arg_file.readline()
+        return parse_args(arg_line)
 
 def main():
+    default_arg_file_name = 'dfy.args'
+    default_server_path = './Binaries/dafny-server'
     parser = argparse.ArgumentParser(description="Interact with the Dafny server")
-    #parser.add_argument('--excel', action='store', help="Excel file to parse for accounts", required=False)
+    parser.add_argument('-d', '--dfy', action='store', help="Dafny file to verify", required=True)
+    parser.add_argument('-a', '--args', action='store', help="Dafny arguments.  Overrides --arg_file", required=False)
+    arg_file_help  = "File to read Dafny arguments from."
+    arg_file_help += "Should consist of one line with all of the desired command-line arguments." 
+    arg_file_help += "Defaults to %s" % default_arg_file_name
+    parser.add_argument('-f', '--arg_file', action='store', default=default_arg_file_name,
+                        required=False, help=arg_file_help)
+    parser.add_argument('-s', '--server', action='store', default=default_server_path, required=False,
+                        help="Path to the DafnyServer.  Defaults to %s" % default_server_path)
+    
     args = parser.parse_args()
 
-    server = DafnyServer('./Binaries/dafny-server')
-    label = "Foo.cpp"
-    task = Task([], label, True, "t.dfy")
-    print(server.get_version())
-    print(server.get_functions_methods(task))
+    server = DafnyServer(args.server)
+    dfy_args = []
+    if not args.args is None:
+        dfy_args = parse_args(args.args)
+    elif os.path.isfile(args.arg_file):
+        dfy_args = read_arg_file(args.arg_file)
+
+    label = args.dfy
+    task = Task(dfy_args, label, True, args.dfy)
+    #print(server.get_version())
+    #print(server.get_functions_methods(task))
     print(server.do_verification(task))
     #sys.stdin.readline()
     #server.send_version_query()
