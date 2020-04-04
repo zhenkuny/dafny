@@ -55,7 +55,7 @@ class DafnyServer:
 
     def write_verification_task(self, task): 
         query = task.to_dict()
-        print(query)
+        #print(query)
         j_string = json.dumps(query) 
         b = j_string.encode(self.encoding) # Convert to bytes
         b64 = base64.b64encode(b)          # Produce base64-encoded bytes
@@ -80,35 +80,53 @@ class DafnyServer:
             line = self.pipe.stdout.readline().decode(self.encoding)
             
             if line.startswith("[%s] %s" % (self.SUCCESS, self.SERVER_EOM_TAG)):
-                print("Ended in success")
+                #print("Ended in success")
                 break
             elif line.startswith("[%s] %s" % (self.FAILURE, self.SERVER_EOM_TAG)):
-                print("Ended in failure")
+                print("WARNING: Server operation ended in failure")
                 break
+            elif line.startswith("Verification completed successfully!"):
+                pass # Suppress this unhelpful value
             else:
                 response = response + line
-        print(response)
+        #print(response)
         return response
 
     def parse_symbols(self, response):
         match = re.search("SYMBOLS_START (.*) SYMBOLS_END", response)
         if match:
             symbols = json.loads(match.group(1))
-            print(symbols)
+            #print(symbols)
             return symbols
         else:
             print("Didn't find expected symbols in the server's response")
             return []
 
+    def find_functions_methods(self, symbols):
+        names = []
+        for sym in symbols:
+            if sym['SymbolType'] == 'Method' or sym['SymbolType'] == 'Function':
+                name = sym['Name']
+                if not name == '_default':
+                    names.append(name)
+        return names
 
-def find_functions_methods(symbols):
-    names = []
-    for sym in symbols:
-        if sym['SymbolType'] == 'Method' or sym['SymbolType'] == 'Function':
-            name = sym['Name']
-            if not name == '_default':
-                names.append(name)
-    return names
+    def get_version(self):
+        self.send_version_query()
+        response = self.recv_response()
+        return response
+
+    def get_functions_methods(self, task):
+        self.send_symbol_query(task)
+        response = self.recv_response()
+        symbols = self.parse_symbols(response)
+        return self.find_functions_methods(symbols)
+
+    def do_verification(self, task):
+        self.send_verification_query(task)
+        response = self.recv_response()
+        return response
+
 
 def main():
     parser = argparse.ArgumentParser(description="Interact with the Dafny server")
@@ -118,13 +136,16 @@ def main():
     server = DafnyServer('./Binaries/dafny-server')
     label = "Foo.cpp"
     task = Task([], label, True, "t.dfy")
+    print(server.get_version())
+    print(server.get_functions_methods(task))
+    print(server.do_verification(task))
     #sys.stdin.readline()
     #server.send_version_query()
     #server.send_verification_query(task)
-    server.send_symbol_query(task)
-    response = server.recv_response()
-    symbols = server.parse_symbols(response)
-    print(find_functions_methods(symbols))
+#    server.send_symbol_query(task)
+#    response = server.recv_response()
+#    symbols = server.parse_symbols(response)
+#    print(find_functions_methods(symbols))
 
     #event_loop()
 
