@@ -183,7 +183,15 @@ def do_file(session, server):
     task = Task(server.dfy_args, server.dfy_file_name, True, server.dfy_file_name)
     print(server.do_verification(task))
 
+def verify_function_method(server, name):
+    args = server.dfy_args + ["/proc:*%s*" % name]
+    task = Task(args, server.dfy_file_name, True, server.dfy_file_name)
+    print(server.do_verification(task))
+
+prev_function_method = None
+
 def do_function_method(session, server):
+    global prev_function_method 
     task = Task(server.dfy_args, server.dfy_file_name, True, server.dfy_file_name)
     names = server.get_functions_methods(task)
     print("\nFound:")
@@ -196,15 +204,22 @@ def do_function_method(session, server):
                           complete_while_typing=True,
                           validate_while_typing=False,
                           validator=Validators.set_validator(set(names)))
-    args = server.dfy_args + ["/proc:*%s*" % name]
-    task = Task(args, server.dfy_file_name, True, server.dfy_file_name)
-    print(server.do_verification(task))
+    prev_function_method = name
+    verify_function_method(server, name)
+
+def do_prev_function_method(session, server):
+    global prev_function_method 
+    if not prev_function_method is None:
+        verify_function_method(server, prev_function_method)
+    else:
+        print("No previous function/method found.  Please choose one.")
+        do_function_method(session, server)
 
 class Validators:
     @staticmethod
     def number_validator(lbound=None, ubound=None):
         return Validator.from_callable(
-                lambda s : is_number(s) and in_bounds(s, lbound, ubound),
+                lambda s : s == "" or (is_number(s) and in_bounds(s, lbound, ubound)),
                 error_message='This input may only contain numeric characters' 
                              + ('' if lbound is None else ' and it must be >= %d' % lbound)
                              + ('' if ubound is None else ' and it must be < %d' % ubound),
@@ -220,14 +235,29 @@ class Validators:
                           + ".  Tab complete may help!",
             move_cursor_to_end=True)
 
+prev_option = None
+
 def dispatcher(session, options, data):
+    global prev_option
+
     print("Please choose from the following options: ")
     for (index, (option, func)) in enumerate(options):
         print("\t%d) %s" % (index, option))
 
-    selection = int(session.prompt('Option: ', 
-                                   validate_while_typing=False,
-                                   validator=Validators.number_validator(0, len(options))))
+    default = prev_option
+    prompt = 'Option: ' if prev_option is None else 'Option (%s): ' % prev_option
+    selection = session.prompt(prompt,
+                               validate_while_typing=False,
+                               validator=Validators.number_validator(0, len(options)))
+    if selection == "":
+        if not prev_option is None:
+            selection = prev_option
+        else:
+            print("Invalid selection.  Please try again")
+            return
+    else:
+        selection = int(selection)
+    prev_option = selection
     _, func = options[selection]
     func(session, data)
 
@@ -235,7 +265,8 @@ def event_loop(server):
     our_history = pt.history.FileHistory(".cmd_history")
     session = pt.PromptSession(history=our_history, key_bindings=bindings)
     actions = [('Verify the File', do_file),
-               ('Verify one Method/Function',do_function_method)] 
+               ('Verify new Method/Function',do_function_method), 
+               ('Verify last Method/Function',do_prev_function_method)] 
     while True:
         try: 
             dispatcher(session, actions, server)
