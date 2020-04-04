@@ -11,9 +11,9 @@ import subprocess
 import json
 import os
 import base64
-#import prompt_toolkit as pt
-#from prompt_toolkit.key_binding import KeyBindings
-#from prompt_toolkit.validation import Validator
+import prompt_toolkit as pt # Install via:  pip3 install prompt_toolkit
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.validation import Validator
 
 class Task:
     def __init__(self, args, file_label, sourceIsFile, file_name):
@@ -137,6 +137,93 @@ def read_arg_file(file_name):
         arg_line = arg_file.readline()
         return parse_args(arg_line)
 
+
+#############################################
+#
+#   UI
+#
+#############################################
+
+bindings = KeyBindings()
+@bindings.add('escape')
+def _(event):
+    event.app.exit(exception=EOFError)
+
+def is_number(text):
+    return text.isdigit()
+
+def in_bounds(n, lbound=None, ubound=None):
+    return (lbound is None or lbound <= int(n)) and (ubound is None or int(n) < ubound)
+
+def do_file(session, data):
+    server, dfy_args, dfy_file_name = data
+    task = Task(dfy_args, dfy_file_name, True, dfy_file_name)
+    print(server.do_verification(task))
+
+def do_function_method(session, data):
+    server, dfy_args, dfy_file_name = data
+    task = Task(dfy_args, dfy_file_name, True, dfy_file_name)
+    names = server.get_functions_methods(task)
+    print("\nFound:")
+    for name in names:
+        print("\t" + name)
+    #names = sorted(names)
+    name_completer = pt.completion.WordCompleter(names, ignore_case=True)
+    name = session.prompt("Enter a name (tab complete at any time): ",
+                          completer=name_completer,
+                          complete_while_typing=True,
+                          validate_while_typing=False,
+                          validator=Validators.set_validator(set(names)))
+    args = dfy_args + ["/proc:*%s*" % name]
+    task = Task(args, dfy_file_name, True, dfy_file_name)
+    print(server.do_verification(task))
+
+class Validators:
+    @staticmethod
+    def number_validator(lbound=None, ubound=None):
+        return Validator.from_callable(
+                lambda s : is_number(s) and in_bounds(s, lbound, ubound),
+                error_message='This input may only contain numeric characters' 
+                             + ('' if lbound is None else ' and it must be >= %d' % lbound)
+                             + ('' if ubound is None else ' and it must be < %d' % ubound),
+                move_cursor_to_end=True)
+
+    @staticmethod
+    def set_validator(s):
+        options_str = ', '.join(sorted(list(s)))
+        return Validator.from_callable(
+            lambda i : i in s,
+            error_message = "Sorry, that's not a valid option.  Try one of these: " 
+                          + options_str
+                          + ".  Tab complete may help!",
+            move_cursor_to_end=True)
+
+def dispatcher(session, options, data):
+    print("Please choose from the following options: ")
+    for (index, (option, func)) in enumerate(options):
+        print("\t%d) %s" % (index, option))
+
+    selection = int(session.prompt('Option: ', 
+                                   validate_while_typing=False,
+                                   validator=Validators.number_validator(0, len(options))))
+    _, func = options[selection]
+    func(session, data)
+
+def event_loop(server, dfy_args, dfy_file_name):
+    our_history = pt.history.FileHistory(".cmd_history")
+    session = pt.PromptSession(history=our_history, key_bindings=bindings)
+    actions = [('Verify the File', do_file),
+               ('Verify one Method/Function',do_function_method)] 
+    while True:
+        try: 
+            dispatcher(session, actions, (server, dfy_args, dfy_file_name))
+        except EOFError:
+            break
+        else:
+            pass
+
+
+
 def main():
     default_arg_file_name = 'dfy.args'
     default_server_path = './Binaries/dafny-server'
@@ -154,14 +241,17 @@ def main():
     args = parser.parse_args()
 
     server = DafnyServer(args.server)
+
     dfy_args = []
     if not args.args is None:
         dfy_args = parse_args(args.args)
     elif os.path.isfile(args.arg_file):
         dfy_args = read_arg_file(args.arg_file)
 
-    label = args.dfy
-    task = Task(dfy_args, label, True, args.dfy)
+    event_loop(server, dfy_args, args.dfy)
+
+#    label = args.dfy
+#    task = Task(dfy_args, label, True, args.dfy)
     #print(server.get_version())
     #print(server.get_functions_methods(task))
     print(server.do_verification(task))
