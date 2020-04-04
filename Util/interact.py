@@ -19,6 +19,8 @@ import base64
 class DafnyServer:
     def __init__(self, server_path):
         self.encoding = 'utf-8'
+        self.SUCCESS = "SUCCESS"
+        self.FAILURE = "FAILURE"
         self.SERVER_EOM_TAG = "[[DAFNY-SERVER: EOM]]"
         self.CLIENT_EOM_TAG = "[[DAFNY-CLIENT: EOM]]"
         try:
@@ -38,16 +40,33 @@ class DafnyServer:
 
     def send_verification_query(self): 
         self.pipe.stdin.write('verify\n'.encode(self.encoding))
-        query = [[], "t.dfy", True, "Foo.dfy"]
-        self.pipe.stdin.write(base64.b64encode((json.dumps(query) + '\n').encode(self.encoding)))
-        self.pipe.stdin.write((self.CLIENT_EOM_TAG + '\n').encode(self.encoding))
+        query = {"args" : [], "filename" : "Foo.cpp", "sourceIsFile" : True, "source" : "t.dfy"}
+        j = json.dumps(query)
+        print("JSON query: " + j)
+        st = json.dumps(query) 
+        b = st.encode(self.encoding)
+        b64 = base64.b64encode(b) 
+        #text = b64
+        #text = (base64.b64encode() + '\n')
+        #self.pipe.stdin.write(text.encode(self.encoding))
+        self.pipe.stdin.write(b64)
+        self.pipe.stdin.write(('\n' + self.CLIENT_EOM_TAG + '\n').encode(self.encoding))
         self.pipe.stdin.flush()
 
     def recv_response(self):
         response = None
         #response = json.loads(self.pipe.stdout.readline().decode(self.encoding))
-        response = self.pipe.stdout.readline().decode(self.encoding)
-        print(response)
+        while True:
+            response = self.pipe.stdout.readline().decode(self.encoding)
+            
+            if response.startswith("[%s] %s" % (self.SUCCESS, self.SERVER_EOM_TAG)):
+                print("Ended in success")
+                break
+            elif response.startswith("[%s] %s" % (self.FAILURE, self.SERVER_EOM_TAG)):
+                print("Ended in failure")
+                break
+            else:
+                print(response)
 #        while True:
 #            response = json.loads(self.pipe.stdout.readline().decode(self.encoding))
 #            if response['kind'] == 'response':
@@ -56,15 +75,16 @@ class DafnyServer:
 #                else:
 #                raise QueryError(response['response'])
 
+
 def main():
     parser = argparse.ArgumentParser(description="Interact with the Dafny server")
     #parser.add_argument('--excel', action='store', help="Excel file to parse for accounts", required=False)
     args = parser.parse_args()
 
     server = DafnyServer('./Binaries/dafny-server')
-    sys.stdin.readline()
-    server.send_version_query()
-    #server.send_verification_query()
+    #sys.stdin.readline()
+    #server.send_version_query()
+    server.send_verification_query()
     server.recv_response()
 
     #event_loop()
