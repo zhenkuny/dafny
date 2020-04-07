@@ -40,7 +40,8 @@ namespace Microsoft.Dafny
     public static int ThreadMain(string[] args)
     {
       Contract.Requires(cce.NonNullElements(args));
-
+      var watch = new Stopwatch();
+      watch.Start();
       ErrorReporter reporter = new ConsoleErrorReporter();
       ExecutionEngine.printer = new DafnyConsolePrinter(); // For boogie errors
 
@@ -64,6 +65,10 @@ namespace Microsoft.Dafny
         Console.WriteLine("Press Enter to exit.");
         Console.ReadLine();
       }
+      watch.Stop();
+      TimeSpan ts = watch.Elapsed;
+      string elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+      Console.WriteLine("ThreadMain " + elapsedTime);
       if (!DafnyOptions.O.CountVerificationErrors && exitValue != ExitValue.PREPROCESSING_ERROR)
       {
         return 0;
@@ -160,6 +165,8 @@ namespace Microsoft.Dafny
                                   ErrorReporter reporter, bool lookForSnapshots = true, string programId = null)
    {
       Contract.Requires(cce.NonNullElements(dafnyFiles));
+      var watch = new Stopwatch();
+      watch.Start();
       var dafnyFileNames = DafnyFile.fileNames(dafnyFiles);
 
       ExitValue exitValue = ExitValue.VERIFIED;
@@ -198,7 +205,10 @@ namespace Microsoft.Dafny
 
       Dafny.Program dafnyProgram;
       string programName = dafnyFileNames.Count == 1 ? dafnyFileNames[0] : "the program";
+      var parseWatch = new Stopwatch();
+      parseWatch.Start();
       string err = Dafny.Main.ParseCheck(dafnyFiles, programName, reporter, out dafnyProgram);
+      parseWatch.Stop();
       if (err != null) {
         exitValue = ExitValue.DAFNY_ERROR;
         ExecutionEngine.printer.ErrorWriteLine(Console.Out, err);
@@ -221,6 +231,13 @@ namespace Microsoft.Dafny
       if (err == null && dafnyProgram != null && DafnyOptions.O.PrintFunctionCallGraph) {
         Util.PrintFunctionCallGraph(dafnyProgram);
       }
+      watch.Stop();
+      TimeSpan ts = parseWatch.Elapsed;
+      string elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+      Console.WriteLine("ParseCheck " + elapsedTime);
+      ts = watch.Elapsed;
+      elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+      Console.WriteLine("ProcessFiles " + elapsedTime);
       return exitValue;
     }
 

@@ -6,6 +6,7 @@
 //-----------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Diagnostics.Contracts;
@@ -334,6 +335,11 @@ namespace Microsoft.Dafny
       Contract.Requires(prog != null);
       Type.ResetScopes();
 
+      var watches = new List<Tuple<string,Stopwatch>>();
+      var watch = new Stopwatch();
+      watches.Add(new Tuple<string, Stopwatch>("Resolve 1", watch));
+      watch.Start();
+
       Type.EnableScopes();
       var origErrorCount = reporter.Count(ErrorLevel.Error); //TODO: This is used further below, but not in the >0 comparisons in the next few lines. Is that right?
       var bindings = new ModuleBindings(null);
@@ -361,6 +367,10 @@ namespace Microsoft.Dafny
         }
         h++;
       }
+      watch.Stop();
+      watch = new Stopwatch();
+      watches.Add(new Tuple<string, Stopwatch>("Resolve 2", watch));
+      watch.Start();
 
       rewriters = new List<IRewriter>();
       refinementTransformer = new RefinementTransformer(prog);
@@ -394,9 +404,17 @@ namespace Microsoft.Dafny
         allTypeParameters.PopMarker();
       }
       ResolveTopLevelDecls_Core(systemModuleClassesWithNonNullTypes, new Graph<IndDatatypeDecl>(), new Graph<CoDatatypeDecl>());
-
+      
+      watch.Stop();
+      watch = new Stopwatch();
+      watches.Add(new Tuple<string, Stopwatch>("Resolve 3", watch));
+      watch.Start();
+      
       var compilationModuleClones = new Dictionary<ModuleDefinition, ModuleDefinition>();
       foreach (var decl in sortedDecls) {
+        var declWatch = new Stopwatch();
+        watches.Add(new Tuple<string, Stopwatch>("Decl: " + decl.Name, declWatch));
+        declWatch.Start();
         if (decl is LiteralModuleDecl) {
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature
@@ -499,8 +517,16 @@ namespace Microsoft.Dafny
           Contract.Assert(decl.Signature.VisibilityScope != null);
 
         } else { Contract.Assert(false); }
+        declWatch.Stop();
         Contract.Assert(decl.Signature != null);
       }
+      watch.Stop();
+      foreach (var tuple in watches) {
+        TimeSpan ts = tuple.Item2.Elapsed;
+        string elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+        Console.WriteLine(tuple.Item1 + ": " + elapsedTime);
+      }
+      
       if (reporter.Count(ErrorLevel.Error) != origErrorCount) {
         // do nothing else
         return;

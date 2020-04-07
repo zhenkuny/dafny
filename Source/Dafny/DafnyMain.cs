@@ -6,6 +6,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using Bpl = Microsoft.Boogie;
 using System.Reflection;
@@ -88,12 +89,26 @@ namespace Microsoft.Dafny {
     public static string ParseCheck(IList<DafnyFile/*!*/>/*!*/ files, string/*!*/ programName, ErrorReporter reporter, out Program program)
       //modifies Bpl.CommandLineOptions.Clo.XmlSink.*;
     {
+      var parseWatch = new Stopwatch();
+      var resolveWatch = new Stopwatch();
+      parseWatch.Start();
       string err = Parse(files, programName, reporter, out program);
+      parseWatch.Stop();
       if (err != null) {
         return err;
       }
+      resolveWatch.Start();
+      var result = Resolve(program, reporter);
+      resolveWatch.Stop();
+      
+      TimeSpan ts = parseWatch.Elapsed;
+      string elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+      Console.WriteLine("Parse " + elapsedTime);
+      ts = resolveWatch.Elapsed;
+      elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+      Console.WriteLine("Resolve " + elapsedTime);
 
-      return Resolve(program, reporter);
+      return result;
     }
 
     public static string Parse(IList<DafnyFile> files, string programName, ErrorReporter reporter, out Program program)
@@ -143,14 +158,27 @@ namespace Microsoft.Dafny {
     {
       if (Bpl.CommandLineOptions.Clo.NoResolve || Bpl.CommandLineOptions.Clo.NoTypecheck) { return null; }
 
+      var constructorWatch = new Stopwatch();
+      var resolveWatch = new Stopwatch();
+      constructorWatch.Start();
       Dafny.Resolver r = new Dafny.Resolver(program);
+      constructorWatch.Stop();
+      resolveWatch.Start();
       r.ResolveProgram(program);
+      resolveWatch.Stop();
       MaybePrintProgram(program, DafnyOptions.O.DafnyPrintResolvedFile, true);
+
+      TimeSpan ts = constructorWatch.Elapsed;
+      string elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+      Console.WriteLine("Resolver constructor " + elapsedTime);
+      ts = resolveWatch.Elapsed;
+      elapsedTime = String.Format("{0:00}:{1:00}", ts.Seconds, ts.Milliseconds / 10);
+      Console.WriteLine("ResolveProgram " + elapsedTime);
 
       if (reporter.Count(ErrorLevel.Error) != 0) {
         return string.Format("{0} resolution/type errors detected in {1}", reporter.Count(ErrorLevel.Error), program.Name);
       }
-
+      
       return null;  // success
     }
 
