@@ -14379,9 +14379,13 @@ namespace Microsoft.Dafny
             CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
             return linearDestructor ? Usage.Shared : Usage.Ordinary;
           } else if (linearDestructor) {
-            reporter.Error(MessageSource.Resolver, expr, "cannot select from linear expression");
+            CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
+            return Usage.Shared;
           } else {
-            CheckIsCompilable(e.Obj, usageContext, Usage.Ordinary);
+            var u = CheckIsCompilable(e.Obj, usageContext);
+            if (u != Usage.Shared && u != Usage.Ordinary) {
+              reporter.Error(MessageSource.Resolver, expr, "cannot select from linear expression");
+            }
             return Usage.Ordinary;
           }
         }

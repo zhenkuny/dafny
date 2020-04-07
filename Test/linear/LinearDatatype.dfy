@@ -95,7 +95,7 @@ function method Share2(linear l:nlList<int>):linear nlList<int>
     }
 }
 
-method M(linear l_in:nlList<int>, shared s:nlList<int>) returns(linear l:nlList<int>)
+method M(linear l_in:nlList<int>, shared s:nlList<int>, shared nl:nlPair<int, nlPair<int, int>>) returns(linear l:nlList<int>)
 {
     l := l_in;
     linear match l
@@ -105,6 +105,8 @@ method M(linear l_in:nlList<int>, shared s:nlList<int>) returns(linear l:nlList<
     }
     var i := l.hd + l.hd;
     var k:int := (shared var NlCons(si, sy) := l; si + 1);
+    var nla := nl.b.a;
+    shared var nlb := nl.b.b;
     shared match s
     {
         case NlNil => k := k + 1;
@@ -118,6 +120,60 @@ method M(linear l_in:nlList<int>, shared s:nlList<int>) returns(linear l:nlList<
         k := k + sa + Length1(sb);
     }
 }
+
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 
 // ---------- fails ------------------------------------
 
@@ -495,4 +551,15 @@ method Leak_b'()
 method Leak_c'()
 {
     linear match NlCons(10, NlNil) {case NlCons(a, b) => {}}
+}
+
+function method id<A>(linear a:A):linear A
+
+method ExpSelect(linear l:nlPair<int, nlPair<int, int>>, shared s:nlPair<int, nlPair<int, int>>)
+{
+    var x1 := l.b.a; // ok: borrow l
+    shared var x2 := l.b.b; // can't smuggle shared value into x2
+    shared var x3 := s.b.a; // can't assign ordinary to shared
+    var x4 := s.b.b; // can't assign ordinary to shared
+    var y1 := id(l).b.a; // can't borrow from non-variable expression id(l)
 }
