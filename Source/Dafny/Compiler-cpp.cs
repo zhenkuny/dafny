@@ -875,10 +875,6 @@ namespace Microsoft.Dafny {
       wdr.Write(");\n");
 
       var w = wr.NewBlock(")", null, BlockTargetWriter.BraceStyle.Newline, BlockTargetWriter.BraceStyle.Newline);
-      if (m.IsTailRecursive) {
-        w.WriteLine("goto TAIL_CALL_START;"); // Avoid warning about unused label
-        w.WriteLine("TAIL_CALL_START: ;");  // Extra semicolon in case there are no additional statements after this
-      }
 
       if (targetReturnTypeReplacement != null) {
         var r = new TargetWriter(w.IndentLevel);
@@ -1114,7 +1110,7 @@ namespace Microsoft.Dafny {
     }
     
     protected override BlockTargetWriter EmitTailCallStructure(MemberDecl member, BlockTargetWriter wr) {
-      wr.WriteLine("goto TAIL_CALL_START");
+      //wr.WriteLine("goto TAIL_CALL_START;");
       wr.WriteLine("TAIL_CALL_START:");
       return wr;
     }
@@ -1997,8 +1993,8 @@ namespace Microsoft.Dafny {
     }
 
     protected override ILvalue EmitMemberSelect(System.Action<TargetWriter> obj, MemberDecl member, Type expectedType, bool internalAccess = false) {
-      if (member is ConstantField) {
-        return SuffixLvalue(obj, "->{0}", member.CompileName);
+      if (member.IsStatic && member is ConstantField) {
+        return SuffixLvalue(obj, "::{0}", member.CompileName);
       } else if (member is DatatypeDestructor dtor && dtor.EnclosingClass is TupleTypeDecl) {
         return SuffixLvalue(obj, ".get_{0}()", dtor.Name);
       } else if (member is SpecialField sf2 && sf2.SpecialId == SpecialField.ID.UseIdParam && sf2.IdParam is string fieldName 
@@ -2008,17 +2004,21 @@ namespace Microsoft.Dafny {
       } else if (member is SpecialField sf) {
         string compiledName, preStr, postStr;
         GetSpecialFieldInfo(sf.SpecialId, sf.IdParam, out compiledName, out preStr, out postStr);
-        if (sf is ConstantField && !member.IsStatic && compiledName.Length != 0) {
-          return SuffixLvalue(obj, "->{0}", compiledName);
-        } else if (sf.SpecialId == SpecialField.ID.Keys || sf.SpecialId == SpecialField.ID.Values) {
+        if (sf.SpecialId == SpecialField.ID.Keys || sf.SpecialId == SpecialField.ID.Values) {
           return SuffixLvalue(obj, ".{0}", compiledName);
         } else if (sf is DatatypeDestructor dtor2) {
           if (dtor2.EnclosingCtors.Count > 1) {
-            NotSupported(String.Format("Using the same destructor {0} with multiple constructors is ambiguous", member.Name), dtor2.tok);
+            NotSupported(
+              String.Format("Using the same destructor {0} with multiple constructors is ambiguous", member.Name),
+              dtor2.tok);
           }
+
           if (!(dtor2.EnclosingClass is IndDatatypeDecl)) {
-            NotSupported(String.Format("Unexpected use of a destructor {0} that isn't for an inductive datatype.  Panic!", member.Name), dtor2.tok);
+            NotSupported(
+              String.Format("Unexpected use of a destructor {0} that isn't for an inductive datatype.  Panic!",
+                member.Name), dtor2.tok);
           }
+
           var dt = dtor2.EnclosingClass as IndDatatypeDecl;
           return SimpleLvalue(wr => {
             if (dt.Ctors.Count > 1) {
@@ -2026,6 +2026,7 @@ namespace Microsoft.Dafny {
                 // This a recursively defined datatype; need to dereference the pointer
                 wr.Write("*");
               }
+
               wr.Write("(");
               obj(wr);
               wr.Write(".dtor_{0}()", sf.CompileName);
@@ -2034,8 +2035,11 @@ namespace Microsoft.Dafny {
               obj(wr);
               wr.Write(".{0}", sf.CompileName);
             }
+
             wr.Write(")");
           });
+        } else if (!member.IsStatic && compiledName.Length != 0) {
+          return SuffixLvalue(obj, "->{0}", compiledName);
         } else if (compiledName.Length != 0) {
           return SuffixLvalue(obj, "::{0}", compiledName);
         } else {
@@ -2134,7 +2138,7 @@ namespace Microsoft.Dafny {
             wr.Write(")");
           } else {
             wr.Write("DafnySequence<{0}>::SeqFromArraySlice(", typeName);
-            TrParenExpr(source, wr, inLetExprBody);
+            TrParenExpr(source, wr, inLetExprBody);  
             wr.Write(",");
             TrParenExpr(lo, wr, inLetExprBody);
             wr.Write(",");
