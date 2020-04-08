@@ -184,7 +184,7 @@ def do_file(session, server):
     print(server.do_verification(task))
 
 def verify_function_method(server, name):
-    args = server.dfy_args + ["/proc:*%s*" % name]
+    args = server.dfy_args + ["/proc:*%s*" % name.replace('_', "__")]
     task = Task(args, server.dfy_file_name, True, server.dfy_file_name)
     print(server.do_verification(task))
 
