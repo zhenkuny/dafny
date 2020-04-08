@@ -264,9 +264,9 @@ def dispatcher(session, options, data):
 def event_loop(server):
     our_history = pt.history.FileHistory(".cmd_history")
     session = pt.PromptSession(history=our_history, key_bindings=bindings)
-    actions = [('Verify the File', do_file),
-               ('Verify new Method/Function',do_function_method), 
-               ('Verify last Method/Function',do_prev_function_method)] 
+    actions = [('Verify the entire file', do_file),
+               ('Verify a specific Method/Function',do_function_method), 
+               ('Verify the previous Method/Function',do_prev_function_method)] 
     while True:
         try: 
             dispatcher(session, actions, server)
