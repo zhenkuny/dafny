@@ -7181,7 +7181,6 @@ namespace Microsoft.Dafny
           }
 
         } else if (stmt is MatchStmt) {
-          // TODO linear
           var s = (MatchStmt)stmt;
           s.IsGhost = mustBeErasable || resolver.UsesSpecFeatures(s.Source);
           if (!mustBeErasable && s.IsGhost) {
@@ -14293,7 +14292,7 @@ namespace Microsoft.Dafny
       return u != Usage.Ghost && u != Usage.Ordinary;
     }
 
-    static string UsageName(Usage u) {
+    public static string UsageName(Usage u) {
       return
         (u == Usage.Ghost) ? "ghost" :
         (u == Usage.Linear) ? "linear" :

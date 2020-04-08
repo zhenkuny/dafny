@@ -112,7 +112,7 @@ namespace Microsoft.Dafny {
     public readonly Dictionary<int, ArrowTypeDecl> ArrowTypeDecls = new Dictionary<int, ArrowTypeDecl>();
     public readonly Dictionary<int, SubsetTypeDecl> PartialArrowTypeDecls = new Dictionary<int, SubsetTypeDecl>();  // same keys as arrowTypeDecl
     public readonly Dictionary<int, SubsetTypeDecl> TotalArrowTypeDecls = new Dictionary<int, SubsetTypeDecl>();  // same keys as arrowTypeDecl
-    readonly Dictionary<int, TupleTypeDecl> tupleTypeDecls = new Dictionary<int, TupleTypeDecl>();
+    readonly Dictionary<object, TupleTypeDecl> tupleTypeDecls = new Dictionary<object, TupleTypeDecl>();
     public readonly ISet<int> Bitwidths = new HashSet<int>();
     public SpecialField ORDINAL_Offset;  // filled in by the resolver, used by the translator
 
@@ -300,29 +300,42 @@ namespace Microsoft.Dafny {
       return body;
     }
 
-    public TupleTypeDecl TupleType(IToken tok, int dims, bool allowCreationOfNewType) {
+    private object MakeTupleKey(List<Usage> usages, int dims) {
+      if (dims == 0) {
+        return 0;
+      } else {
+        var u = usages[dims - 1];
+        return Tuple.Create(u, MakeTupleKey(usages, dims - 1));
+      }
+    }
+
+    public TupleTypeDecl TupleType(IToken tok, int dims, bool allowCreationOfNewType, List<Usage> usages = null) {
       Contract.Requires(tok != null);
       Contract.Requires(0 <= dims);
       Contract.Ensures(Contract.Result<TupleTypeDecl>() != null);
 
       TupleTypeDecl tt;
-      if (!tupleTypeDecls.TryGetValue(dims, out tt)) {
+      if (usages == null) {
+        usages = new Usage[dims].ToList().ConvertAll(_ => Usage.Ordinary);
+      }
+      object key = MakeTupleKey(usages, dims);
+      if (!tupleTypeDecls.TryGetValue(key, out tt)) {
         Contract.Assume(allowCreationOfNewType);  // the parser should ensure that all needed tuple types exist by the time of resolution
-        if (dims == 2) {
+        if (dims == 2 && usages.TrueForAll(u => u == Usage.Ordinary)) {
           // tuple#2 is already defined in DafnyRuntime.cs
-          tt = new TupleTypeDecl(dims, SystemModule, DontCompile());
+          tt = new TupleTypeDecl(usages, SystemModule, DontCompile());
         } else {
-          tt = new TupleTypeDecl(dims, SystemModule, null);
+          tt = new TupleTypeDecl(usages, SystemModule, null);
         }
-        tupleTypeDecls.Add(dims, tt);
+        tupleTypeDecls.Add(key, tt);
         SystemModule.TopLevelDecls.Add(tt);
       }
       return tt;
     }
 
-    public static string TupleTypeName(int dims) {
-      Contract.Requires(0 <= dims);
-      return "_tuple#" + dims;
+    public static string TupleTypeName(List<Usage> usages) {
+      var uchars = usages.ConvertAll(u => u == Usage.Linear ? "L" : u == Usage.Ghost ? "G" : "_");
+      return "_tuple#" + usages.Count + ((usages.All(u => u == Usage.Ordinary)) ? "" : String.Concat(uchars));
     }
     public static bool IsTupleTypeName(string s) {
       Contract.Requires(s != null);
@@ -2603,7 +2616,16 @@ namespace Microsoft.Dafny {
     public override string TypeName(ModuleDefinition context, bool parseAble) {
       Contract.Ensures(Contract.Result<string>() != null);
       if (BuiltIns.IsTupleTypeName(Name)) {
-        return "(" + Util.Comma(", ", TypeArgs, ty => ty.TypeName(context, parseAble)) + ")";
+        // Unfortunately, ResolveClass may be null, so Name is all we have.  Reverse-engineer the string name.
+        List<string> usages = new string[TypeArgs.Count].ToList();
+        if (System.Char.IsDigit(Name[Name.Length - 1])) {
+          usages = usages.ConvertAll(_ => "");
+        } else {
+          usages = usages.Select((_, i) => Name[Name.Length - usages.Count + i]).ToList().ConvertAll(c =>
+            (c == 'L') ? "linear " : (c == 'G') ? "ghost " : "");
+        }
+        return "(" + Util.Comma(", ", TypeArgs.Zip(usages),
+          (ty_u) => ty_u.Item2 + ty_u.Item1.TypeName(context, parseAble)) + ")";
       } else if (ArrowType.IsPartialArrowTypeName(Name)) {
         return ArrowType.PrettyArrowTypeName(ArrowType.PARTIAL_ARROW, TypeArgs, null, context, parseAble);
       } else if (ArrowType.IsTotalArrowTypeName(Name)) {
@@ -4017,21 +4039,23 @@ namespace Microsoft.Dafny {
 
   public class TupleTypeDecl : IndDatatypeDecl
   {
-    public readonly int Dims;
+    public readonly List<Usage> Usages;
+    public int Dims { get { return Usages.Count; } }
+
     /// <summary>
     /// Construct a resolved built-in tuple type with "dim" arguments.  "systemModule" is expected to be the _System module.
     /// </summary>
-    public TupleTypeDecl(int dims, ModuleDefinition systemModule, Attributes attributes)
-      : this(systemModule, CreateCovariantTypeParameters(dims), attributes) {
-      Contract.Requires(0 <= dims);
+    public TupleTypeDecl(List<Usage> usages, ModuleDefinition systemModule, Attributes attributes)
+      : this(systemModule, CreateCovariantTypeParameters(usages.Count), usages, attributes) {
       Contract.Requires(systemModule != null);
     }
 
-    private TupleTypeDecl(ModuleDefinition systemModule, List<TypeParameter> typeArgs, Attributes attributes)
-      : base(Token.NoToken, BuiltIns.TupleTypeName(typeArgs.Count), systemModule, typeArgs, CreateConstructors(typeArgs), new List<MemberDecl>(), attributes, false) {
+    private TupleTypeDecl(ModuleDefinition systemModule, List<TypeParameter> typeArgs, List<Usage> usages, Attributes attributes)
+      : base(Token.NoToken, BuiltIns.TupleTypeName(usages), systemModule, typeArgs,
+        CreateConstructors(typeArgs, usages), new List<MemberDecl>(), attributes, usages.Contains(Usage.Linear)) {
       Contract.Requires(systemModule != null);
       Contract.Requires(typeArgs != null);
-      Dims = typeArgs.Count;
+      Usages = usages;
       foreach (var ctor in Ctors) {
         ctor.EnclosingDatatype = this;  // resolve here
         DefaultCtor = ctor;
@@ -4052,12 +4076,12 @@ namespace Microsoft.Dafny {
       }
       return ts;
     }
-    private static List<DatatypeCtor> CreateConstructors(List<TypeParameter> typeArgs) {
+    private static List<DatatypeCtor> CreateConstructors(List<TypeParameter> typeArgs, List<Usage> usages) {
       Contract.Requires(typeArgs != null);
       var formals = new List<Formal>();
       for (int i = 0; i < typeArgs.Count; i++) {
         var tp = typeArgs[i];
-        var f = new Formal(Token.NoToken, i.ToString(), new UserDefinedType(Token.NoToken, tp), true, Usage.Ordinary);
+        var f = new Formal(Token.NoToken, i.ToString(), new UserDefinedType(Token.NoToken, tp), true, usages[i]);
         formals.Add(f);
       }
       var ctor = new DatatypeCtor(Token.NoToken, BuiltIns.TupleTypeCtorNamePrefix + typeArgs.Count, formals, null);
@@ -4066,7 +4090,7 @@ namespace Microsoft.Dafny {
 
     public override string CompileName {
       get {
-        return "Tuple" + Dims;
+        return BuiltIns.TupleTypeName(Usages).Replace("_tuple#", "Tuple");
       }
     }
   }

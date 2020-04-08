@@ -103,4 +103,7 @@ LinearDatatype.dfy(561,25): Error: cannot borrow variable because expression ret
 LinearDatatype.dfy(562,25): Error: expected shared expression, found ordinary expression
 LinearDatatype.dfy(563,18): Error: expected ordinary expression, found shared expression
 LinearDatatype.dfy(564,16): Error: expected shared expression, found linear expression
-105 resolution/type errors detected in LinearDatatype.dfy
+LinearDatatype.dfy(569,22): Error: expected shared expression, found ordinary expression
+LinearDatatype.dfy(570,15): Error: expected ordinary expression, found shared expression
+LinearDatatype.dfy(571,39): Error: expected ordinary expression, found shared expression
+108 resolution/type errors detected in LinearDatatype.dfy

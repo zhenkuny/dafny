@@ -216,8 +216,15 @@ bool IsGets() {
 }
 
 bool IsMatch() {
+  scanner.ResetPeek();
   IToken x = scanner.Peek();
   return la.kind == _match || (x.kind == _match && (la.kind == _linear || la.kind == _shared));
+}
+
+bool IsVar() {
+  scanner.ResetPeek();
+  IToken x = scanner.Peek();
+  return la.kind == _var || (x.kind == _var && (la.kind == _ghost || la.kind == _linear || la.kind == _shared));
 }
 
 // an existential guard starts with an identifier and is then followed by
@@ -1731,7 +1738,7 @@ Type<out Type ty>
 TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
 = (. Contract.Ensures(Contract.ValueAtReturn(out tok)!=null); Contract.Ensures(Contract.ValueAtReturn(out ty) != null);
      tok = Token.NoToken;  ty = new BoolType();  /*keep compiler happy*/
-     List<Type> gt; List<Type> tupleArgTypes = null;
+     List<Type> gt; List<Type> tupleArgTypes = null; List<Usage> usages = null; Usage usage = Usage.Ordinary;
   .)
   ( "bool"                          (. tok = t; .)
   | "char"                          (. tok = t;  ty = new CharType(); .)
@@ -1809,17 +1816,24 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
                                        int dims = StringToInt(dimString, 1, "arrays of that many dimensions");
                                        ty = theBuiltIns.ArrayType(tok, dims, gt, true, true);
                                     .)
-  | "("                             (. tok = t; tupleArgTypes = new List<Type>(); .)
-    [ Type<out ty>                  (. tupleArgTypes.Add(ty); .)
-      { "," Type<out ty>            (. tupleArgTypes.Add(ty); .)
+  | "("                             (. tok = t; tupleArgTypes = new List<Type>(); usages = new List<Usage>(); .)
+    [ [ "linear"                    (. usage = Usage.Linear; .)
+      | "ghost"                     (. usage = Usage.Ghost; .)
+      ]
+      Type<out ty>                  (. tupleArgTypes.Add(ty); usages.Add(usage); .)
+      { ","                         (. usage = Usage.Ordinary; .)
+        [ "linear"                  (. usage = Usage.Linear; .)
+        | "ghost"                   (. usage = Usage.Ghost; .)
+        ]
+        Type<out ty>                (. tupleArgTypes.Add(ty); usages.Add(usage); .)
       }
     ]
     ")"                             (. if (tupleArgTypes.Count == 1) {
                                          // just return the type 'ty'
                                        } else {
                                          var dims = tupleArgTypes.Count;
-                                         var tmp = theBuiltIns.TupleType(tok, dims, true);  // make sure the tuple type exists
-                                         ty = new UserDefinedType(tok, BuiltIns.TupleTypeName(dims), dims == 0 ? null : tupleArgTypes);
+                                         var tmp = theBuiltIns.TupleType(tok, dims, true, usages);  // make sure the tuple type exists
+                                         ty = new UserDefinedType(tok, BuiltIns.TupleTypeName(usages), dims == 0 ? null : tupleArgTypes);
                                        }
                                     .)
   | (. Expression e; .)
@@ -3385,17 +3399,18 @@ LambdaExpression<out Expression e, bool allowSemi, bool allowBitwiseOps>
   .
 ParensExpression<out Expression e, bool allowSemi, bool allowLambda>
 = (. IToken x;
+     var usages = new List<Usage>();
      var args = new List<Expression>();
   .)
   "("                                        (. x = t; .)
-  [ Expressions<args> ]
+  [ TupleArgs<args, usages> ]
   ")"
   (. if (args.Count == 1) {
        e = new ParensExpression(x, args[0]);
      } else {
        // make sure the corresponding tuple type exists
-       var tmp = theBuiltIns.TupleType(x, args.Count, true);
-       e = new DatatypeValue(x, BuiltIns.TupleTypeName(args.Count), BuiltIns.TupleTypeCtorNamePrefix + args.Count, args);
+       var tmp = theBuiltIns.TupleType(x, args.Count, true, usages);
+       e = new DatatypeValue(x, BuiltIns.TupleTypeName(usages), BuiltIns.TupleTypeCtorNamePrefix + args.Count, args);
      }
   .)
   .
@@ -3533,7 +3548,8 @@ EndlessExpression<out Expression e, bool allowSemi, bool allowLambda, bool allow
     SetComprehensionExpr<x, false, out e, allowSemi, allowLambda, true>
   | StmtInExpr<out s>
     Expression<out e, allowSemi, allowLambda, allowBitwiseOps>    (. e = new StmtExpr(s.Tok, s, e); .)
-  | LetExpr<out e, allowSemi, allowLambda, allowBitwiseOps>
+  | LetExprWithLHS<out e, allowSemi, allowLambda, allowBitwiseOps>
+  | LetExprWithoutLHS<out e, allowSemi, allowLambda, allowBitwiseOps>
   | "map"                           (. x = t; .)
     MapComprehensionExpr<x, true, out e, allowSemi, allowLambda, allowBitwiseOps>
   | "imap"                          (. x = t; .)
@@ -3551,12 +3567,6 @@ StmtInExpr<out Statement s>
   | CalcStmt<out s>
   )
   .
-
-LetExpr<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwiseOps>
-= (. e = dummyExpr; .)
-  ( LetExprWithLHS<out e, allowSemi, allowLambda, allowBitwiseOps>
-  | LetExprWithoutLHS<out e, allowSemi, allowLambda, allowBitwiseOps>
-  ).
 
 LetExprWithLHS<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwiseOps>
 = (. IToken x = null;
@@ -3691,7 +3701,7 @@ CaseExpression<out MatchCaseExpr c, bool allowSemi, bool allowLambda, bool allow
   Expression<out body, allowSemi, allowLambda, allowBitwiseOps>    (. c = new MatchCaseExpr(x, name, arguments, body); .)
   .
 CasePattern<.out CasePattern<BoundVar> pat.>
-= (. IToken id;  List<CasePattern<BoundVar>> arguments;
+= (. IToken id; List<CasePattern<BoundVar>> arguments; List<Usage> usages; Usage usage = Usage.Ordinary;
      BoundVar bv;
      pat = null;
   .)
@@ -3705,13 +3715,21 @@ CasePattern<.out CasePattern<BoundVar> pat.>
     ")"                                (. pat = new CasePattern<BoundVar>(id, id.val, arguments); .)
   | "("                                (. id = t;
                                           arguments = new List<CasePattern<BoundVar>>();
+                                          usages = new List<Usage>();
                                        .)
-      [ CasePattern<out pat>           (. arguments.Add(pat); .)
-        { "," CasePattern<out pat>     (. arguments.Add(pat); .)
+      [ [ "linear"                     (. usage = Usage.Linear; .)
+        | "ghost"                      (. usage = Usage.Linear; .)
+        ]
+        CasePattern<out pat>           (. arguments.Add(pat); usages.Add(usage); .)
+        { ","                          (. usage = Usage.Ordinary; .)
+          [ "linear"                   (. usage = Usage.Linear; .)
+          | "ghost"                    (. usage = Usage.Ghost; .)
+          ]
+          CasePattern<out pat>         (. arguments.Add(pat); usages.Add(usage); .)
         }
       ]
     ")"                                (. // Parse parenthesis without an identifier as a built in tuple type.
-                                          theBuiltIns.TupleType(id, arguments.Count, true); // make sure the tuple type exists
+                                          theBuiltIns.TupleType(id, arguments.Count, true, usages); // make sure the tuple type exists
                                           string ctor = BuiltIns.TupleTypeCtorNamePrefix + arguments.Count;  //use the TupleTypeCtors
                                           pat = new CasePattern<BoundVar>(id, ctor, arguments);
                                        .)
@@ -3733,7 +3751,7 @@ CasePattern<.out CasePattern<BoundVar> pat.>
  * not have a way to make the patterns take a bounded type parameter.
  */
 CasePatternLocal<.out CasePattern<LocalVariable> pat, Usage usage.>
-= (. IToken id;  List<CasePattern<LocalVariable>> arguments;
+= (. IToken id; List<CasePattern<LocalVariable>> arguments; List<Usage> usages; Usage u = Usage.Ordinary;
      LocalVariable local;
      pat = null;
   .)
@@ -3747,13 +3765,22 @@ CasePatternLocal<.out CasePattern<LocalVariable> pat, Usage usage.>
     ")"                                          (. pat = new CasePattern<LocalVariable>(id, id.val, arguments); .)
   | "("                                          (. id = t;
                                                     arguments = new List<CasePattern<LocalVariable>>();
+                                                    usages = new List<Usage>();
                                                  .)
-      [ CasePatternLocal<out pat, usage>       (. arguments.Add(pat); .)
-        { "," CasePatternLocal<out pat, usage> (. arguments.Add(pat); .)
+      [
+        [ "linear"                     (. u = Usage.Linear; .)
+        | "ghost"                      (. u = Usage.Linear; .)
+        ]
+        CasePatternLocal<out pat, usage>       (. arguments.Add(pat); usages.Add(u); .)
+        { ","                            (. u = Usage.Ordinary; .)
+          [ "linear"                     (. u = Usage.Linear; .)
+          | "ghost"                      (. u = Usage.Linear; .)
+          ]
+          CasePatternLocal<out pat, usage> (. arguments.Add(pat); usages.Add(u); .)
         }
       ]
     ")"                                (. // Parse parenthesis without an identifier as a built in tuple type.
-                                          theBuiltIns.TupleType(id, arguments.Count, true); // make sure the tuple type exists
+                                          theBuiltIns.TupleType(id, arguments.Count, true, usages); // make sure the tuple type exists
                                           string ctor = BuiltIns.TupleTypeCtorNamePrefix + arguments.Count;  //use the TupleTypeCtors
                                           pat = new CasePattern<LocalVariable>(id, ctor, arguments);
                                        .)
@@ -3999,6 +4026,17 @@ Expressions<.List<Expression> args.>
 = (. Expression e; .)
   Expression<out e, true, true>                      (. args.Add(e); .)
   { "," Expression<out e, true, true>                (. args.Add(e); .)
+  }
+  .
+TupleArgs<.List<Expression> args, List<Usage> usages.>
+= (. Expression e; Usage usage = Usage.Ordinary; .)
+  [ IF(la.kind == _linear && !IsMatch() && !IsVar()) "linear" (. usage = Usage.Linear; .) ]
+  [ IF(la.kind == _ghost && !IsMatch() && !IsVar()) "ghost"   (. usage = Usage.Ghost; .) ]
+  Expression<out e, true, true>                      (. args.Add(e); usages.Add(usage); .)
+  { ","                                              (. usage = Usage.Ordinary; .)
+    [ IF(la.kind == _linear && !IsMatch() && !IsVar()) "linear" (. usage = Usage.Linear; .) ]
+    [ IF(la.kind == _ghost && !IsMatch() && !IsVar()) "ghost"   (. usage = Usage.Ghost; .) ]
+    Expression<out e, true, true>                    (. args.Add(e); usages.Add(usage); .)
   }
   .
 /*------------------------------------------------------------------------*/

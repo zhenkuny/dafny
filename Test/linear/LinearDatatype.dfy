@@ -121,14 +121,14 @@ method M(linear l_in:nlList<int>, shared s:nlList<int>, shared nl:nlPair<int, nl
     }
 }
 
-//
-//
-//
-//
-//
-//
-//
-//
+method TupleGood(shared x:(int, linear int), y:(int, int, bool), linear l:int) returns(linear q:int)
+{
+    var i := x.0;
+    shared var j := x.1;
+    linear var z:(int, linear int) := (i, linear l);
+    linear var (a, linear b) := z;
+    q := b;
+}
 //
 //
 //
@@ -562,4 +562,13 @@ method ExpSelect(linear l:nlPair<int, nlPair<int, int>>, shared s:nlPair<int, nl
     shared var x3 := s.b.a; // can't assign ordinary to shared
     var x4 := s.b.b; // can't assign ordinary to shared
     var y1 := id(l).b.a; // can't borrow from non-variable expression id(l)
+}
+
+method TupleBad(shared x:(int, linear int), y:(int, int, bool), linear l:int) returns(linear q:int)
+{
+    shared var i := x.0;
+    var j := x.1;
+    linear var z:(int, linear int) := (i, linear l);
+    linear var (a, linear b) := z;
+    q := b;
 }
