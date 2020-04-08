@@ -15,18 +15,14 @@ namespace Extern {
     return ret;
   }
 
-  class __default {
-    public: 
-
-    template <typename T>
-    static DafnyArray<T> newArrayFill(uint64 size, T v) {
-      DafnyArray<T> ret = DafnyArray<T>::New(size);
-      for (uint64 i = 0; i < size; i++) {
-        ret.at(i) = v;
-      }
-      return ret;
+  template <typename T>
+  static DafnyArray<T> newArrayFill(uint64 size, T v) {
+    DafnyArray<T> ret = DafnyArray<T>::New(size);
+    for (uint64 i = 0; i < size; i++) {
+      ret.at(i) = v;
     }
-  };
+    return ret;
+  }
 
   class ExternClass {
     public:
