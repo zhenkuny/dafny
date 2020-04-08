@@ -1474,7 +1474,7 @@ int StringToInt(string s, int defaultValue, string errString) {
 	}
 
 	void NoUSIdent(out IToken/*!*/ x) {
-		Contract.Ensures(Contract.ValueAtReturn(out x) != null); 
+		Contract.Ensures(Contract.ValueAtReturn(out x) != null); x=null; 
 		if (la.kind == 1) {
 			Get();
 			x = t;
