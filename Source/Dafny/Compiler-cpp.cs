@@ -1608,7 +1608,12 @@ namespace Microsoft.Dafny {
         // TODO: the string should be converted to a Dafny seq<char>
         TrStringLiteral(str, wr);
       } else if (AsNativeType(e.Type) is NativeType nt) {
+        
         wr.Write("({0}){1}", GetNativeTypeName(nt), (BigInteger)e.Value);
+        if ((BigInteger) e.Value > 9223372036854775807) {
+          // Avoid compiler warning: integer literal is too large to be represented in a signed integer type
+          wr.Write("U");
+        }
       } else if (e.Value is BigInteger i) {
         EmitIntegerLiteral(i, wr);
       } else if (e.Value is Basetypes.BigDec) {
