@@ -146,6 +146,33 @@ namespace Microsoft.Dafny {
       CreateArrowTypeDecl(0);
       // Note, in addition to these types, the _System module contains tuple types.  These tuple types are added to SystemModule
       // by the parser as the parser detects the need for these.
+
+      // ==> Add rank_is_less_than<A, B>(a:A, b:B) function
+      if (Translator.FrugalHeapUse && DafnyOptions.O.DafnyPrintResolvedFile == /*can drop this requirement; would need to update various .dfy.expect files*/ null) {
+        var rankParamA = new TypeParameter(Token.NoToken, "A", TypeParameter.TPVarianceSyntax.NonVariant_Strict);
+        var rankParamB = new TypeParameter(Token.NoToken, "B", TypeParameter.TPVarianceSyntax.NonVariant_Strict);
+        var rankVarA = new UserDefinedType(Token.NoToken, "A", null);
+        var rankVarB = new UserDefinedType(Token.NoToken, "B", null);
+        rankVarA.ResolvedParam = rankParamA;
+        rankVarB.ResolvedParam = rankParamB;
+        Attributes rankAttrs = new Attributes("axiom", new List<Expression>(), null);
+        var rankFun = new Function(Token.NoToken, "rank_is_less_than", false, false, true,
+          new List<TypeParameter>() { rankParamA, rankParamB },
+          new List<Formal>() {
+            new Formal(Token.NoToken, "a", rankVarA, true, Usage.Ghost),
+            new Formal(Token.NoToken, "b", rankVarB, true, Usage.Ghost) },
+          new Formal(Token.NoToken, "r", new BoolType(), true, Usage.Ghost),
+          new BoolType(), new List<MaybeFreeExpression>(), new List<FrameExpression>(),
+          new List<MaybeFreeExpression>(), new Specification<Expression>(new List<Expression>(), null),
+          null, rankAttrs, null);
+        rankFun.IsBuiltin = true;
+        var defaultClass = new DefaultClassDecl(SystemModule,
+          new List<MemberDecl>() { rankFun });
+        rankFun.EnclosingClass = defaultClass;
+        SystemModule.TopLevelDecls.Add(defaultClass);
+        CreateArrowTypeDecl(2);
+      }
+      // <== Add rank_is_less_than
     }
 
     private Attributes DontCompile() {

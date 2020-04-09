@@ -293,7 +293,8 @@ function method discard<A>(linear m:maybe<A>):()
     requires !has(m)
 
 type lseq<A>
-function lseqs<A>(s:lseq<A>):seq<maybe<A>> // contents of an lseq, as ghost seq
+function lseqs<A>(l:lseq<A>):(s:seq<maybe<A>>) // contents of an lseq, as ghost seq
+    ensures rank_is_less_than(s, l)
 function method lseq_length<A>(shared s:lseq<A>):(n:nat)
     ensures n == |lseqs(s)|
 

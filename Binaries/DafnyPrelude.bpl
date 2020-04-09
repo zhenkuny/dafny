@@ -1374,3 +1374,23 @@ axiom (forall x, y, z: int ::
 #endif
 
 // -------------------------------------------------------------------------
+
+// function declaration for _System._default.rank__is__less__than
+function _System.__default.rank__is__less__than(A:Ty, B:Ty, a:Box, b:Box):bool;
+
+axiom (forall A:Ty, B:Ty, a:Box, b:Box ::
+  {_System.__default.rank__is__less__than(A, B, a, b), BoxRank(a)}
+  {_System.__default.rank__is__less__than(A, B, a, b), BoxRank(b)}
+  _System.__default.rank__is__less__than(A, B, a, b) ==> BoxRank(a) < BoxRank(b));
+
+axiom (forall A:Ty, B:Ty, a:Box, b:Seq Box ::
+  {_System.__default.rank__is__less__than(A, B, a, $Box(b)), BoxRank(a)}
+  {_System.__default.rank__is__less__than(A, B, a, $Box(b)), Seq#Rank(b)}
+  _System.__default.rank__is__less__than(A, B, a, $Box(b)) ==> BoxRank(a) < Seq#Rank(b));
+
+axiom (forall A:Ty, B:Ty, a:Seq Box, b:Box ::
+  {_System.__default.rank__is__less__than(A, B, $Box(a), b), Seq#Rank(a)}
+  {_System.__default.rank__is__less__than(A, B, $Box(a), b), BoxRank(b)}
+  _System.__default.rank__is__less__than(A, B, $Box(a), b) ==> Seq#Rank(a) < BoxRank(b));
+
+// -------------------------------------------------------------------------
