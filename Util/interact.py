@@ -42,10 +42,11 @@ class Task:
                 "source" :       self.file_name}
 
 class DafnyServer:
-    def __init__(self, server_path, no_color, dfy_args, dfy_file_name):
+    def __init__(self, server_path, no_color, dfy_args, dfy_file_name, hide_info):
         self.no_color = no_color
         self.dfy_args = dfy_args
         self.dfy_file_name = dfy_file_name
+        self.hide_info = hide_info
 
         self.encoding = 'utf-8'
         self.SUCCESS = "SUCCESS"
@@ -105,6 +106,8 @@ class DafnyServer:
                 break
             elif line.startswith("Verification completed successfully!"):
                 pass # Suppress this unhelpful value
+            elif self.hide_info and "Info: " in line:
+                pass  # Skip tooltip information, which Server insists on returning
             else:
                 if add_color:
                     if "Error" in line:
@@ -292,6 +295,8 @@ def main():
                         help="Path to the DafnyServer.  Defaults to %s" % default_server_path)
     parser.add_argument('--no-color', action='store_true', default=False, required=False,
                         help="Don't add color to verification results")
+    parser.add_argument('--show-tooltips', action='store_true', default=False, required=False,
+                        help="Show all of the tooltips that Dafny returns")
     
     args = parser.parse_args()
 
@@ -301,7 +306,7 @@ def main():
     elif os.path.isfile(args.arg_file):
         dfy_args = read_arg_file(args.arg_file)
 
-    server = DafnyServer(args.server, args.no_color, dfy_args, args.dfy)
+    server = DafnyServer(args.server, args.no_color, dfy_args, args.dfy, not args.show_tooltips)
 
     event_loop(server)
 
