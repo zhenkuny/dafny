@@ -4129,8 +4129,9 @@ TypeNameOrCtorSuffix<out IToken id>
   .
 
 // Identifier, disallowing leading underscores
+// x=null hackaround relieves C# error: "Parser.cs(1476,7): error CS0177: The out parameter 'x' must be assigned to before control leaves the current method"
 NoUSIdent<out IToken/*!*/ x>
-= (. Contract.Ensures(Contract.ValueAtReturn(out x) != null); .)
+= (. Contract.Ensures(Contract.ValueAtReturn(out x) != null); x=null; .)
   ( ident          (. x = t;
                       if (x.val.StartsWith("_")) {
                         SemErr("cannot declare identifier beginning with underscore");
