@@ -1477,7 +1477,9 @@ namespace Microsoft.Dafny
       }
       // add for the module itself
       foreach (var kv in m.TopLevels) {
-        Contract.Assert(EquivIfPresent(info.TopLevels, kv.Key, kv.Value));
+        if (kv.Key != "_default") { // System._default has rank_is_less_than
+          Contract.Assert(EquivIfPresent(info.TopLevels, kv.Key, kv.Value));
+        }
         info.TopLevels[kv.Key] = kv.Value;
       }
       foreach (var kv in m.Ctors) {
