@@ -11032,7 +11032,7 @@ namespace Microsoft.Dafny {
       E = e;
     }
     public Expression Expr {
-      get { return Resolved ?? E.PlaceholderReplacement ?? E; }
+      get { return WasResolved() ? Resolved : E.PlaceholderReplacement ?? E; }
     }
   }
 
