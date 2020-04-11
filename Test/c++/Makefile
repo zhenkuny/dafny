@@ -42,4 +42,4 @@ test: $(EXECS)
 #	fi
 
 clean:
-	rm -f *.cpp *cs $(DOT_H_S) $(EXECS) $(TEST_LOG)
+	mv ExternFramework.cs ExternFramework; rm -f *.cpp *cs $(DOT_H_S) $(EXECS) $(TEST_LOG); mv ExternFramework ExternFramework.cs
