@@ -14319,7 +14319,7 @@ namespace Microsoft.Dafny
 
     void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage) {
       IdentifierExpr x = ExprAsIdentifier(expr);
-      if (expectedUsage == Usage.Shared && x != null && x.Var.Usage == Usage.Linear) {
+      if (usageContext != null && expectedUsage == Usage.Shared && x != null && x.Var.Usage == Usage.Linear) {
         // Try to borrow x
         if (usageContext.available[x.Var] == Available.Consumed) {
           reporter.Error(MessageSource.Resolver, expr, "tried to borrow variable, but it was already unavailable");
