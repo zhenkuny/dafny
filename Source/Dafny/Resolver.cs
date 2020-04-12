@@ -10155,7 +10155,7 @@ namespace Microsoft.Dafny
               Type st = SubstType(formal.Type, subst);
               ConstrainSubtypeRelation(v.Type, st, s.Tok,
                 "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", v.Type, st);
-              v.IsGhost = formal.IsGhost;
+              v.Usage = ConstructorArgUsage(s.Usage, formal.Usage);
 
               // update the type of the boundvars in the MatchCaseToken
               if (v.tok is MatchCaseToken) {
@@ -11244,7 +11244,7 @@ namespace Microsoft.Dafny
       var tempType = new InferredTypeProxy();
       s.ResolvedStatements.Add(
         // "var temp := MethodOrExpression;"
-        new VarDeclStmt(s.Tok, s.Tok, new List<LocalVariable>() { new LocalVariable(s.Tok, s.Tok, temp, tempType, false) },
+        new VarDeclStmt(s.Tok, s.Tok, new List<LocalVariable>() { new LocalVariable(s.Tok, s.Tok, temp, tempType, Usage.Ordinary) },
           new UpdateStmt(s.Tok, s.Tok, new List<Expression>() { new IdentifierExpr(s.Tok, temp) }, new List<AssignmentRhs>() { new ExprRhs(s.Rhs) })));
       if (s.ExpectToken != null) {
         var notFailureExpr = new UnaryOpExpr(s.Tok, UnaryOpExpr.Opcode.Not, VarDotMethod(s.Tok, temp, "IsFailure"));
@@ -12018,6 +12018,11 @@ namespace Microsoft.Dafny
       if (!(t is TypeProxy)) {
         return t;  // we're good
       }
+      bool isOverload = memberName == "_#overload";
+      string origMemberName = memberName;
+      if (isOverload) {
+        memberName = null;
+      }
 
       // simplify constraints
       PrintTypeConstraintState(10);
@@ -12025,7 +12030,7 @@ namespace Microsoft.Dafny
         var proxySpecializations = new HashSet<TypeProxy>();
         GetRelatedTypeProxies(t, proxySpecializations);
         var anyNewConstraintsAssignable = ConvertAssignableToSubtypeConstraints(proxySpecializations);
-        var anyNewConstraintsEquatable = TightenUpEquatable(proxySpecializations);
+        var anyNewConstraintsEquatable = isOverload ? false : TightenUpEquatable(proxySpecializations);
         if ((strength > 1 && !anyNewConstraintsAssignable && !anyNewConstraintsEquatable) || strength == 10) {
           if (t is TypeProxy) {
             // One more try
@@ -12068,6 +12073,9 @@ namespace Microsoft.Dafny
       // Look for a meet of head symbols among the proxy's subtypes
       Type meet = null;
       if (MeetOfAllSubtypes(proxy, ref meet, new HashSet<TypeProxy>()) && meet != null) {
+        if (isOverload && meet.IsArrayType) {
+          return t; // arrays are sensitive, don't touch them if we don't need to
+        }
         bool isRoot, isLeaf, headIsRoot, headIsLeaf;
         CheckEnds(meet, out isRoot, out isLeaf, out headIsRoot, out headIsLeaf);
         if (meet.IsDatatype) {
@@ -12154,7 +12162,7 @@ namespace Microsoft.Dafny
             Contract.Assert(proxy != join);
             proxy.T = join;
             Contract.Assert(t.NormalizeExpand() == join);
-            return PartiallyResolveTypeForMemberSelection(tok, t, memberName, strength + 1);
+            return PartiallyResolveTypeForMemberSelection(tok, t, origMemberName, strength + 1);
           }
         }
         if (DafnyOptions.O.TypeInferenceDebug) {
@@ -12172,7 +12180,7 @@ namespace Microsoft.Dafny
       if (DafnyOptions.O.TypeInferenceDebug) {
         Console.WriteLine("  ----> found no improvement using simple things, trying harder once more");
       }
-      return PartiallyResolveTypeForMemberSelection(tok, t, memberName, strength + 1);
+      return PartiallyResolveTypeForMemberSelection(tok, t, origMemberName, strength + 1);
     }
 
     private Type/*?*/ GetBaseTypeFromProxy(TypeProxy proxy, Dictionary<TypeProxy, Type/*?*/> determinedProxies) {
@@ -12706,6 +12714,12 @@ namespace Microsoft.Dafny
         e.ResolvedExpression = e.E;
         e.Type = e.E.Type;
 
+      } else if (expr is PlaceholderExpression) {
+        var e = (PlaceholderExpression)expr;
+        ResolveExpression(e.Expr, opts);
+        e.ResolvedExpression = e.Expr;
+        e.Type = e.Expr.Type;
+
       } else if (expr is ChainingExpression) {
         var e = (ChainingExpression)expr;
         ResolveExpression(e.E, opts);
@@ -13033,6 +13047,9 @@ namespace Microsoft.Dafny
             expr.Type = e.E.Type;
             break;
           case UnaryOpExpr.Opcode.Cardinality:
+            if (ReplaceOverload(opts, e, e.E.Type, "cardinality", new List<Expression>{e.E})) {
+              return;
+            }
             AddXConstraint(expr.tok, "Sizeable", e.E.Type, "size operator expects a collection argument (instead got {0})");
             expr.Type = Type.Int;
             break;
@@ -13184,6 +13201,14 @@ namespace Microsoft.Dafny
 
           case BinaryExpr.Opcode.In:
           case BinaryExpr.Opcode.NotIn:
+            if (ReplaceOverload(opts, e, e.E1.Type, "in", new List<Expression>{e.E1, e.E0})) {
+              if (e.Op == BinaryExpr.Opcode.NotIn) {
+                var not = new UnaryOpExpr(e.tok, UnaryOpExpr.Opcode.Not, e.PlaceholderReplacement);
+                ResolveExpression(not, opts);
+                e.PlaceholderReplacement = not;
+              }
+              return;
+            }
             AddXConstraint(expr.tok, "Innable", e.E1.Type, e.E0.Type, "second argument to \"" + BinaryExpr.OpcodeString(e.Op) + "\" must be a set, multiset, or sequence with elements of type {1}, or a map with domain {1} (instead got {0})");
             expr.Type = Type.Bool;
             break;
@@ -13259,7 +13284,7 @@ namespace Microsoft.Dafny
           var i = 0;
           foreach (var lhs in e.LHSs) {
             var rhsType = i < e.RHSs.Count ? e.RHSs[i].Type : new InferredTypeProxy();
-            ResolveCasePattern(lhs, rhsType, opts.codeContext);
+            ResolveCasePattern(lhs, rhsType, opts.codeContext, e.Usage, e.Usage);
             // Check for duplicate names now, because not until after resolving the case pattern do we know if identifiers inside it refer to bound variables or nullary constructors
             var c = 0;
             foreach (var v in lhs.Vars) {
@@ -13466,13 +13491,13 @@ namespace Microsoft.Dafny
     }
 
     // TODO search for occurrences of "new LetExpr" which could benefit from this helper
-    private LetExpr LetPatIn(IToken tok, CasePattern<BoundVar> lhs, Expression rhs, Expression body) {
-      return new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { rhs }, body, true);
+    private LetExpr LetPatIn(IToken tok, CasePattern<BoundVar> lhs, Usage usage, Expression rhs, Expression body) {
+      return new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { rhs }, body, true, usage);
     }
 
-    private LetExpr LetVarIn(IToken tok, string name, Type tp, Expression rhs, Expression body) {
+    private LetExpr LetVarIn(IToken tok, string name, Type tp, Usage usage, Expression rhs, Expression body) {
       var lhs = new CasePattern<BoundVar>(tok, new BoundVar(tok, name, tp));
-      return LetPatIn(tok, lhs, rhs, body);
+      return LetPatIn(tok, lhs, usage, rhs, body);
     }
 
     /// <summary>
@@ -13483,7 +13508,7 @@ namespace Microsoft.Dafny
       var temp = FreshTempVarName("valueOrError", opts.codeContext);
       var tempType = new InferredTypeProxy();
       // "var temp := E;"
-      expr.ResolvedExpression = LetVarIn(expr.tok, temp, tempType, expr.Rhs,
+      expr.ResolvedExpression = LetVarIn(expr.tok, temp, tempType, Usage.Ordinary, expr.Rhs,
         // "if temp.IsFailure()"
         new ITEExpr(expr.tok, false, VarDotFunction(expr.tok, temp, "IsFailure"),
           // "then temp.PropagateFailure()"
@@ -13493,7 +13518,7 @@ namespace Microsoft.Dafny
             // "F"
             ? expr.Body
             // "var x: T := temp.Extract(); F"
-            : LetPatIn(expr.tok, expr.Lhs, VarDotFunction(expr.tok, temp, "Extract"), expr.Body)));
+            : LetPatIn(expr.tok, expr.Lhs, Usage.Ordinary, VarDotFunction(expr.tok, temp, "Extract"), expr.Body)));
 
       ResolveExpression(expr.ResolvedExpression, opts);
       bool expectExtract = (expr.Lhs != null);
@@ -13715,11 +13740,11 @@ namespace Microsoft.Dafny
       foreach (var entry in rhsBindings) {
         if (entry.Value.Item1 != null) {
           var lhs = new CasePattern<BoundVar>(tok, entry.Value.Item1);
-          rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { entry.Value.Item3 }, rewrite, true);
+          rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { lhs }, new List<Expression>() { entry.Value.Item3 }, rewrite, true, Usage.Ordinary);
         }
       }
       var dVarPat = new CasePattern<BoundVar>(tok, dVar);
-      rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { dVarPat }, new List<Expression>() { root }, rewrite, true);
+      rewrite = new LetExpr(tok, new List<CasePattern<BoundVar>>() { dVarPat }, new List<Expression>() { root }, rewrite, true, Usage.Ordinary);
       Contract.Assert(rewrite != null);
       ResolveExpression(rewrite, opts);
       return rewrite;
@@ -13867,7 +13892,7 @@ namespace Microsoft.Dafny
               Type st = SubstType(formal.Type, subst);
               ConstrainSubtypeRelation(v.Type, st, me,
                 "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", v.Type, st);
-              v.IsGhost = formal.IsGhost;
+              v.Usage = ConstructorArgUsage(me.Usage, formal.Usage);
 
               // update the type of the boundvars in the MatchCaseToken
               if (v.tok is MatchCaseToken) {
@@ -13904,7 +13929,7 @@ namespace Microsoft.Dafny
 
     }
 
-    void ResolveCasePattern<VT>(CasePattern<VT> pat, Type sourceType, ICodeContext context) where VT: IVariable {
+    void ResolveCasePattern<VT>(CasePattern<VT> pat, Type sourceType, ICodeContext context, Usage uOuter, Usage uFormal) where VT: IVariable {
       Contract.Requires(pat != null);
       Contract.Requires(sourceType != null);
       Contract.Requires(context != null);
@@ -13939,6 +13964,18 @@ namespace Microsoft.Dafny
         // The reason is that the purpose of the pattern on the left is really just to provide a skeleton to introduce bound variables in.
         AddAssignableConstraint(v.Tok, v.Type, sourceType, "type of corresponding source/RHS ({1}) does not match type of bound variable ({0})");
         pat.AssembleExpr(null);
+        Usage usage = ConstructorArgUsage(uOuter, uFormal);
+        var x = v as LocalVariable;
+        var bv = v as BoundVar;
+        if (HasLinearity(usage) && x == null && bv == null) {
+          reporter.Error(MessageSource.Resolver, pat.tok, "linear/shared not supported here");
+        }
+        if (x != null) {
+          x.Usage = usage;
+        }
+        if (bv != null) {
+          bv.Usage = usage;
+        }
         return;
       }
       if (dtd == null) {
@@ -13975,7 +14012,7 @@ namespace Microsoft.Dafny
             if (j < ctor.Formals.Count) {
               var formal = ctor.Formals[j];
               Type st = SubstType(formal.Type, subst);
-              ResolveCasePattern(arg, st, context);
+              ResolveCasePattern(arg, st, context, uOuter, formal.Usage);
             }
             j++;
           }
