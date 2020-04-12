@@ -1,33 +1,49 @@
 #include "DafnyRuntime.h"
 
-template <typename A>
-typedef struct {
-  uint64 length;
-  A* elts;
-} linear_seq;
+#include <vector>
+
+namespace LinearExtern {
 
 template <typename A>
-A seq_get(linear_seq s, uint64 i) {
-  return s.elts[i];
+using linear_seq = std::vector<A>;
+
+class __default {
+  public:
+
+  template <typename A>
+  static A seq_get(linear_seq<A> s, uint64 i) {
+    return s[i];
+  }
+
+  template <typename A>
+  static linear_seq<A> seq_set(linear_seq<A> s, uint64 i, A a) {
+    s[i] = a;
+    return s;
+  }
+
+  template <typename A>
+  static uint64 seq_length(linear_seq<A> s) {
+    return s.size();
+  }
+
+  template <typename A>
+  static linear_seq<A> seq_alloc(uint64 length) {
+    linear_seq<A> ret;
+    ret.assign(length, get_default<A>::call());
+    return ret;
+  }
+
+  template <typename A>
+  static void seq_free(linear_seq<A> s) {
+    s.clear();
+  }
+
+  template <typename A>
+  static DafnySequence<A> seq_unleash(linear_seq<A> s) {
+    DafnySequence<A> ret(s);  // Copies contents of s into ret
+    seq_free(s);
+    return ret;
+  }
+};
+
 }
-
-template <typename A>
-linear_seq seq_set(linear_seq s, uint64 i, A a) {
-  s.elts[i] = a;
-  return s;
-}
-
-template <typename A>
-uint64 seq_length(linear_seq s) {
-  return s.length;
-}
-
-template <typename A>
-linear_seq seq_alloc(uint64 length) {
-  linear_seq ret;
-  ret.length = length;
-  ret.elts = new A[length];
-  return ret;
-}
-
-

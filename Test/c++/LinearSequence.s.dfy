@@ -2,23 +2,23 @@ include "LinearMaybe.s.dfy"
 
 newtype{:nativeType "ulong"} uint64 = i:int | 0 <= i < 0x10000000000000000
 
-function method seq_get<A>(shared s:seq<A>, i:uint64):(a:A)
+function method {:extern "LinearExtern", "seq_get"} seq_get<A>(shared s:seq<A>, i:uint64):(a:A)
     requires i as int < |s|
     ensures a == s[i]
 
-function method seq_set<A>(linear s1:seq<A>, i:uint64, a:A):(linear s2:seq<A>) // can be implemented as in-place update
+function method {:extern "LinearExtern", "seq_set"} seq_set<A>(linear s1:seq<A>, i:uint64, a:A):(linear s2:seq<A>) // can be implemented as in-place update
     requires i as nat < |s1|
     ensures s2 == s1[i as nat := a]
 
-function method seq_length<A>(shared s:seq<A>):(n:nat)
+function method {:extern "LinearExtern", "seq_length"} seq_length<A>(shared s:seq<A>):(n:nat)
     ensures n == |s|
 
-function method seq_alloc<A>(length:uint64):(linear s:seq<A>)
+function method {:extern "LinearExtern", "seq_alloc"} seq_alloc<A>(length:uint64):(linear s:seq<A>)
     ensures |s| == length as int
 
-function method seq_free<A>(linear s:seq<A>):()
+function method {:extern "LinearExtern", "seq_free"} seq_free<A>(linear s:seq<A>):()
 
-function method seq_unleash<A>(linear s1:seq<A>):(s2:seq<A>)
+function method {:extern "LinearExtern", "seq_unleash"} seq_unleash<A>(linear s1:seq<A>):(s2:seq<A>)
     ensures s1 == s2
 
 type lseq<A>

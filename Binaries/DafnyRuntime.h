@@ -119,6 +119,8 @@ struct get_default<std::shared_ptr<U>> {
  *  TUPLES                                               *
  *********************************************************/
 
+struct Tuple0 {};
+
 template <typename T0, typename T1>
 struct Tuple2 {
   T0 t0;
@@ -389,6 +391,13 @@ struct DafnySequence {
       start = &*sptr;
       std::copy(arr.begin(), arr.end(), start);
     }
+    
+    DafnySequence(std::vector<T> vec) {
+      len = vec.size();
+      sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
+      start = &*sptr;
+      std::copy(vec.begin(), vec.end(), start);
+     }
 
     DafnySequence(DafnyArray<T> arr, uint64 lo, uint64 hi) {
       len = hi - lo;
