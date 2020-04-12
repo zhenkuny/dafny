@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cstdint>
 #include <variant>
+#include <exception>
 
 class _dafny {
   public:
@@ -29,6 +30,14 @@ typedef int64_t  int64;
 /*********************************************************
  *  UTILITIES                                            *
  *********************************************************/
+
+class DafnyHaltException : public std::runtime_error{
+  public:
+  DafnyHaltException(const char* msg) : std::runtime_error(msg) {}
+  virtual const char* what() const throw() {
+      return exception::what();
+  }
+};
 
 // using boost::hash_combine
 template <class T>

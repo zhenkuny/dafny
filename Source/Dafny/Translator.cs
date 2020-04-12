@@ -273,7 +273,6 @@ namespace Microsoft.Dafny {
       public readonly Bpl.Type Ty;
       public readonly Bpl.Type TyTag;
       public readonly Bpl.Expr Null;
-      public readonly Bpl.Expr NoTraitAtAll;
       public readonly Bpl.Constant AllocField;
       [ContractInvariantMethod]
       void ObjectInvariant() {
@@ -309,7 +308,6 @@ namespace Microsoft.Dafny {
         Contract.Invariant(Ty != null);
         Contract.Invariant(TyTag != null);
         Contract.Invariant(Null != null);
-        Contract.Invariant(NoTraitAtAll != null);
         Contract.Invariant(AllocField != null);
       }
 
@@ -447,7 +445,6 @@ namespace Microsoft.Dafny {
         this.DtCtorId = new Bpl.CtorType(Token.NoToken, dtCtorId, new List<Bpl.Type>());
         this.AllocField = allocField;
         this.Null = new Bpl.IdentifierExpr(Token.NoToken, "null", refT);
-        this.NoTraitAtAll = new Bpl.IdentifierExpr(Token.NoToken, "NoTraitAtAll", ClassNameType);
       }
     }
 
@@ -1067,55 +1064,42 @@ namespace Microsoft.Dafny {
     }
 
     /// <summary>
-    /// adding TraitParent axioms
-    /// if a class A extends trait J and B does not extend anything, then this method adds the followings to the sink:
-    ///   axiom TraitParent(class.A) == class.J;
-    ///   axiom TraitParent(class.B) == NoTraitAtAll;
+    /// For every revealed type (class or trait) C that extends a trait J, add:
+    ///   axiom IsTraitParent(class.C, class.J);
+    /// Note:
+    ///   At this time, a trait cannot extend another trait (which is enforced in the parser).
+    ///   However, that may change in the future. This method is forward compatible with such a change.
+    /// Note:
+    ///   The IsTraitParent predicates are currently not used for anything in the Boogie axiomatization.
+    ///   The idea is that these would be used to determine certain type relationships during verification.
+    ///   To be useful, there also needs to be a way to determine the _absence_ of trait-parent relationships.
+    ///   For example, suppose one can tell from the looking at the "extends" clauses in a program
+    ///   that a class C does not (directly or transitively) extend a trait T. Then, given variables c and t
+    ///   of static types C and T, respectively, the verifier should be able to infer c != t. This is not
+    ///   possible today. It will require an axiomatization of _all_ possible parent traits, not just
+    ///   saying that some are possible. When this becomes needed, the axiomatization will need to be
+    ///   embellished.
     /// </summary>
-    private void AddTraitParentAxioms()
-    {
-        foreach (ModuleDefinition m in program.RawModules())
-        {
-            if (m.TopLevelDecls.Any(d => (d is ClassDecl && ((ClassDecl)d).TraitsObj.Count > 0) || (d is TraitDecl)))
-            {
-                foreach (TopLevelDecl d in m.TopLevelDecls)
-                {
-                  if (!VisibleInScope(d)) {
-                    continue;
-                  }
-                    if (d is ClassDecl)
-                    {
-                        var c = (ClassDecl)d;
-                        if (c.TraitsObj.Count > 0)
-                        {
-                            foreach (TraitDecl traitObj in c.TraitsObj)
-                            {
-                              if (!VisibleInScope(traitObj)) {
-                                continue;
-                              }
-                              //this adds: axiom TraitParent(class.A) == class.J; Where A extends J
-                              Bpl.Constant trait = GetClass(traitObj);
-                              Bpl.Expr traitId_expr = new Bpl.IdentifierExpr(traitObj.tok, trait);
+    private void AddTraitParentAxioms() {
+      foreach (ModuleDefinition m in program.RawModules()) {
+        foreach (TopLevelDecl d in m.TopLevelDecls) {
+          var c = d as ClassDecl;
+          if (c == null || !RevealedInScope(d)) {
+            continue;
+          }
+          foreach (TraitDecl tr in c.TraitsObj) {
+            Contract.Assert(RevealedInScope((Declaration)tr)); // the resolver allows "class/trait C extends J" only if J is known to be a trait
 
-                              var id = new Bpl.IdentifierExpr(c.tok, GetClass(c));
-                              var funCallExpr = FunctionCall(c.tok, BuiltinFunction.TraitParent, null, id);
-                              var traitParentAxiom = new Bpl.Axiom(c.tok, Bpl.Expr.Eq(funCallExpr, traitId_expr));
+            // axiom IsTraitParent(class.C, class.J);
+            var classIdExpr = new Bpl.IdentifierExpr(c.tok, GetClass(c));
+            var traitIdExpr = new Bpl.IdentifierExpr(c.tok, GetClass(tr));
 
-                              sink.AddTopLevelDeclaration(traitParentAxiom);
-                            }
-                        }
-                        else
-                        {
-                          var id = new Bpl.IdentifierExpr(c.tok, GetClass(c));
-                          var funCallExpr = FunctionCall(c.tok, BuiltinFunction.TraitParent, null, id);
-                          var traitParentAxiom = new Bpl.Axiom(c.tok, Bpl.Expr.Eq(funCallExpr, predef.NoTraitAtAll));
-
-                          sink.AddTopLevelDeclaration(traitParentAxiom);
-                        }
-                    }
-                }
-            }
+            var isTraitParent = FunctionCall(c.tok, BuiltinFunction.IsTraitParent, null, classIdExpr, traitIdExpr);
+            var traitParentAxiom = new Bpl.Axiom(c.tok, isTraitParent);
+            sink.AddTopLevelDeclaration(traitParentAxiom);
+          }
         }
+      }
     }
 
     /// <summary>
@@ -1201,6 +1185,10 @@ namespace Microsoft.Dafny {
         }
       } else {
         AddTypeDecl(d.SelfSynonymDecl());
+        var dd = d as TopLevelDeclWithMembers;
+        if (dd != null) {
+          AddClassMembers(dd, true);
+        }
       }
     }
 
@@ -3486,7 +3474,7 @@ namespace Microsoft.Dafny {
           // exists k':ORDINAL | _k' LESS _k :: pp(_k', args)
           // Here, instead of using the usual ORD#Less, we use the semantically equivalent ORD#LessThanLimit, because this
           // allows us to write a good trigger for a targeted monotonicity axiom.  That axiom, in turn, makes the
-          // automatica verification more powerful for inductive lemmas that have more than one focal-predicate term.
+          // automatic verification more powerful for inductive lemmas that have more than one focal-predicate term.
           var smaller = new BinaryExpr(kprime.tok, BinaryExpr.Opcode.Lt, kprime, k) {
             ResolvedOp = BinaryExpr.ResolvedOpcode.LessThanLimit,
             Type = Type.Bool
@@ -6547,9 +6535,6 @@ namespace Microsoft.Dafny {
       } else if (expr is ConcreteSyntaxExpression) {
         var e = (ConcreteSyntaxExpression)expr;
         return CanCallAssumption(e.ResolvedExpression, etran);
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr)expr;
-        return CanCallAssumption(e.ResolvedExpression, etran);
       } else if (expr is BoogieFunctionCall) {
         var e = (BoogieFunctionCall)expr;
         return CanCallAssumption(e.Args, etran);
@@ -7651,7 +7636,6 @@ namespace Microsoft.Dafny {
         CheckWellformedWithResult(e.Els, options, result, resultType, locals, bElse, etran);
         builder.Add(new Bpl.IfCmd(expr.tok, etran.TrExpr(e.Test), bThen.Collect(expr.tok), null, bElse.Collect(expr.tok)));
         result = null;
-
       } else if (expr is MatchExpr) {
         MatchExpr me = (MatchExpr)expr;
         CheckWellformed(me.Source, options, locals, builder, etran);
@@ -7674,7 +7658,9 @@ namespace Microsoft.Dafny {
             }
             builder.Add(new Bpl.HavocCmd(me.tok, havocIds));
           }
-          b.Add(Assert(me.tok, Bpl.Expr.False, "missing case in case statement: " + missingCtor.Name));
+
+          String missingStr = me.Context.FillHole(new IdCtx(new KeyValuePair<string, DatatypeCtor>(missingCtor.Name, missingCtor))).AbstractAllHoles().ToString();
+          b.Add(Assert(me.tok, Bpl.Expr.False, "missing case in match expression: " + missingStr));
 
           Bpl.Expr guard = Bpl.Expr.Eq(src, r);
           ifCmd = new Bpl.IfCmd(me.tok, guard, b.Collect(me.tok), ifCmd, els);
@@ -7709,11 +7695,6 @@ namespace Microsoft.Dafny {
 
       } else if (expr is ConcreteSyntaxExpression) {
         var e = (ConcreteSyntaxExpression)expr;
-        CheckWellformedWithResult(e.ResolvedExpression, options, result, resultType, locals, builder, etran);
-        result = null;
-
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr)expr;
         CheckWellformedWithResult(e.ResolvedExpression, options, result, resultType, locals, builder, etran);
         result = null;
 
@@ -8001,6 +7982,8 @@ namespace Microsoft.Dafny {
         Bpl.Expr be;
         if (expr.Type.IsNumericBased() || expr.Type.IsBitVectorType) {
           be = ConvertExpression(expr.tok, o, expr.Type, toType);
+        } else if (expr.Type.IsBigOrdinalType) {
+          be = FunctionCall(expr.tok, "ORD#Offset", Bpl.Type.Int, o);
         } else {
           be = o;
         }
@@ -9891,6 +9874,26 @@ namespace Microsoft.Dafny {
             builder.Add(TrAssumeCmd(stmt.Tok, etran.TrExpr(s.Expr)));
             stmtContext = StmtType.NONE;
           }
+        } else if (stmt is ExpectStmt) {
+          AddComment(builder, stmt, "expect statement");
+          ExpectStmt s = (ExpectStmt)stmt;
+          stmtContext = StmtType.ASSUME;
+          TrStmt_CheckWellformed(s.Expr, builder, locals, etran, false);
+
+          // Need to check the message is well-formed, assuming the expected expression
+          // does NOT hold:
+          //
+          // if Not(TrExpr[[ s.Expr ]]) {
+          //  CheckWellformed[[ s.Message ]]
+          //  assume false;
+          // }
+          BoogieStmtListBuilder thnBuilder = new BoogieStmtListBuilder(this);
+          TrStmt_CheckWellformed(s.Message, thnBuilder, locals, etran, false);
+          thnBuilder.Add(TrAssumeCmd(stmt.Tok, new Bpl.LiteralExpr(stmt.Tok, false), etran.TrAttributes(stmt.Attributes, null)));
+          Bpl.StmtList thn = thnBuilder.Collect(s.Tok);
+          builder.Add(new Bpl.IfCmd(stmt.Tok, Bpl.Expr.Not(etran.TrExpr(s.Expr)), thn, null, null));
+
+          stmtContext = StmtType.NONE;  // done with translating expect stmt.
         } else if (stmt is AssumeStmt) {
           AddComment(builder, stmt, "assume statement");
           AssumeStmt s = (AssumeStmt)stmt;
@@ -10391,6 +10394,9 @@ namespace Microsoft.Dafny {
         }
         CurrentIdGenerator.Pop();
         this.fuelContext = FuelSetting.PopFuelContext();
+      } else if (stmt is ConcreteSyntaxStatement) {
+        ConcreteSyntaxStatement s = (ConcreteSyntaxStatement)stmt;
+        TrStmt(s.ResolvedStatement, builder, locals, etran);
       } else if (stmt is MatchStmt) {
         var s = (MatchStmt)stmt;
         TrStmt_CheckWellformed(s.Source, builder, locals, etran, true);
@@ -10415,7 +10421,8 @@ namespace Microsoft.Dafny {
             }
             builder.Add(new Bpl.HavocCmd(s.Tok, havocIds));
           }
-          b.Add(Assert(s.Tok, Bpl.Expr.False, "missing case in case statement: " + missingCtor.Name));
+          String missingStr = s.Context.FillHole(new IdCtx(new KeyValuePair<string, DatatypeCtor>(missingCtor.Name, missingCtor))).AbstractAllHoles().ToString();
+          b.Add(Assert(s.Tok, Bpl.Expr.False, "missing case in match statement: " + missingStr));
 
           Bpl.Expr guard = Bpl.Expr.Eq(source, r);
           ifCmd = new Bpl.IfCmd(s.Tok, guard, b.Collect(s.Tok), ifCmd, els);
@@ -14858,7 +14865,7 @@ namespace Microsoft.Dafny {
           var oe1 = e1;
           var lit0 = translator.GetLit(e0);
           var lit1 = translator.GetLit(e1);
-          bool liftLit = lit0 != null && lit1 != null;
+          bool liftLit = translator.IsLit(e0) && translator.IsLit(e1);
           // NOTE(namin): We usually avoid keeping literals, because their presence might mess up triggers that do not expect them.
           //              Still for equality-related operations, it's useful to keep them instead of lifting them, so that they can be propagated.
           bool keepLits = false;
@@ -15237,8 +15244,22 @@ namespace Microsoft.Dafny {
             List<Bpl.Variable> lhss;
             List<Bpl.Expr> rhss;
             TrLetExprPieces(e, out lhss, out rhss);
+            // in the translation of body, treat a let-bound variable as IsLit if its RHS definition is IsLit
+            Contract.Assert(lhss.Count == rhss.Count);  // this is a postcondition of TrLetExprPieces
+            var previousCount = translator.letBoundVariablesWithLitRHS.Count;
+            for (var i = 0; i < lhss.Count; i++) {
+              if (translator.IsLit(rhss[i])) {
+                translator.letBoundVariablesWithLitRHS.Add(lhss[i].Name);
+              }
+              i++;
+            }
+            var body = TrExpr(e.Body);
+            foreach (var v in lhss) {
+              translator.letBoundVariablesWithLitRHS.Remove(v.Name);
+            }
+            Contract.Assert(previousCount == translator.letBoundVariablesWithLitRHS.Count);
             // in the following, use the token for Body instead of the token for the whole let expression; this gives better error locations
-            return new Bpl.LetExpr(e.Body.tok, lhss, rhss, null, TrExpr(e.Body));
+            return new Bpl.LetExpr(e.Body.tok, lhss, rhss, null, body);
           }
         } else if (expr is NamedExpr) {
           return TrExpr(((NamedExpr)expr).Body);
@@ -15428,7 +15449,6 @@ namespace Microsoft.Dafny {
           var thn = translator.RemoveLit(TrExpr(e.Thn));
           var els = translator.RemoveLit(TrExpr(e.Els));
           return new NAryExpr(expr.tok, new IfThenElse(expr.tok), new List<Bpl.Expr> { g, thn, els });
-
         } else if (expr is MatchExpr) {
           var e = (MatchExpr)expr;
           var ite = DesugarMatchExpr(e);
@@ -15436,10 +15456,6 @@ namespace Microsoft.Dafny {
 
         } else if (expr is ConcreteSyntaxExpression) {
           var e = (ConcreteSyntaxExpression)expr;
-          return TrExpr(e.ResolvedExpression);
-
-        } else if (expr is RevealExpr) {
-          var e = (RevealExpr)expr;
           return TrExpr(e.ResolvedExpression);
 
         } else if (expr is BoxingCastExpr) {
@@ -15956,7 +15972,7 @@ namespace Microsoft.Dafny {
       Is, IsBox,
       IsAlloc, IsAllocBox,
 
-      TraitParent,
+      IsTraitParent,
 
       SetCard,
       SetEmpty,
@@ -16089,7 +16105,12 @@ namespace Microsoft.Dafny {
       return GetLit(expr) ?? expr;
     }
 
+    readonly ISet<string> letBoundVariablesWithLitRHS = new HashSet<string>();
+
     bool IsLit(Bpl.Expr expr) {
+      if (expr is Bpl.IdentifierExpr ie) {
+        return letBoundVariablesWithLitRHS.Contains(ie.Name);
+      }
       return GetLit(expr) != null;
     }
 
@@ -16148,10 +16169,10 @@ namespace Microsoft.Dafny {
           Contract.Assert(typeInstantiation == null);
           return FunctionCall(tok, "$IsAllocBox", Bpl.Type.Bool, args);
 
-        case BuiltinFunction.TraitParent:
-          Contract.Assert(args.Length == 1);
+        case BuiltinFunction.IsTraitParent:
+          Contract.Assert(args.Length == 2);
           Contract.Assert(typeInstantiation == null);
-          return FunctionCall(tok, "TraitParent", predef.ClassNameType, args);
+          return FunctionCall(tok, "IsTraitParent", Bpl.Type.Bool, args);
 
         case BuiltinFunction.SetCard:
           Contract.Assert(args.Length == 1);
@@ -16685,10 +16706,6 @@ namespace Microsoft.Dafny {
 
       } else if (expr is ConcreteSyntaxExpression) {
         var e = (ConcreteSyntaxExpression)expr;
-        return TrSplitExpr(e.ResolvedExpression, splits, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
-
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr)expr;
         return TrSplitExpr(e.ResolvedExpression, splits, position, heightLimit, inlineProtectedFunctions, apply_induction, etran);
 
       } else if (expr is LetExpr) {
@@ -17878,7 +17895,6 @@ namespace Microsoft.Dafny {
             var newLet = new SubstLetExpr(e.tok, e.LHSs, new List<Expression>{ rhs }, body, e.Exact, e.Usage, e, newSubstMap, newTypeMap);
             newExpr = newLet;
           }
-
         } else if (expr is MatchExpr) {
           var e = (MatchExpr)expr;
           var src = Substitute(e.Source);
@@ -17895,7 +17911,7 @@ namespace Microsoft.Dafny {
             if (newBoundVars != mc.Arguments || body != mc.Body) {
               anythingChanged = true;
             }
-            var newCaseExpr = new MatchCaseExpr(mc.tok, mc.Id, newBoundVars, body);
+            var newCaseExpr = new MatchCaseExpr(mc.tok, mc.Ctor, newBoundVars, body);
             newCaseExpr.Ctor = mc.Ctor;  // resolve here
             cases.Add(newCaseExpr);
           }
@@ -17965,10 +17981,6 @@ namespace Microsoft.Dafny {
 
         } else if (expr is ConcreteSyntaxExpression) {
           var e = (ConcreteSyntaxExpression)expr;
-          return Substitute(e.ResolvedExpression);
-
-        } else if (expr is RevealExpr) {
-          var e = (RevealExpr)expr;
           return Substitute(e.ResolvedExpression);
 
         } else if (expr is BoogieFunctionCall) {
@@ -18228,6 +18240,9 @@ namespace Microsoft.Dafny {
         } else if (stmt is AssertStmt) {
           var s = (AssertStmt)stmt;
           r = new AssertStmt(s.Tok, s.EndTok, Substitute(s.Expr), SubstBlockStmt(s.Proof), s.Label, SubstAttributes(s.Attributes));
+        } else if (stmt is ExpectStmt) {
+          var s = (ExpectStmt)stmt;
+          r = new ExpectStmt(s.Tok, s.EndTok, Substitute(s.Expr), Substitute(s.Message), SubstAttributes(s.Attributes));
         } else if (stmt is AssumeStmt) {
           var s = (AssumeStmt)stmt;
           r = new AssumeStmt(s.Tok, s.EndTok, Substitute(s.Expr), SubstAttributes(s.Attributes));
@@ -18289,6 +18304,9 @@ namespace Microsoft.Dafny {
           rr.Steps.AddRange(s.Steps.ConvertAll(Substitute));
           rr.Result = Substitute(s.Result);
           r = rr;
+        } else if (stmt is ConcreteSyntaxStatement) {
+          var s = (ConcreteSyntaxStatement)stmt;
+          r = SubstStmt(s.ResolvedStatement);
         } else if (stmt is MatchStmt) {
           var s = (MatchStmt)stmt;
           var rr = new MatchStmt(s.Tok, s.EndTok, Substitute(s.Source), s.Cases.ConvertAll(SubstMatchCaseStmt), s.UsesOptionalBraces, s.Usage);
@@ -18418,7 +18436,7 @@ namespace Microsoft.Dafny {
       protected MatchCaseStmt SubstMatchCaseStmt(MatchCaseStmt c) {
         Contract.Requires(c != null);
         var newBoundVars = CreateBoundVarSubstitutions(c.Arguments, false);
-        var r = new MatchCaseStmt(c.tok, c.Id, newBoundVars, c.Body.ConvertAll(SubstStmt));
+        var r = new MatchCaseStmt(c.tok, c.Ctor, newBoundVars, c.Body.ConvertAll(SubstStmt));
         r.Ctor = c.Ctor;
         // undo any changes to substMap (could be optimized to do this only if newBoundVars != e.Vars)
         foreach (var bv in c.Arguments) {

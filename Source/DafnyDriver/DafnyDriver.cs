@@ -640,7 +640,6 @@ namespace Microsoft.Dafny
         jcompiler.CompileTuples(dest);
         jcompiler.CreateFunctionInterface(dest);
         jcompiler.CompileDafnyArrays(dest);
-        jcompiler.CompileArrayInits(dest);
       }
 
       if (!completeProgram) {
