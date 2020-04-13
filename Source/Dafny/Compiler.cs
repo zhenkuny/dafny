@@ -1409,13 +1409,17 @@ namespace Microsoft.Dafny {
         var ctor = pat.Ctor;
         Contract.Assert(ctor != null);  // follows from successful resolution
         Contract.Assert(pat.Arguments.Count == ctor.Formals.Count);  // follows from successful resolution
+        bool isLinear = false;
+        if (pat.Ctor.EnclosingDatatype is IndDatatypeDecl idecl) {
+          isLinear = idecl.IsLinear;
+        } 
 
         // Create the temporary variable to hold G
         var tmp_name = idGenerator.FreshId("_let_tmp_rhs");
         if (rhs != null) {
-          DeclareLocalVar(tmp_name, rhs.Type, rhs.tok, false, rhs, inLetExprBody, wr);   // REVIEW: Linear?
+          DeclareLocalVar(tmp_name, rhs.Type, rhs.tok, isLinear, rhs, inLetExprBody, wr);
         } else {
-          DeclareLocalVar(tmp_name, rhsType, rhsTok, false, false, rhs_string, wr);   // REVIEW: Linear?
+          DeclareLocalVar(tmp_name, rhsType, rhsTok, isLinear, false, rhs_string, wr);
         }
 
         var k = 0;  // number of non-ghost formals processed
