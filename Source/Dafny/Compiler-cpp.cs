@@ -46,6 +46,7 @@ namespace Microsoft.Dafny {
     new string DafnyMultiSetClass = "DafnyMultiset";
     new string DafnySeqClass = "DafnySequence"; 
     new string DafnyMapClass = "DafnyMap";
+    private string DafnyLinearSeqClass = "LinearExtern::linear_seq";
 
     public override string TargetLanguage => "Cpp";
     protected override string ModuleSeparator => "::";
@@ -1159,7 +1160,12 @@ namespace Microsoft.Dafny {
         if (ComplicatedTypeParameterForCompilation(argType)) {
           Error(tok, "compilation of seq<TRAIT> is not supported; consider introducing a ghost", wr);
         }
-        return DafnySeqClass + "<" + TypeName(argType, wr, tok) + ">";
+
+        if (isLinear) {
+          return DafnyLinearSeqClass + "<" + TypeName(argType, wr, tok) + ">";
+        } else {
+          return DafnySeqClass + "<" + TypeName(argType, wr, tok) + ">";
+        }
       } else if (xType is MultiSetType) {
         Type argType = ((MultiSetType)xType).Arg;
         if (ComplicatedTypeParameterForCompilation(argType)) {

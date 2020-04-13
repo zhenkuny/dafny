@@ -15,11 +15,20 @@ method Test(name:string, b:bool)
   }
 }
 
+
+//newtype{:nativeType "ulong"} uint64 = i:int | 0 <= i < 0x10000000000000000
+//
+//function method {:extern "LinearExtern", "seq_alloc"} seq_alloc<A>(length:uint64):(linear s:seq<A>)
+//function method {:extern "LinearExtern", "seq_free"} seq_free<A>(linear s:seq<A>):()
+//
+
 method TestLinearSequences() 
 {
   linear var s0 := seq_alloc<uint64>(10);
+//  var _ := seq_free(s0);
   var x := seq_get(s0, 0);
   print x;
+  print "\n";
   linear var s1 := seq_set(s0, 0, 42);
 //  x := seq_get(s0, 0);   // Fails linearity check
 //  print x;
