@@ -1084,7 +1084,7 @@ namespace Microsoft.Dafny
       return true;
     }
 
-    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
+    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
       wr.Write("{0} {1}", type != null ? TypeName(type, wr, tok) : "var", name);
       if (leaveRoomForRhs) {
         Contract.Assert(rhs == null);  // follows from precondition
@@ -1095,7 +1095,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, TargetWriter wr) {
       wr.Write("{0} {1} = ", type != null ? TypeName(type, wr, tok) : "var", name);
       var w = wr.Fork();
       wr.WriteLine(";");
@@ -1106,9 +1106,9 @@ namespace Microsoft.Dafny
       wr.Write("var {0} = ", collectorVarName);
     }
 
-    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
+    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, bool isLinear, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
       if (useReturnStyleOuts) {
-        DeclareLocalVar(name, type, tok, false, rhs, wr);
+        DeclareLocalVar(name, type, tok, isLinear, false, rhs, wr);
       } else {
         EmitAssignment(name, type, rhs, null, wr);
       }
@@ -1860,7 +1860,7 @@ namespace Microsoft.Dafny
 
       var indexType = lengthExpr.Type;
       var lengthVar = FreshId("dim");
-      DeclareLocalVar(lengthVar, indexType, lengthExpr.tok, lengthExpr, inLetExprBody, wrLamBody);
+      DeclareLocalVar(lengthVar, indexType, lengthExpr.tok, boundVar.IsLinear, lengthExpr, inLetExprBody, wrLamBody);
       var arrVar = FreshId("arr");
       wrLamBody.Write("var {0} = ", arrVar);
       var wrDims = EmitNewArray(body.Type, body.tok, dimCount: 1, mustInitialize: false, wr: wrLamBody);

@@ -1086,7 +1086,7 @@ namespace Microsoft.Dafny {
     }
     
     // Use class_name = true if you want the actual name of the class, not the type used when declaring variables/arguments/etc.
-    protected string TypeName(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member = null, bool class_name=false) {
+    protected string TypeName(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member = null, bool class_name=false, bool isLinear=false) {
       Contract.Ensures(Contract.Result<string>() != null);
       Contract.Assume(type != null);  // precondition; this ought to be declared as a Requires in the superclass
 
@@ -1378,9 +1378,9 @@ namespace Microsoft.Dafny {
       return ret;
     }
 
-    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
+    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
       if (type != null) {
-        wr.Write("{0} ", TypeName(type, wr, tok));
+        wr.Write("{0} ", TypeName(type, wr, tok, isLinear:isLinear));
       } else {
         wr.Write("auto ");
       }
@@ -1394,9 +1394,9 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, TargetWriter wr) {
       if (type != null) {
-        wr.Write("{0} ", TypeName(type, wr, tok));
+        wr.Write("{0} ", TypeName(type, wr, tok, isLinear:isLinear));
       } else {
         wr.Write("auto ");
       }
@@ -1412,8 +1412,8 @@ namespace Microsoft.Dafny {
       wr.Write("auto {0} = ", collectorVarName);
     }
 
-    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, false, rhs, wr);
+    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, bool isLinear, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
+      DeclareLocalVar(name, type, tok, isLinear, false, rhs, wr);
     }
 
     protected override void EmitOutParameterSplits(string outCollector, List<string> actualOutParamNames, TargetWriter wr) {

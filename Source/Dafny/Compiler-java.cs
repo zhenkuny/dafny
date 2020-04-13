@@ -258,13 +258,13 @@ namespace Microsoft.Dafny{
       wr.Write($"({s})");
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, TargetWriter wr, Type t){
-      return DeclareLocalVar(name, t, tok, wr);
+    protected override TargetWriter DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, TargetWriter wr, Type t){
+      return DeclareLocalVar(name, t, tok, isLinear, wr);
     }
 
-    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Expression rhs,
+    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, Expression rhs,
       bool inLetExprBody, TargetWriter wr, Type t){
-      var w = DeclareLocalVar(name, t, tok, wr);
+      var w = DeclareLocalVar(name, t, tok, isLinear, wr);
       TrExpr(rhs, w, inLetExprBody);
     }
 
@@ -429,12 +429,12 @@ namespace Microsoft.Dafny{
       }
     }
 
-    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Expression rhs,
+    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, Expression rhs,
       bool inLetExprBody, TargetWriter wr){
       if (type == null){
         type = rhs.Type;
       }
-      var w = DeclareLocalVar(name, type, tok, wr);
+      var w = DeclareLocalVar(name, type, tok, isLinear, wr);
       TrExpr(rhs, w, inLetExprBody);
     }
 
@@ -1091,7 +1091,7 @@ namespace Microsoft.Dafny{
       wr.Write(custom ? "_this" : "this");
     }
 
-    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool leaveRoomForRhs,
+    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, bool leaveRoomForRhs,
       string /*?*/ rhs, TargetWriter wr){
       if (type != null && type.AsArrayType != null){
         arrays.Add(type.AsArrayType.Dims);
@@ -1114,9 +1114,9 @@ namespace Microsoft.Dafny{
       }
     }
 
-    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool leaveRoomForRhs,
+    protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, bool leaveRoomForRhs,
       string /*?*/ rhs, TargetWriter wr, Type t) {
-      DeclareLocalVar(name, t, tok, leaveRoomForRhs, rhs, wr);
+      DeclareLocalVar(name, t, tok, isLinear, leaveRoomForRhs, rhs, wr);
     }
 
     protected override void EmitCollectionDisplay(CollectionType ct, Bpl.IToken tok, List<Expression> elements, bool inLetExprBody, TargetWriter wr) {
@@ -3060,15 +3060,15 @@ namespace Microsoft.Dafny{
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type type, Bpl.IToken tok, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type type, Bpl.IToken tok, bool isLinear, TargetWriter wr) {
       wr.Write("{0} {1} = ", type != null ? TypeName(type, wr, tok) : "var", name);
       var w = wr.Fork();
       wr.WriteLine(";");
       return w;
     }
 
-    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, false, rhs, wr);
+    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, bool isLinear, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
+      DeclareLocalVar(name, type, tok, isLinear, false, rhs, wr);
     }
 
     protected override IClassWriter CreateTrait(string name, bool isExtern, List<Type> superClasses, Bpl.IToken tok, TargetWriter wr) {
