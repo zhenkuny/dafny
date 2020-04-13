@@ -39,6 +39,15 @@ Tuple0 discard(maybe<A> m) { (void)m; Tuple0 ret; return ret; }
 
 }
 
+template<typename A>
+struct get_default<LinearMaybe::maybe<A>> {
+  static LinearMaybe::maybe<A> call() { 
+    struct LinearMaybe::maybe<A> m;
+    m.a = get_default<A>::call();
+    return m; 
+  }
+};
+
 namespace LinearExtern {
 
 ////////////////////////////////////////////////////////////
@@ -102,7 +111,7 @@ DafnySequence<A> seq_unleash(linear_seq<A> s) {
 //
 ////////////////////////////////////////////////////////////
 template <typename A>
-using lseq = std::vector<A>;
+using lseq = std::vector<LinearMaybe::maybe<A>>;
 
 template <typename A>
 uint64 lseq_length_raw(lseq<A> s) {
@@ -112,7 +121,7 @@ uint64 lseq_length_raw(lseq<A> s) {
 template <typename A>
 lseq<A> lseq_alloc_raw(uint64 length) {
   lseq<A> ret;
-  ret.assign(length, get_default<A>::call());
+  ret.assign(length, get_default<LinearMaybe::maybe<A>>::call());
   return ret;
 }
 

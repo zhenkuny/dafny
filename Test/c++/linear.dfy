@@ -3,6 +3,7 @@ include "LinearSequence.s.dfy"
 import opened Types
 import opened LinearMaybe
 import opened LinearSequences
+import opened LinearLSeq
 //linear datatype Node =
 //  | Leaf(linear keys: seq<uint64>, linear values: seq<uint64>)
 //  | Index(linear pivots: seq<uint64>, linear children: lseq<uint64>)
@@ -71,6 +72,36 @@ method TestLinearMaybe(linear u:uint64) returns (linear x:uint64)
 
 method {:extern "LinearExtern", "MakeLinearInt"} MakeLinearInt(u:uint64) returns (linear x:uint64)
 method {:extern "LinearExtern", "DiscardLinearInt"} DiscardLinearInt(linear u:uint64) 
+
+lemma {:axiom} falso()
+  ensures false;
+
+method AccessShared(shared s:lseq<uint64>) 
+  requires lseq_length_raw(s) > 1
+  requires has(lseq_share_raw(s, 0))
+{
+  shared var m := lseq_share_raw(s, 0);
+  shared var a := peek(m);
+}
+
+method TestLSeq() 
+{
+  linear var s := lseq_alloc_raw<uint64>(10);
+  var len := lseq_length_raw(s);
+  print len;
+  print "\n";
+
+  linear var u := MakeLinearInt(24);
+  linear var m := give(u);
+  linear var (s', m') := lseq_swap_raw_fun(s, 0, m);
+  
+  AccessShared(s');
+
+  linear var (s'', m'') := lseq_swap_raw_fun(s', 0, m');
+  falso();    // Skip proofs about has
+  var _ := discard(m'');
+  var _ := lseq_free_raw(s'');
+}
 
 method Main()
 {
