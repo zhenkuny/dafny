@@ -15,8 +15,8 @@ module LinearSequences {
       requires i as nat < |s1|
       ensures s2 == s1[i as nat := a]
 
-  function method {:extern "LinearExtern", "seq_length"} seq_length<A>(shared s:seq<A>):(n:nat)
-      ensures n == |s|
+  function method {:extern "LinearExtern", "seq_length"} seq_length<A>(shared s:seq<A>):(n:uint64)
+      ensures n as int == |s|
 
   function method {:extern "LinearExtern", "seq_alloc"} seq_alloc<A>(length:uint64):(linear s:seq<A>)
       ensures |s| == length as int
