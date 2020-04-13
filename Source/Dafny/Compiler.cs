@@ -1510,7 +1510,7 @@ namespace Microsoft.Dafny {
         if (!e.Function.IsStatic) {
           string inTmp = idGenerator.FreshId("_in");
           inTmps.Add(inTmp);
-          DeclareLocalVar(inTmp, null, null, false, e.Receiver, false, wr);   // REVIEW: Linear?
+          DeclareLocalVar(inTmp, null, null, false, e.Receiver, false, wr);
         }
         for (int i = 0; i < e.Function.Formals.Count; i++) {
           Formal p = e.Function.Formals[i];
@@ -2863,7 +2863,7 @@ namespace Microsoft.Dafny {
         return sw.ToString();
       } else {
         var v = idGenerator.FreshId(prefix);
-        DeclareLocalVar(v, null, null, false, e, false, wr);  // REVIEW: Linear?
+        DeclareLocalVar(v, null, null, false, e, false, wr);
         return v;
       }
     }
@@ -2927,7 +2927,7 @@ namespace Microsoft.Dafny {
         TrExpr(eRhs.Expr, wr, false);
       } else {
         var nw = idGenerator.FreshId("_nw");
-        var wRhs = DeclareLocalVar(nw, null, null, false, wStmts, tRhs.Type);   // REVIEW: Linear?
+        var wRhs = DeclareLocalVar(nw, null, null, false, wStmts, tRhs.Type);
         TrTypeRhs(tRhs, wRhs);
 
         // Proceed with initialization
@@ -2941,7 +2941,7 @@ namespace Microsoft.Dafny {
         } else if (tRhs.ElementInit != null) {
           // Compute the array-initializing function once and for all (as required by the language definition)
           string f = idGenerator.FreshId("_arrayinit");
-          DeclareLocalVar(f, null, null, false, tRhs.ElementInit, false, wStmts, tRhs.ElementInit.Type);   // REVIEW: Linear?
+          DeclareLocalVar(f, null, null, false, tRhs.ElementInit, false, wStmts, tRhs.ElementInit.Type);
           // Build a loop nest that will call the initializer for all indices
           var indices = Translator.Map(Enumerable.Range(0, tRhs.ArrayDimensions.Count), ii => idGenerator.FreshId("_arrayinit_" + ii));
           var w = wStmts;
@@ -2996,7 +2996,7 @@ namespace Microsoft.Dafny {
 
           string inTmp = idGenerator.FreshId("_in");
           inTmps.Add(inTmp);
-          DeclareLocalVar(inTmp, null, null, false, s.Receiver, false, wr);   // REVIEW: Linear?
+          DeclareLocalVar(inTmp, null, null, false, s.Receiver, false, wr);
         }
         for (int i = 0; i < s.Method.Ins.Count; i++) {
           Formal p = s.Method.Ins[i];
