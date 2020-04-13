@@ -1282,7 +1282,7 @@ namespace Microsoft.Dafny {
         IVariable accVar = null;
         if (f.IsTailRecursive) {
           if (f.IsAccumulatorTailRecursive) {
-            accVar = new LocalVariable(f.tok, f.tok, "_accumulator", f.ResultType, false) {
+            accVar = new LocalVariable(f.tok, f.tok, "_accumulator", f.ResultType, (f.Result != null) ? f.Result.Usage : Usage.Ordinary) {
               type = f.ResultType
             };
             Expression unit;

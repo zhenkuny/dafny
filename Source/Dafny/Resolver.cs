@@ -10200,8 +10200,9 @@ namespace Microsoft.Dafny
       public bool Debug;
       public readonly ICodeContext CodeContext;
       public List<ExtendedPattern> MissingCases;
+      public Usage Usage;
 
-      public MatchTempInfo(IToken tok, int branchidnum, ICodeContext codeContext, bool debug = false) {
+      public MatchTempInfo(IToken tok, int branchidnum, ICodeContext codeContext, Usage usage, bool debug = false) {
         int[] init = new int[branchidnum];
         for (int i = 0; i < branchidnum; i++) {
           init[i] = 1;
@@ -10214,9 +10215,10 @@ namespace Microsoft.Dafny
         this.Debug = debug;
         this.CodeContext = codeContext;
         this.MissingCases = new List<ExtendedPattern>();
+        this.Usage = usage;
       }
 
-      public MatchTempInfo(IToken tok, IToken endtok, int branchidnum, ICodeContext codeContext, bool debug = false) {
+      public MatchTempInfo(IToken tok, IToken endtok, int branchidnum, ICodeContext codeContext, Usage usage, bool debug = false) {
         int[] init = new int[branchidnum];
         for (int i = 0; i < branchidnum; i++) {
           init[i] = 1;
@@ -10229,6 +10231,7 @@ namespace Microsoft.Dafny
         this.Debug = debug;
         this.CodeContext = codeContext;
         this.MissingCases = new List<ExtendedPattern>();
+        this.Usage = usage;
       }
 
       public void UpdateBranchID(int branchID, int update) {
@@ -10385,7 +10388,7 @@ namespace Microsoft.Dafny
     private void LetBind(RBranch branch, IdPattern var, Expression genExpr) {
       var name = var.Id;
       var type = var.Type;
-      var isGhost = var.IsGhost;
+      var usage = var.Usage;
 
       // if the expression is a generated IdentifierExpr, replace its token by the branch's
       Expression expr = genExpr;
@@ -10395,19 +10398,19 @@ namespace Microsoft.Dafny
         }
       }
       if (branch is RBranchStmt branchStmt) {
-        var cLVar = new LocalVariable(var.Tok, var.Tok, name, type, isGhost);
+        var cLVar = new LocalVariable(var.Tok, var.Tok, name, type, usage);
         var cPat = new CasePattern<LocalVariable>(cLVar.EndTok, cLVar);
-        var cLet = new LetStmt(cLVar.Tok, cLVar.Tok, cPat, expr);
+        var cLet = new LetStmt(cLVar.Tok, cLVar.Tok, cPat, expr, usage);
         branchStmt.Body.Insert(0, cLet);
       } else if (branch is RBranchExpr branchExpr) {
         var cBVar = new BoundVar(var.Tok, name, type);
-        cBVar.IsGhost = isGhost;
+        cBVar.Usage = usage;
         var cPat = new CasePattern<BoundVar>(cBVar.Tok, cBVar);
         var cPats = new List<CasePattern<BoundVar>>();
         cPats.Add(cPat);
         var exprs = new List<Expression>();
         exprs.Add(expr);
-        var cLet = new LetExpr(cBVar.tok, cPats, exprs, branchExpr.Body, true);
+        var cLet = new LetExpr(cBVar.tok, cPats, exprs, branchExpr.Body, true, usage);
         branchExpr.Body = cLet;
       }
       return;
@@ -10490,22 +10493,24 @@ namespace Microsoft.Dafny
       return newMatchCase;
     }
 
-    private BoundVar CreatePatBV(IToken oldtok , Type subtype, ICodeContext codeContext) {
+    private BoundVar CreatePatBV(IToken oldtok , Type subtype, ICodeContext codeContext, Usage uOuter, Usage uInner) {
       var tok = oldtok;
       var name = FreshTempVarName("_mcc#", codeContext);
       var type = new InferredTypeProxy();
       var err = new TypeConstraint.ErrorMsgWithToken(oldtok, "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", type, subtype, name);
       ConstrainSubtypeRelation(type, subtype, err);
-      return new BoundVar(tok, name, type);
+      Usage usage = (uOuter == Usage.Shared && uInner == Usage.Linear) ? Usage.Shared : uInner;
+      return new BoundVar(tok, name, type, usage);
     }
 
-    private IdPattern CreateFreshId(IToken oldtok , Type subtype, ICodeContext codeContext, bool isGhost = false) {
+    private IdPattern CreateFreshId(IToken oldtok , Type subtype, ICodeContext codeContext, Usage uOuter, Usage uInner) {
       var tok = oldtok;
       var name = FreshTempVarName("_mcc#", codeContext);
       var type = new InferredTypeProxy();
       var err = new TypeConstraint.ErrorMsgWithToken(oldtok, "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", type, subtype, name);
       ConstrainSubtypeRelation(type, subtype, err);
-      return new IdPattern(tok, name, type, new List<ExtendedPattern>(), isGhost);
+      Usage usage = (uOuter == Usage.Shared && uInner == Usage.Linear) ? Usage.Shared : uInner;
+      return new IdPattern(tok, name, type, new List<ExtendedPattern>(), usage);
     }
 
     private void PrintRBranches(MatchingContext context, List<Expression> matchees, List<RBranch> branches) {
@@ -10617,7 +10622,7 @@ namespace Microsoft.Dafny
         // create a bound variable for each formal to use in the MatchCase for this constructor
         // using the currMatchee.tok to get a location closer to the error if something goes wrong
         var freshPatBV = ctor.Value.Formals.ConvertAll(
-          x => CreatePatBV(currMatchee.tok, SubstType(x.Type, subst), mti.CodeContext));
+          x => CreatePatBV(currMatchee.tok, SubstType(x.Type, subst), mti.CodeContext, mti.Usage, x.Usage));
 
         // rhs to bind to head-patterns that are bound variables
         var rhsExpr = currMatchee;
@@ -10636,7 +10641,15 @@ namespace Microsoft.Dafny
                 }
                 for (int j = 0; j < currPattern.Arguments.Count; j++) {
                   // mark patterns standing in for ghost field
-                  currPattern.Arguments[j].IsGhost = currPattern.Arguments[j].IsGhost || ctor.Value.Formals[j].IsGhost;
+                  Usage u = ctor.Value.Formals[j].Usage;
+                  if (mti.Usage == Usage.Shared && u == Usage.Linear) {
+                    u = Usage.Shared;
+                  }
+                  if (currPattern.Arguments[j].Usage == Usage.Ordinary) {
+                    currPattern.Arguments[j].Usage = u;
+                  } else if (currPattern.Arguments[j].Usage != u) {
+                    reporter.Error(MessageSource.Resolver, mti.BranchTok[PB.Item2.BranchID], "expected {0} pattern, found {1} pattern", UsageName(ctor.Value.Formals[j].Usage), UsageName(u));
+                  }
                 }
                 currBranch.Patterns.InsertRange(0, currPattern.Arguments);
               } else if (!ctor.Value.Formals.Count.Equals(0)) {
@@ -10658,7 +10671,7 @@ namespace Microsoft.Dafny
               var currBranch = CloneRBranch(PB.Item2);
 
               List<IdPattern> freshArgs = ctor.Value.Formals.ConvertAll(x =>
-                CreateFreshId(currPattern.Tok, SubstType(x.Type, subst), mti.CodeContext, x.IsGhost));
+                CreateFreshId(currPattern.Tok, SubstType(x.Type, subst), mti.CodeContext, mti.Usage, x.Usage));
 
               currBranch.Patterns.InsertRange(0, freshArgs);
               LetBindNonWildCard(currBranch, currPattern, rhsExpr);
@@ -10689,10 +10702,10 @@ namespace Microsoft.Dafny
       }
       // Generate and pack the right kind of Match
       if (mti.isStmt) {
-        var newMatchStmt = new MatchStmt(mti.Tok, mti.EndTok, currMatchee, newMatchCases.ConvertAll(x => (MatchCaseStmt) x), true, context);
+        var newMatchStmt = new MatchStmt(mti.Tok, mti.EndTok, currMatchee, newMatchCases.ConvertAll(x => (MatchCaseStmt) x), true, mti.Usage, context);
         return new CStmt(null, newMatchStmt);
       } else {
-        var newMatchExpr = new MatchExpr(mti.Tok, currMatchee, newMatchCases.ConvertAll(x => (MatchCaseExpr) x), true, context);
+        var newMatchExpr = new MatchExpr(mti.Tok, currMatchee, newMatchCases.ConvertAll(x => (MatchCaseExpr) x), true, mti.Usage, context);
         return new CExpr(null, newMatchExpr);
       }
     }
@@ -10812,7 +10825,7 @@ namespace Microsoft.Dafny
       }
       if (DafnyOptions.O.MatchCompilerDebug) Console.WriteLine("DEBUG: CompileNestedMatchExpr for match at line {0}", e.tok.line);
 
-      MatchTempInfo mti = new MatchTempInfo(e.tok, e.Cases.Count(), codeContext, DafnyOptions.O.MatchCompilerDebug);
+      MatchTempInfo mti = new MatchTempInfo(e.tok, e.Cases.Count(), codeContext, e.Usage, DafnyOptions.O.MatchCompilerDebug);
 
       // create Rbranches from MatchCaseExpr and set the branch tokens in mti
       List<RBranch> branches = new List<RBranch>();
@@ -10827,7 +10840,7 @@ namespace Microsoft.Dafny
       SyntaxContainer rb = CompileRBranch(mti, new HoleCtx(), matchees, branches);
       if (rb is null) {
         // Happens only if the match has no cases, create a Match with no cases as resolved expression and let ResolveMatchExpr handle it.
-        e.ResolvedExpression = new MatchExpr(e.tok, (new Cloner()).CloneExpr(e.Source), new List<MatchCaseExpr>(), e.UsesOptionalBraces);
+        e.ResolvedExpression = new MatchExpr(e.tok, (new Cloner()).CloneExpr(e.Source), new List<MatchCaseExpr>(), e.UsesOptionalBraces, e.Usage);
       } else if (rb is CExpr) {
         // replace e with desugared expression
         var newME = ((CExpr)rb).Body;
@@ -10858,7 +10871,7 @@ namespace Microsoft.Dafny
       if (DafnyOptions.O.MatchCompilerDebug) Console.WriteLine("DEBUG: CompileNestedMatchStmt for match at line {0}", s.Tok.line);
 
       // initialize the MatchTempInfo to record position and duplication information about each branch
-      MatchTempInfo mti = new MatchTempInfo(s.Tok, s.EndTok, s.Cases.Count(), codeContext, DafnyOptions.O.MatchCompilerDebug);
+      MatchTempInfo mti = new MatchTempInfo(s.Tok, s.EndTok, s.Cases.Count(), codeContext, s.Usage, DafnyOptions.O.MatchCompilerDebug);
 
       // create Rbranches from NestedMatchCaseStmt and set the branch tokens in mti
       List<RBranch> branches = new List<RBranch>();
@@ -10872,7 +10885,7 @@ namespace Microsoft.Dafny
       SyntaxContainer rb = CompileRBranch(mti, new HoleCtx(), matchees, branches);
       if (rb is null) {
         // Happens only if the nested match has no cases, create a MatchStmt with no branches.
-        s.ResolvedStatement = new MatchStmt(s.Tok, s.EndTok, (new Cloner()).CloneExpr(s.Source), new List<MatchCaseStmt>(), s.UsesOptionalBraces);
+        s.ResolvedStatement = new MatchStmt(s.Tok, s.EndTok, (new Cloner()).CloneExpr(s.Source), new List<MatchCaseStmt>(), s.UsesOptionalBraces, s.Usage);
 
       } else if (rb is CStmt) {
         // Resolve s as desugared match

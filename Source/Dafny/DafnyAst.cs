@@ -5482,8 +5482,8 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public BoundVar(IToken tok, string name, Type type)
-      : base(tok, name, type, Usage.Ordinary) {
+    public BoundVar(IToken tok, string name, Type type, Usage usage = Usage.Ordinary)
+      : base(tok, name, type, usage) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(type != null);
@@ -11010,19 +11010,19 @@ namespace Microsoft.Dafny {
   public abstract class ExtendedPattern
   {
     public readonly IToken Tok;
-    public bool IsGhost;
+    public Usage Usage;
 
-    public ExtendedPattern(IToken tok, bool isGhost = false) {
+    public ExtendedPattern(IToken tok, Usage usage = Usage.Ordinary) {
       Contract.Requires(tok != null);
       this.Tok = tok;
-      this.IsGhost = isGhost;
+      this.Usage = usage;
     }
   }
   public class LitPattern : ExtendedPattern
   {
     public readonly LiteralExpr Lit;
 
-    public LitPattern(IToken tok, LiteralExpr lit, bool isGhost = false) : base(tok, isGhost) {
+    public LitPattern(IToken tok, LiteralExpr lit, Usage usage = Usage.Ordinary) : base(tok, usage) {
       Contract.Requires(lit != null);
       this.Lit = lit;
     }
@@ -11038,7 +11038,7 @@ namespace Microsoft.Dafny {
     public readonly Type Type; // This is the syntactic type, ExtendedPatterns dissapear during resolution.
     public readonly List<ExtendedPattern> Arguments;
 
-    public IdPattern(IToken tok, String id, List<ExtendedPattern> arguments, bool isGhost = false) : base(tok, isGhost) {
+    public IdPattern(IToken tok, String id, List<ExtendedPattern> arguments, Usage usage = Usage.Ordinary) : base(tok, usage) {
       Contract.Requires(id != null);
       Contract.Requires(arguments != null); // Arguments can be empty, but shouldn't be null
       this.Id = id;
@@ -11046,13 +11046,13 @@ namespace Microsoft.Dafny {
       this.Arguments = arguments;
     }
 
-    public IdPattern(IToken tok, String id, Type type, List<ExtendedPattern> arguments, bool isGhost = false) : base(tok, isGhost) {
+    public IdPattern(IToken tok, String id, Type type, List<ExtendedPattern> arguments, Usage usage = Usage.Ordinary) : base(tok, usage) {
       Contract.Requires(id != null);
       Contract.Requires(arguments != null); // Arguments can be empty, but shouldn't be null
       this.Id = id;
       this.Type = type == null? new InferredTypeProxy(): type ;
       this.Arguments = arguments;
-      this.IsGhost = isGhost;
+      this.Usage = usage;
     }
 
     public override string ToString() {
@@ -11103,6 +11103,7 @@ namespace Microsoft.Dafny {
     public readonly Expression Source;
     public readonly List<NestedMatchCaseStmt> Cases;
     public readonly bool UsesOptionalBraces;
+    public readonly Usage Usage;
 
     public override IEnumerable<Expression> SubExpressions {
       get {
@@ -11112,12 +11113,13 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public NestedMatchStmt(IToken tok, IToken endTok, Expression source, [Captured] List<NestedMatchCaseStmt> cases, bool usesOptionalBraces): base(tok, endTok) {
+    public NestedMatchStmt(IToken tok, IToken endTok, Expression source, [Captured] List<NestedMatchCaseStmt> cases, bool usesOptionalBraces, Usage usage): base(tok, endTok) {
       Contract.Requires(source != null);
       Contract.Requires(cce.NonNullElements(cases));
       this.Source = source;
       this.Cases = cases;
       this.UsesOptionalBraces = usesOptionalBraces;
+      this.Usage = usage;
     }
   }
 
@@ -11126,13 +11128,15 @@ namespace Microsoft.Dafny {
     public readonly Expression Source;
     public readonly List<NestedMatchCaseExpr> Cases;
     public readonly bool UsesOptionalBraces;
+    public readonly Usage Usage;
 
-    public NestedMatchExpr(IToken tok, Expression source, [Captured] List<NestedMatchCaseExpr> cases, bool usesOptionalBraces): base(tok) {
+    public NestedMatchExpr(IToken tok, Expression source, [Captured] List<NestedMatchCaseExpr> cases, bool usesOptionalBraces, Usage usage): base(tok) {
       Contract.Requires(source != null);
       Contract.Requires(cce.NonNullElements(cases));
       this.Source = source;
       this.Cases = cases;
       this.UsesOptionalBraces = usesOptionalBraces;
+      this.Usage = usage;
     }
   }
 

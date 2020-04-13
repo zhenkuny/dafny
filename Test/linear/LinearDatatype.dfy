@@ -129,14 +129,14 @@ method TupleGood(shared x:(int, linear int), y:(int, int, bool), linear l:int) r
     linear var (a, linear b) := z;
     q := b;
 }
-//
-//
-//
-//
-//
-//
-//
-//
+
+type TX
+function operator(| |)(tx:TX):nat
+datatype dx = DX(tx:TX)
+function MX(d:dx):nat
+{
+    match d { case DX(tx) => |tx| }
+}
 //
 //
 //

@@ -451,14 +451,14 @@ namespace Microsoft.Dafny
 
       } else if (expr is PlaceholderExpression) {
         var e = (PlaceholderExpression)expr;
-        return CloneExpr(e.Expr);
+        return (e.ResolvedExpression != null) ? CloneExpr(e.Expr) : new PlaceholderExpression(Tok(e.tok), CloneExpr(e.Expr));
 
       } else if (expr is ParensExpression) {
         var e = (ParensExpression)expr;
         return CloneExpr(e.E);  // skip the parentheses in the clone
       } else if (expr is NestedMatchExpr) {
         var e = (NestedMatchExpr) expr;
-        return new NestedMatchExpr(Tok(e.tok), CloneExpr(e.Source), e.Cases.ConvertAll(CloneNestedMatchCaseExpr), e.UsesOptionalBraces);
+        return new NestedMatchExpr(Tok(e.tok), CloneExpr(e.Source), e.Cases.ConvertAll(CloneNestedMatchCaseExpr), e.UsesOptionalBraces, e.Usage);
 
       } else if (expr is MatchExpr) {
         var e = (MatchExpr)expr;
@@ -631,7 +631,7 @@ namespace Microsoft.Dafny
         r = new CalcStmt(Tok(s.Tok), Tok(s.EndTok), CloneCalcOp(s.UserSuppliedOp), lines, s.Hints.ConvertAll(CloneBlockStmt), s.StepOps.ConvertAll(CloneCalcOp), CloneAttributes(s.Attributes));
       } else if (stmt is NestedMatchStmt) {
         var s = (NestedMatchStmt)stmt;
-        r = new NestedMatchStmt(Tok(s.Tok), Tok(s.EndTok), CloneExpr(s.Source), s.Cases.ConvertAll(CloneNestedMatchCaseStmt), s.UsesOptionalBraces);
+        r = new NestedMatchStmt(Tok(s.Tok), Tok(s.EndTok), CloneExpr(s.Source), s.Cases.ConvertAll(CloneNestedMatchCaseStmt), s.UsesOptionalBraces, s.Usage);
 
       } else if (stmt is MatchStmt) {
         var s = (MatchStmt)stmt;

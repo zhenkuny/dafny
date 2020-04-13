@@ -1399,7 +1399,7 @@ namespace Microsoft.Dafny
         var e = (NestedMatchExpr)expr;
 
         var autoReqs = generateAutoReqs(e.ResolvedExpression);
-        var newMatch = new NestedMatchExpr(e.tok, e.Source, e.Cases, e.UsesOptionalBraces);
+        var newMatch = new NestedMatchExpr(e.tok, e.Source, e.Cases, e.UsesOptionalBraces, e.Usage);
         newMatch.ResolvedExpression = andify(e.tok, autoReqs);
         reqs.Add(newMatch);
       } else if (expr is ConcreteSyntaxExpression) {
