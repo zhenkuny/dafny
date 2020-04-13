@@ -2,7 +2,53 @@
 
 #include <vector>
 
+namespace LinearMaybe {
+////////////////////////////////////////////////////////////
+//
+//   Maybe
+//
+////////////////////////////////////////////////////////////
+
+template <typename A>
+struct maybe {
+  A a;
+};
+
+template <typename A>
+A peek(maybe<A> m) { return m.a; }
+
+template <typename A>
+A unwrap(maybe<A> m) { return m.a; }
+
+template <typename A>
+maybe<A> give(A a) { 
+  struct maybe<A> m;
+  m.a = a;
+  return m;
+}
+
+template <typename A>
+//maybe<A> empty() { return maybe(get_default<A>::call()); }
+maybe<A> empty() { 
+  struct maybe<A> m;
+  return m;  // REVIEW: Safe, b/c !has ?
+}    
+
+template <typename A>
+Tuple0 discard(maybe<A> m) { (void)m; Tuple0 ret; return ret; } 
+
+}
+
 namespace LinearExtern {
+
+////////////////////////////////////////////////////////////
+//
+//   Ints (for testing purposes)
+//
+////////////////////////////////////////////////////////////
+
+uint64 MakeLinearInt(uint64 u) { return u; }
+void DiscardLinearInt(uint64 u) { (void) u; }
 
 ////////////////////////////////////////////////////////////
 //
@@ -52,33 +98,6 @@ DafnySequence<A> seq_unleash(linear_seq<A> s) {
 
 ////////////////////////////////////////////////////////////
 //
-//   Maybe
-//
-////////////////////////////////////////////////////////////
-
-template <typename A>
-struct maybe {
-  A a;
-};
-
-template <typename A>
-A peek(maybe<A> m) { return m.a; }
-
-template <typename A>
-A unwrap(maybe<A> m) { return m.a; }
-
-template <typename A>
-maybe<A> give(A a) { return maybe(a); }
-
-template <typename A>
-//maybe<A> empty() { return maybe(get_default<A>::call()); }
-maybe<A> empty() { return maybe(get_default<A>::call()); }    // REVIEW: Safe, b/c !has ?
-
-template <typename A>
-Tuple0 discard(maybe<A> m) { m; Tuple0 ret; return ret; } 
-
-////////////////////////////////////////////////////////////
-//
 //   lseqs
 //
 ////////////////////////////////////////////////////////////
@@ -105,14 +124,14 @@ Tuple0 lseq_free_raw(lseq<A> s) {
 }
 
 template <typename A>
-Tuple2<lseq<A>, maybe<A>> lseq_swap_raw_fun(lseq<A> s1, uint64 i, maybe<A> a1) {
+Tuple2<lseq<A>, LinearMaybe::maybe<A>> lseq_swap_raw_fun(lseq<A> s1, uint64 i, LinearMaybe::maybe<A> a1) {
   Tuple2 ret(s1, s1[i]);
   s1[i] = a1;
   return ret;
 }
 
 template <typename A>
-maybe<A> lseq_share_raw(lseq<A> s, uint64 i) {
+LinearMaybe::maybe<A> lseq_share_raw(lseq<A> s, uint64 i) {
   return s[i];
 }
 

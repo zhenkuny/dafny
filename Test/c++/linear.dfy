@@ -1,6 +1,8 @@
 
 include "LinearSequence.s.dfy"
-
+import opened Types
+import opened LinearMaybe
+import opened LinearSequences
 //linear datatype Node =
 //  | Leaf(linear keys: seq<uint64>, linear values: seq<uint64>)
 //  | Index(linear pivots: seq<uint64>, linear children: lseq<uint64>)
@@ -25,7 +27,6 @@ method Test(name:string, b:bool)
 method TestLinearSequences() 
 {
   linear var s0 := seq_alloc<uint64>(10);
-//  var _ := seq_free(s0);
   var x := seq_get(s0, 0);
   print x;
   print "\n";
@@ -45,7 +46,36 @@ method TestLinearSequences()
   var _ := seq_free(t1);
 }
 
+method TestPeek(shared u:maybe<uint64>)
+  requires has(u)
+{
+  shared var val := peek(u);
+}
+
+method TestLinearMaybe(linear u:uint64) returns (linear x:uint64)
+{
+  linear var m := give(u);
+  linear var e := empty<uint64>();
+
+//  shared var m_val := peek(m);
+//  shared var e_val := peek(e);
+  TestPeek(m);
+  //TestPeek(e);    // !has(e)
+
+  linear var m_unwrapped := unwrap(m);
+  //linear var e_unwrapped := unwrap(e);
+
+  x := m_unwrapped;
+  var _ := discard(e);
+}
+
+method {:extern "LinearExtern", "MakeLinearInt"} MakeLinearInt(u:uint64) returns (linear x:uint64)
+method {:extern "LinearExtern", "DiscardLinearInt"} DiscardLinearInt(linear u:uint64) 
+
 method Main()
 {
   TestLinearSequences();
+  linear var x := MakeLinearInt(42);
+  linear var y := TestLinearMaybe(x);
+  DiscardLinearInt(y);
 }
