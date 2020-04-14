@@ -486,7 +486,7 @@ namespace Microsoft.Dafny{
       var nTypes = WriteRuntimeTypeDescriptorsFormals(m, m.TypeArgs, useAllTypeArgs: true, wr);
       var sep = nTypes > 0 ? ", " : "";
       if (customReceiver) {
-        DeclareFormal(sep, "_this", receiverType, m.tok, true, wr);
+        DeclareFormal(sep, "_this", receiverType, m.tok, Usage.Ordinary, true, wr);
         sep = ", ";
       }
       WriteFormals(sep, m.Ins, wr);
@@ -550,7 +550,7 @@ namespace Microsoft.Dafny{
       var sep = "";
       var argCount = 0;
       if (customReceiver) {
-        DeclareFormal(sep, "_this", receiverType, tok, true, wr);
+        DeclareFormal(sep, "_this", receiverType, tok, Usage.Ordinary, true, wr);
         sep = ", ";
         argCount++;
       }
@@ -780,7 +780,7 @@ namespace Microsoft.Dafny{
       return name + "]";
     }
 
-    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, bool isInParam, TextWriter wr) {
+    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, TextWriter wr) {
       if (!isInParam) return false;
       wr.Write($"{prefix}{TypeName(type, wr, tok)} {name}");
       return true;

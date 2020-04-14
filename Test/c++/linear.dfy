@@ -47,6 +47,12 @@ method TestLinearSequences()
   var _ := seq_free(t1);
 }
 
+method PassLinearSequence(linear s:seq<uint64>, shared t:seq<uint64>) returns (shared t':seq<uint64>)
+{
+  var _ := seq_free(s);
+  t' := t;
+}
+
 method TestPeek(shared u:maybe<uint64>)
   requires has(u)
 {

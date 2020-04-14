@@ -837,7 +837,7 @@ namespace Microsoft.Dafny {
       List<Formal> nonGhostOuts = m.Outs.Where(o => !o.IsGhost).ToList();
       string targetReturnTypeReplacement = null;
       if (nonGhostOuts.Count == 1) {
-        targetReturnTypeReplacement = TypeName(nonGhostOuts[0].Type, wr, nonGhostOuts[0].tok);
+        targetReturnTypeReplacement = TypeName(nonGhostOuts[0].Type, wr, nonGhostOuts[0].tok, usage:nonGhostOuts[0].Usage);
       } else if (nonGhostOuts.Count > 1) {
         targetReturnTypeReplacement = String.Format("struct Tuple{0}{1}", nonGhostOuts.Count, TemplateMethod(nonGhostOuts.ConvertAll(n => n.Type)));
       }
@@ -1353,16 +1353,16 @@ namespace Microsoft.Dafny {
       }
     }
 
-    private string DeclareFormalString(string prefix, string name, Type type, Bpl.IToken tok, bool isInParam) {
+    private string DeclareFormalString(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam) {
       if (isInParam) {        
-        return String.Format("{0}{2} {1}", prefix, name, TypeName(type, null, tok));
+        return String.Format("{0}{2} {1}", prefix, name, TypeName(type, null, tok, usage:usage));
       } else {
         return null;
       }
     }
 
-    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, bool isInParam, TextWriter wr) {
-      var formal_str = DeclareFormalString(prefix, name, type, tok, isInParam);
+    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, TextWriter wr) {
+      var formal_str = DeclareFormalString(prefix, name, type, tok, usage, isInParam);
       if (formal_str != null) {
         wr.Write(formal_str);
         return true;        
@@ -1378,7 +1378,7 @@ namespace Microsoft.Dafny {
       foreach (Formal arg in formals) {
         if (!arg.IsGhost) {
           string name = FormalName(arg, i);
-          string decl = DeclareFormalString(sep, name, arg.Type, arg.tok, arg.InParam);
+          string decl = DeclareFormalString(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam);
           if (decl != null) {
             ret += decl;
             sep = ", ";
