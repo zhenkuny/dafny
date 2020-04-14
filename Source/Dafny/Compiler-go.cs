@@ -1665,7 +1665,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    private TargetWriter/*?*/ DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, bool includeRhs, bool leaveRoomForRhs, TargetWriter wr) {
+    private TargetWriter/*?*/ DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool includeRhs, bool leaveRoomForRhs, TargetWriter wr) {
       wr.Write("var {0}", name);
 
       if (type != null) {
@@ -1692,15 +1692,15 @@ namespace Microsoft.Dafny {
       return w;
     }
 
-    protected override void DeclareLocalVar(string name, Type type, Bpl.IToken tok, bool isLinear, bool leaveRoomForRhs, string rhs, TargetWriter wr) {
-      var w = DeclareLocalVar(name, type, tok, isLinear, includeRhs:(rhs != null || leaveRoomForRhs), leaveRoomForRhs:leaveRoomForRhs, wr:wr);
+    protected override void DeclareLocalVar(string name, Type type, Bpl.IToken tok, Usage usage, bool leaveRoomForRhs, string rhs, TargetWriter wr) {
+      var w = DeclareLocalVar(name, type, tok, usage, includeRhs:(rhs != null || leaveRoomForRhs), leaveRoomForRhs:leaveRoomForRhs, wr:wr);
       if (rhs != null) {
         w.Write(rhs);
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, TargetWriter wr) {
-      return DeclareLocalVar(name, type, tok, isLinear, includeRhs:true, leaveRoomForRhs:false, wr:wr);
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr) {
+      return DeclareLocalVar(name, type, tok, usage, includeRhs:true, leaveRoomForRhs:false, wr:wr);
     }
 
     protected override bool UseReturnStyleOuts(Method m, int nonGhostOutCount) => true;
@@ -1709,8 +1709,8 @@ namespace Microsoft.Dafny {
     protected override bool SupportsMultipleReturns => true;
     protected override string StmtTerminator => "";
 
-    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, bool isLinear, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, isLinear, false, rhs, wr);
+    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
+      DeclareLocalVar(name, type, tok, usage, false, rhs, wr);
     }
 
     protected override void EmitActualTypeArgs(List<Type> typeArgs, Bpl.IToken tok, TextWriter wr) {

@@ -47,6 +47,7 @@ namespace Microsoft.Dafny {
     new string DafnySeqClass = "DafnySequence"; 
     new string DafnyMapClass = "DafnyMap";
     private string DafnyLinearSeqClass = "LinearExtern::linear_seq";
+    private string DafnySharedSeqClass = "LinearExtern::shared_seq";
 
     public override string TargetLanguage => "Cpp";
     protected override string ModuleSeparator => "::";
@@ -1087,7 +1088,7 @@ namespace Microsoft.Dafny {
     }
     
     // Use class_name = true if you want the actual name of the class, not the type used when declaring variables/arguments/etc.
-    protected string TypeName(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member = null, bool class_name=false, bool isLinear=false) {
+    protected string TypeName(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member = null, bool class_name=false, Usage usage=Usage.Ordinary) {
       Contract.Ensures(Contract.Result<string>() != null);
       Contract.Assume(type != null);  // precondition; this ought to be declared as a Requires in the superclass
 
@@ -1161,8 +1162,10 @@ namespace Microsoft.Dafny {
           Error(tok, "compilation of seq<TRAIT> is not supported; consider introducing a ghost", wr);
         }
 
-        if (isLinear) {
+        if (usage == Usage.Linear) {
           return DafnyLinearSeqClass + "<" + TypeName(argType, wr, tok) + ">";
+        } else if (usage == Usage.Shared) {
+          return DafnySharedSeqClass + "<" + TypeName(argType, wr, tok) + ">";
         } else {
           return DafnySeqClass + "<" + TypeName(argType, wr, tok) + ">";
         }
@@ -1386,9 +1389,9 @@ namespace Microsoft.Dafny {
       return ret;
     }
 
-    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
+    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
       if (type != null) {
-        wr.Write("{0} ", TypeName(type, wr, tok, isLinear:isLinear));
+        wr.Write("{0} ", TypeName(type, wr, tok, usage:usage));
       } else {
         wr.Write("auto ");
       }
@@ -1402,9 +1405,9 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr) {
       if (type != null) {
-        wr.Write("{0} ", TypeName(type, wr, tok, isLinear:isLinear));
+        wr.Write("{0} ", TypeName(type, wr, tok, usage:usage));
       } else {
         wr.Write("auto ");
       }
@@ -1420,8 +1423,8 @@ namespace Microsoft.Dafny {
       wr.Write("auto {0} = ", collectorVarName);
     }
 
-    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, bool isLinear, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, isLinear, false, rhs, wr);
+    protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
+      DeclareLocalVar(name, type, tok, usage, false, rhs, wr);
     }
 
     protected override void EmitOutParameterSplits(string outCollector, List<string> actualOutParamNames, TargetWriter wr) {

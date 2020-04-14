@@ -253,10 +253,10 @@ namespace Microsoft.Dafny {
     /// In the above, if "type" is null, then it is replaced by "var" or "let".
     /// "tok" is allowed to be null if "type" is.
     /// </summary>
-    protected abstract void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr);
+    protected abstract void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr);
 
-    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, bool leaveRoomForRhs, string /*?*/ rhs, TargetWriter wr, Type t) {
-      DeclareLocalVar(name, type, tok, isLinear, leaveRoomForRhs, rhs, wr);
+    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs, string /*?*/ rhs, TargetWriter wr, Type t) {
+      DeclareLocalVar(name, type, tok, usage, leaveRoomForRhs, rhs, wr);
     }
     /// <summary>
     /// Generates:
@@ -264,14 +264,14 @@ namespace Microsoft.Dafny {
     /// In the above, if "type" is null, then it is replaced by "var" or "let".
     /// "tok" is allowed to be null if "type" is.
     /// </summary>
-    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, Expression rhs, bool inLetExprBody, TargetWriter wr) {
-      var w = DeclareLocalVar(name, type, tok, isLinear, wr);
+    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, Expression rhs, bool inLetExprBody, TargetWriter wr) {
+      var w = DeclareLocalVar(name, type, tok, usage, wr);
       TrExpr(rhs, w, inLetExprBody);
     }
 
-    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, Expression rhs,
+    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, Expression rhs,
       bool inLetExprBody, TargetWriter wr, Type t){
-      var w = DeclareLocalVar(name, type, tok, isLinear, wr);
+      var w = DeclareLocalVar(name, type, tok, usage, wr);
       TrExpr(rhs, w, inLetExprBody);
     }
     /// <summary>
@@ -280,7 +280,7 @@ namespace Microsoft.Dafny {
     /// In the above, if "type" is null, then it is replaced by "var" or "let".
     /// "tok" is allowed to be null if "type" is.
     /// </summary>
-    protected abstract TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, bool isLinear, TargetWriter wr);
+    protected abstract TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr);
     protected virtual void DeclareOutCollector(string collectorVarName, TargetWriter wr) { }  // called only for return-style calls
     protected virtual void DeclareSpecificOutCollector(string collectorVarName, TargetWriter wr, List<Type> types, List<Type> formalTypes, List<Type> lhsTypes) {DeclareOutCollector(collectorVarName, wr); } // for languages that don't allow "let" or "var" expressions
     protected virtual bool UseReturnStyleOuts(Method m, int nonGhostOutCount) => false;
@@ -295,7 +295,7 @@ namespace Microsoft.Dafny {
     /// statements are followed by newlines regardless.
     protected virtual string StmtTerminator { get => ";"; }
     protected void EndStmt(TargetWriter wr) { wr.WriteLine(StmtTerminator); }
-    protected abstract void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, bool isLinear, string rhs, bool useReturnStyleOuts, TargetWriter wr);
+    protected abstract void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr);
     protected virtual void EmitActualOutArg(string actualOutParamName, TextWriter wr) { }  // actualOutParamName is always the name of a local variable; called only for non-return-style outs
     protected virtual void EmitOutParameterSplits(string outCollector, List<string> actualOutParamNames, TargetWriter wr) { }  // called only for return-style calls
     protected virtual void EmitCastOutParameterSplits(string outCollector, List<string> actualOutParamNames, TargetWriter wr, List<Type> actualOutParamTypes, List<Type> formalOutParamTypes, List<Type> lhsTypes, Bpl.IToken tok) {
@@ -304,8 +304,8 @@ namespace Microsoft.Dafny {
     protected abstract void EmitActualTypeArgs(List<Type> typeArgs, Bpl.IToken tok, TextWriter wr);
     protected abstract string GenerateLhsDecl(string target, Type/*?*/ type, TextWriter wr, Bpl.IToken tok);
 
-    protected virtual TargetWriter DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, bool isLinear, TargetWriter wr, Type t){
-      return DeclareLocalVar(name, type, tok, isLinear, wr);
+    protected virtual TargetWriter DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, TargetWriter wr, Type t){
+      return DeclareLocalVar(name, type, tok, usage, wr);
     }
 
     protected virtual TargetWriter EmitAssignment(ILvalue wLhs, Type/*?*/ lhsType, Type/*?*/ rhsType, TargetWriter wr) {
@@ -1309,7 +1309,7 @@ namespace Microsoft.Dafny {
               Contract.Assert(false);  // unexpected type
               throw new cce.UnreachableException();
             }
-            DeclareLocalVar(IdName(accVar), accVar.Type, f.tok, accVar.IsLinear, unit, false, w);
+            DeclareLocalVar(IdName(accVar), accVar.Type, f.tok, accVar.Usage, unit, false, w);
           }
           w = EmitTailCallStructure(f, w);
         }
@@ -1341,7 +1341,7 @@ namespace Microsoft.Dafny {
         var useReturnStyleOuts = UseReturnStyleOuts(m, nonGhostOutsCount);
         foreach (var p in m.Outs) {
           if (!p.IsGhost) {
-            DeclareLocalOutVar(IdName(p), p.Type, p.tok, p.IsLinear, DefaultValue(p.Type, w, p.tok, true), useReturnStyleOuts, w);
+            DeclareLocalOutVar(IdName(p), p.Type, p.tok, p.Usage, DefaultValue(p.Type, w, p.tok, true), useReturnStyleOuts, w);
           }
         }
 
@@ -1365,7 +1365,7 @@ namespace Microsoft.Dafny {
           var c = m.EnclosingClass;
           var typeArgs = c.TypeArgs.ConvertAll(tp => (Type)Type.Bool);
           var ty = new UserDefinedType(m.tok, c.Name, c, typeArgs);
-          var wRhs = DeclareLocalVar("b", ty, m.tok, false, w);
+          var wRhs = DeclareLocalVar("b", ty, m.tok, Usage.Ordinary, w);
           EmitNew(ty, m.tok, null, wRhs);
           w.WriteLine("b.{0}();", IdName(m));
         } else {
@@ -1391,7 +1391,7 @@ namespace Microsoft.Dafny {
         // var x := G;
         var bv = pat.Var;
         if (!bv.IsGhost) {
-          var w = DeclareLocalVar(IdProtect(bv.CompileName), bv.Type, rhsTok, bv.IsLinear, wr);
+          var w = DeclareLocalVar(IdProtect(bv.CompileName), bv.Type, rhsTok, bv.Usage, wr);
           if (rhs != null) {
             w = EmitCoercionIfNecessary(from: rhs.Type, to: bv.Type, tok:rhsTok, wr:w);
             TrExpr(rhs, w, inLetExprBody);
@@ -1409,17 +1409,17 @@ namespace Microsoft.Dafny {
         var ctor = pat.Ctor;
         Contract.Assert(ctor != null);  // follows from successful resolution
         Contract.Assert(pat.Arguments.Count == ctor.Formals.Count);  // follows from successful resolution
-        bool isLinear = false;
-        if (pat.Ctor.EnclosingDatatype is IndDatatypeDecl idecl) {
-          isLinear = idecl.IsLinear;
+        Usage usage = Usage.Ordinary;
+        if (pat.Ctor.EnclosingDatatype is IndDatatypeDecl idecl && idecl.IsLinear) {
+          usage = Usage.Linear;
         } 
 
         // Create the temporary variable to hold G
         var tmp_name = idGenerator.FreshId("_let_tmp_rhs");
         if (rhs != null) {
-          DeclareLocalVar(tmp_name, rhs.Type, rhs.tok, isLinear, rhs, inLetExprBody, wr);
+          DeclareLocalVar(tmp_name, rhs.Type, rhs.tok, usage, rhs, inLetExprBody, wr);
         } else {
-          DeclareLocalVar(tmp_name, rhsType, rhsTok, isLinear, false, rhs_string, wr);
+          DeclareLocalVar(tmp_name, rhsType, rhsTok, usage, false, rhs_string, wr);
         }
 
         var k = 0;  // number of non-ghost formals processed
@@ -1482,7 +1482,7 @@ namespace Microsoft.Dafny {
         //     ...
         //   }
         string source = idGenerator.FreshId("_source");
-        DeclareLocalVar(source, e.Source.Type, e.Source.tok, e.Usage == Usage.Linear, e.Source, false, wr);
+        DeclareLocalVar(source, e.Source.Type, e.Source.tok, e.Usage, e.Source, false, wr);
 
         if (e.Cases.Count == 0) {
           // the verifier would have proved we never get here; still, we need some code that will compile
@@ -1510,14 +1510,14 @@ namespace Microsoft.Dafny {
         if (!e.Function.IsStatic) {
           string inTmp = idGenerator.FreshId("_in");
           inTmps.Add(inTmp);
-          DeclareLocalVar(inTmp, null, null, false, e.Receiver, false, wr);
+          DeclareLocalVar(inTmp, null, null, Usage.Ordinary, e.Receiver, false, wr);
         }
         for (int i = 0; i < e.Function.Formals.Count; i++) {
           Formal p = e.Function.Formals[i];
           if (!p.IsGhost) {
             string inTmp = idGenerator.FreshId("_in");
             inTmps.Add(inTmp);
-            DeclareLocalVar(inTmp, null, null, p.IsLinear, e.Args[i], false, wr, p.Type);
+            DeclareLocalVar(inTmp, null, null, p.Usage, e.Args[i], false, wr, p.Type);
           }
         }
         // Now, assign to the formals
@@ -2312,7 +2312,7 @@ namespace Microsoft.Dafny {
         // }
         if (s.Cases.Count != 0) {
           string source = idGenerator.FreshId("_source");
-          DeclareLocalVar(source, s.Source.Type, s.Source.tok, s.Usage == Usage.Linear, s.Source, false, wr);
+          DeclareLocalVar(source, s.Source.Type, s.Source.tok, s.Usage, s.Source, false, wr);
 
           int i = 0;
           var sourceType = (UserDefinedType)s.Source.Type.NormalizeExpand();
@@ -2362,7 +2362,7 @@ namespace Microsoft.Dafny {
 
     protected virtual TargetWriter EmitIngredients(TargetWriter wr, string ingredients, int L, string tupleTypeArgs, ForallStmt s, AssignStmt s0, Expression rhs){
 
-      using (var wrVarInit = DeclareLocalVar(ingredients, null, null, false, wr)){   // REVIEW: Linear?
+      using (var wrVarInit = DeclareLocalVar(ingredients, null, null, Usage.Ordinary, wr)){   // REVIEW: Linear?
         EmitEmptyTupleList(tupleTypeArgs, wrVarInit);
       }
 
@@ -2735,7 +2735,7 @@ namespace Microsoft.Dafny {
         Contract.Assert((bound.Virtues & ComprehensionExpr.BoundedPool.PoolVirtues.Enumerable) != 0);  // if we have got this far, it must be an enumerable bound
         var bv = lhss[i];
         if (needIterLimit) {
-          DeclareLocalVar(string.Format("{0}_{1}", iterLimit, i), null, null, bv.IsLinear, false, iterLimit, wr, Type.Int);
+          DeclareLocalVar(string.Format("{0}_{1}", iterLimit, i), null, null, bv.Usage, false, iterLimit, wr, Type.Int);
         }
         var tmpVar = idGenerator.FreshId("_assign_such_that_");
         TargetWriter collectionWriter;
@@ -2863,7 +2863,7 @@ namespace Microsoft.Dafny {
         return sw.ToString();
       } else {
         var v = idGenerator.FreshId(prefix);
-        DeclareLocalVar(v, null, null, false, e, false, wr);
+        DeclareLocalVar(v, null, null, Usage.Ordinary, e, false, wr);
         return v;
       }
     }
@@ -2927,7 +2927,7 @@ namespace Microsoft.Dafny {
         TrExpr(eRhs.Expr, wr, false);
       } else {
         var nw = idGenerator.FreshId("_nw");
-        var wRhs = DeclareLocalVar(nw, null, null, false, wStmts, tRhs.Type);
+        var wRhs = DeclareLocalVar(nw, null, null, Usage.Ordinary, wStmts, tRhs.Type);
         TrTypeRhs(tRhs, wRhs);
 
         // Proceed with initialization
@@ -2941,7 +2941,7 @@ namespace Microsoft.Dafny {
         } else if (tRhs.ElementInit != null) {
           // Compute the array-initializing function once and for all (as required by the language definition)
           string f = idGenerator.FreshId("_arrayinit");
-          DeclareLocalVar(f, null, null, false, tRhs.ElementInit, false, wStmts, tRhs.ElementInit.Type);
+          DeclareLocalVar(f, null, null, Usage.Ordinary, tRhs.ElementInit, false, wStmts, tRhs.ElementInit.Type);
           // Build a loop nest that will call the initializer for all indices
           var indices = Translator.Map(Enumerable.Range(0, tRhs.ArrayDimensions.Count), ii => idGenerator.FreshId("_arrayinit_" + ii));
           var w = wStmts;
@@ -2996,14 +2996,14 @@ namespace Microsoft.Dafny {
 
           string inTmp = idGenerator.FreshId("_in");
           inTmps.Add(inTmp);
-          DeclareLocalVar(inTmp, null, null, false, s.Receiver, false, wr);
+          DeclareLocalVar(inTmp, null, null, Usage.Ordinary, s.Receiver, false, wr);
         }
         for (int i = 0; i < s.Method.Ins.Count; i++) {
           Formal p = s.Method.Ins[i];
           if (!p.IsGhost) {
             string inTmp = idGenerator.FreshId("_in");
             inTmps.Add(inTmp);
-            DeclareLocalVar(inTmp, null, null, p.IsLinear, s.Args[i], false, wr, p.Type);
+            DeclareLocalVar(inTmp, null, null, p.Usage, s.Args[i], false, wr, p.Type);
           }
         }
         // Now, assign to the formals
@@ -3101,7 +3101,7 @@ namespace Microsoft.Dafny {
             outTypes.Add(type);
             outFormalTypes.Add(p.Type);
             outLhsTypes.Add(s.Lhs[i].Type);
-            DeclareLocalVar(target, type, s.Lhs[i].tok, p.IsLinear, false, null, wr);
+            DeclareLocalVar(target, type, s.Lhs[i].tok, p.Usage, false, null, wr);
           }
         }
         Contract.Assert(lvalues.Count == outTmps.Count);
@@ -3237,7 +3237,7 @@ namespace Microsoft.Dafny {
         // only emit non-ghosts (we get here only for local variables introduced implicitly by call statements)
         return;
       }
-      DeclareLocalVar(IdName(v), v.Type, v.Tok, v.IsLinear, false, alwaysInitialize ? DefaultValue(v.Type, wr, v.Tok) : null, wr);
+      DeclareLocalVar(IdName(v), v.Type, v.Tok, v.Usage, false, alwaysInitialize ? DefaultValue(v.Type, wr, v.Tok) : null, wr);
     }
 
     TargetWriter MatchCasePrelude(string source, UserDefinedType sourceType, DatatypeCtor ctor, List<BoundVar> arguments, int caseIndex, int caseCount, TargetWriter wr) {
@@ -3268,7 +3268,7 @@ namespace Microsoft.Dafny {
         if (!arg.IsGhost) {
           BoundVar bv = arguments[m];
           // FormalType f0 = ((Dt_Ctor0)source._D).a0;
-          var sw = DeclareLocalVar(IdName(bv), bv.Type, bv.Tok, bv.IsLinear, w);
+          var sw = DeclareLocalVar(IdName(bv), bv.Type, bv.Tok, bv.Usage, w);
           EmitDestructor(source, arg, k, ctor, sourceType.TypeArgs, bv.Type, sw);
           k++;
         }
@@ -3346,7 +3346,7 @@ namespace Microsoft.Dafny {
           // allow out parameters
           var name = string.Format("_pat_let_tv{0}", GetUniqueAstNumber(e));
           wr.Write(name);
-          DeclareLocalVar(name, null, null, e.Var.IsLinear, false, IdName(e.Var), copyInstrWriters.Peek(), e.Type);
+          DeclareLocalVar(name, null, null, e.Var.Usage, false, IdName(e.Var), copyInstrWriters.Peek(), e.Type);
         } else {
           wr.Write(IdName(e.Var));
         }
@@ -3606,7 +3606,7 @@ namespace Microsoft.Dafny {
           } else {
             var w = CreateIIFE1(0, e.Body.Type, e.Body.tok, "_let_dummy_" + GetUniqueAstNumber(e), wr);
             foreach (var bv in e.BoundVars) {
-              DeclareLocalVar(IdName(bv), bv.Type, bv.tok, bv.IsLinear, false, DefaultValue(bv.Type, wr, bv.tok), w);
+              DeclareLocalVar(IdName(bv), bv.Type, bv.tok, bv.Usage, false, DefaultValue(bv.Type, wr, bv.tok), w);
             }
             TrAssignSuchThat(new List<IVariable>(e.BoundVars).ConvertAll(bv => (IVariable)bv), e.RHSs[0], e.Constraint_Bounds, e.tok.line, w, inLetExprBody);
             EmitReturnExpr(e.Body, true, w);
@@ -3733,7 +3733,7 @@ namespace Microsoft.Dafny {
         var rantypeName = TypeName(e.Type.AsMapType.Range, wr, e.tok);
         var collection_name = idGenerator.FreshId("_coll");
         wr = CreateIIFE0(e.Type.AsMapType, e.tok, wr);
-        using (var wrVarInit = DeclareLocalVar(collection_name, null, null, false, wr, e.Type.AsMapType)){   // REVIEW: Linear maps not supported
+        using (var wrVarInit = DeclareLocalVar(collection_name, null, null, Usage.Ordinary, wr, e.Type.AsMapType)){   // REVIEW: Linear maps not supported
           EmitCollectionBuilder_New(e.Type.AsMapType, e.tok, wrVarInit);
         }
         var n = e.BoundVars.Count;
@@ -3817,7 +3817,7 @@ namespace Microsoft.Dafny {
 
     protected virtual void EmitSetComprehension(TargetWriter wr, Expression expr, String collection_name){
       var e = (SetComprehension) expr;
-        using (var wrVarInit = DeclareLocalVar(collection_name, null, null, false, wr)){   // REVIEW: Linear sets not supported
+        using (var wrVarInit = DeclareLocalVar(collection_name, null, null, Usage.Ordinary, wr)){   // REVIEW: Linear sets not supported
           EmitCollectionBuilder_New(e.Type.AsSetType, e.tok, wrVarInit);
         }
     }
