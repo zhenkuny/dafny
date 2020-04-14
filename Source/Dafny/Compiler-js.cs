@@ -123,7 +123,7 @@ namespace Microsoft.Dafny {
       foreach (var member in iter.Members) {
         var f = member as Field;
         if (f != null && !f.IsGhost) {
-          DeclareField(IdName(f), false, false, f.Type, f.tok, DefaultValue(f.Type, instanceFieldsWriter, f.tok), instanceFieldsWriter);
+          DeclareField(IdName(f), false, false, f.Type, f.tok, DefaultValue(f.Type, instanceFieldsWriter, f.tok, Usage.Ordinary), instanceFieldsWriter);
         } else if (member is Constructor) {
           Contract.Assert(ct == null);  // we're expecting just one constructor
           ct = (Constructor)member;
@@ -475,7 +475,7 @@ namespace Microsoft.Dafny {
             string sep = "";
             foreach (var f in defaultCtor.Formals) {
               if (!f.IsGhost) {
-                arguments.Write("{0}{1}", sep, DefaultValue(f.Type, wDefault, f.tok));
+                arguments.Write("{0}{1}", sep, DefaultValue(f.Type, wDefault, f.tok, Usage.Ordinary));
                 sep = ", ";
               }
             }
@@ -509,7 +509,7 @@ namespace Microsoft.Dafny {
       }
       using (var wDefault = w.NewBlock("static get Default()")) {
         var udt = new UserDefinedType(nt.tok, nt.Name, nt, new List<Type>());
-        var d = TypeInitializationValue(udt, wr, nt.tok, false);
+        var d = TypeInitializationValue(udt, wr, nt.tok, Usage.Ordinary, false);
         wDefault.WriteLine("return {0};", d);
       }
       return cw;
@@ -525,7 +525,7 @@ namespace Microsoft.Dafny {
       }
       using (var wDefault = w.NewBlock("static get Default()")) {
         var udt = UserDefinedType.FromTopLevelDecl(sst.tok, sst);
-        var d = TypeInitializationValue(udt, wr, sst.tok, false);
+        var d = TypeInitializationValue(udt, wr, sst.tok, Usage.Ordinary, false);
         wDefault.WriteLine("return {0};", d);
       }
     }
@@ -861,7 +861,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public override string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, bool inAutoInitContext) {
+    public override string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, Usage usage, bool inAutoInitContext) {
       var xType = type.NormalizeExpandKeepConstraints();
       if (xType is BoolType) {
         return "false";
@@ -901,7 +901,7 @@ namespace Microsoft.Dafny {
         } else if (td.NativeType != null) {
           return "0";
         } else {
-          return TypeInitializationValue(td.BaseType, wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.BaseType, wr, tok, Usage.Ordinary, inAutoInitContext);
         }
       } else if (cl is SubsetTypeDecl) {
         var td = (SubsetTypeDecl)cl;
@@ -913,7 +913,7 @@ namespace Microsoft.Dafny {
           if (ArrowType.IsPartialArrowTypeName(td.Name)) {
             return "null";
           } else if (ArrowType.IsTotalArrowTypeName(td.Name)) {
-            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, inAutoInitContext);
+            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, Usage.Ordinary, inAutoInitContext);
             // return the lambda expression ((Ty0 x0, Ty1 x1, Ty2 x2) => rangeDefaultValue)
             return string.Format("function () {{ return {0}; }}", rangeDefaultValue);
           } else if (((NonNullTypeDecl)td).Class is ArrayClassDecl) {
@@ -931,7 +931,7 @@ namespace Microsoft.Dafny {
             return "null";
           }
         } else {
-          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, Usage.Ordinary, inAutoInitContext);
         }
       } else if (cl is ClassDecl) {
         bool isHandle = true;
@@ -1129,7 +1129,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitNewArray(Type elmtType, Bpl.IToken tok, List<Expression> dimensions, bool mustInitialize, TargetWriter wr) {
-      var initValue = mustInitialize ? DefaultValue(elmtType, wr, tok) : null;
+      var initValue = mustInitialize ? DefaultValue(elmtType, wr, tok, Usage.Ordinary) : null;
       if (dimensions.Count == 1) {
         // handle the common case of 1-dimensional arrays separately
         wr.Write("Array(");

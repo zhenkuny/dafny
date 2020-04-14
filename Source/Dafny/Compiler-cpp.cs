@@ -445,7 +445,7 @@ namespace Microsoft.Dafny {
         var wc = wdef.NewNamedBlock("{1}\n{0}{2}::{0}()", DtT_protected, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs));
         foreach (var arg in ctor.Formals) {
           if (!arg.IsGhost) {
-            wc.WriteLine("{0} = {1};", arg.CompileName, DefaultValue(arg.Type, wc, arg.tok));
+            wc.WriteLine("{0} = {1};", arg.CompileName, DefaultValue(arg.Type, wc, arg.tok, arg.Usage));
           }
         }
         
@@ -581,7 +581,7 @@ namespace Microsoft.Dafny {
           {
             if (!arg.IsGhost) {
               wd.WriteLine("COMPILER_result_subStruct.{0} = {1};", arg.CompileName,
-                DefaultValue(arg.Type, wd, arg.tok));
+                DefaultValue(arg.Type, wd, arg.tok, arg.Usage));
             }
           }
           wd.WriteLine("v = COMPILER_result_subStruct;");
@@ -720,7 +720,7 @@ namespace Microsoft.Dafny {
       GetNativeInfo(nt.NativeType.Sel, out nt_name, out literalSuffice, out needsCastAfterArithmetic);
       using (var wDefault = w.NewBlock(string.Format("static {0} get_Default()", nt_name))) {
         var udt = new UserDefinedType(nt.tok, nt.Name, nt, new List<Type>());
-        var d = TypeInitializationValue(udt, wr, nt.tok, false);
+        var d = TypeInitializationValue(udt, wr, nt.tok, Usage.Ordinary, false);
         wDefault.WriteLine("return {0};", d);
       }
 
@@ -753,7 +753,7 @@ namespace Microsoft.Dafny {
       
       using (var wDefault = w.NewBlock(String.Format("static {0}{1} get_Default()", IdName(sst), TemplateMethod(sst.TypeArgs)))) {
         var udt = new UserDefinedType(sst.tok, sst.Name, sst, sst.TypeArgs.ConvertAll(tp => (Type)new UserDefinedType(tp)));
-        var d = TypeInitializationValue(udt, wr, sst.tok, false);
+        var d = TypeInitializationValue(udt, wr, sst.tok, Usage.Ordinary, false);
         wDefault.WriteLine("return {0};", d);
       }
     }
@@ -1199,7 +1199,7 @@ namespace Microsoft.Dafny {
       return TypeName(type, wr, tok, member, true);
     }
 
-    public override string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, bool inAutoInitContext) {
+    public override string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, Usage usage, bool inAutoInitContext) {
       var xType = type.NormalizeExpandKeepConstraints();
       if (xType is BoolType) {
         return "false";
@@ -1220,7 +1220,13 @@ namespace Microsoft.Dafny {
       } else if (xType is MultiSetType) {
         return "_dafny.MultiSet.Empty";
       } else if (xType is SeqType) {
-        return string.Format("DafnySequence<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false));
+        if (usage == Usage.Linear) {
+          return string.Format("{1}<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false), DafnyLinearSeqClass);
+        } else if (usage == Usage.Shared) {
+          return string.Format("{1}<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false), DafnySharedSeqClass);
+        } else {
+          return string.Format("DafnySequence<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false));
+        }
       } else if (xType is MapType) {
         var m = (MapType) xType;
         return String.Format("DafnyMap<{0},{1}>::empty()", TypeName(m.Domain, wr, tok), TypeName(m.Range, wr, tok));
@@ -1246,7 +1252,7 @@ namespace Microsoft.Dafny {
         } else if (td.NativeType != null) {
           return "0";
         } else {
-          return TypeInitializationValue(td.BaseType, wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.BaseType, wr, tok, usage, inAutoInitContext);
         }
       } else if (cl is SubsetTypeDecl) {
         var td = (SubsetTypeDecl)cl;
@@ -1258,7 +1264,7 @@ namespace Microsoft.Dafny {
           if (ArrowType.IsPartialArrowTypeName(td.Name)) {
             return "nullptr";
           } else if (ArrowType.IsTotalArrowTypeName(td.Name)) {
-            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, inAutoInitContext);
+            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, usage, inAutoInitContext);
             // return the lambda expression ((Ty0 x0, Ty1 x1, Ty2 x2) => rangeDefaultValue)
             return string.Format("function () {{ return {0}; }}", rangeDefaultValue);
           } else if (((NonNullTypeDecl)td).Class is ArrayClassDecl) {
@@ -1277,7 +1283,7 @@ namespace Microsoft.Dafny {
             return "nullptr";
           }
         } else {
-          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, usage, inAutoInitContext);
         }
       } else if (cl is ClassDecl) {
         bool isHandle = true;
@@ -1343,7 +1349,7 @@ namespace Microsoft.Dafny {
     }
 
     protected void DeclareField(string className, List<TypeParameter> targs, string name, bool isStatic, bool isConst, Type type, Bpl.IToken tok, string rhs, TargetWriter wr, TargetWriter finisher) {
-      var r = rhs != null ? rhs : DefaultValue(type, wr, tok);
+      var r = rhs != null ? rhs : DefaultValue(type, wr, tok, Usage.Ordinary);
       var t = TypeName(type, wr, tok);
       if (isStatic) {
           wr.WriteLine("static {0} {1};", t, name);
@@ -1584,7 +1590,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitNewArray(Type elmtType, Bpl.IToken tok, List<Expression> dimensions, bool mustInitialize, TargetWriter wr) {
-      var initValue = mustInitialize ? DefaultValue(elmtType, wr, tok) : null;
+      var initValue = mustInitialize ? DefaultValue(elmtType, wr, tok, Usage.Ordinary) : null;
       // TODO: Handle initValue
       if (dimensions.Count == 1) {
         // handle the common case of 1-dimensional arrays separately

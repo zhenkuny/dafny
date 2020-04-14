@@ -227,7 +227,7 @@ namespace Microsoft.Dafny {
     protected virtual string TypeArgumentName(Type type, TextWriter wr, Bpl.IToken tok) {
       return TypeName(type, wr, tok);
     }
-    public abstract string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, bool inAutoInitContext);
+    public abstract string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, Usage usage, bool inAutoInitContext);
     protected abstract string TypeName_UDT(string fullCompileName, List<Type> typeArgs, TextWriter wr, Bpl.IToken tok);
     protected abstract string/*?*/ TypeName_Companion(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member);
     protected string TypeName_Companion(TopLevelDecl cls, TextWriter wr, Bpl.IToken tok) {
@@ -972,7 +972,7 @@ namespace Microsoft.Dafny {
             var cf = (ConstantField)member;
             if (cf.Rhs == null) {
               Contract.Assert(!cf.IsStatic);  // as checked above, only instance members can be inherited
-              classWriter.DeclareField("_" + cf.CompileName, c.TypeArgs, false, false, cf.Type, cf.tok, DefaultValue(cf.Type, errorWr, cf.tok, true));
+              classWriter.DeclareField("_" + cf.CompileName, c.TypeArgs, false, false, cf.Type, cf.tok, DefaultValue(cf.Type, errorWr, cf.tok, Usage.Ordinary, true));
             }
             var w = classWriter.CreateGetter(IdName(cf), cf.Type, cf.tok, false, true, member);
             Contract.Assert(w != null);  // since the previous line asked for a body
@@ -989,7 +989,7 @@ namespace Microsoft.Dafny {
           if (NeedsWrappersForInheritedFields) {
             var f = (Field)member;
             // every field is inherited
-            classWriter.DeclareField("_" + f.CompileName, c.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, true));
+            classWriter.DeclareField("_" + f.CompileName, c.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, Usage.Ordinary, true));
             TargetWriter wSet;
             var wGet = classWriter.CreateGetterSetter(IdName(f), f.Type, f.tok, false, true, member, out wSet);
             {
@@ -1013,7 +1013,7 @@ namespace Microsoft.Dafny {
               var rhs = w.ToString();
               classWriter.DeclareField(f.CompileName, c.TypeArgs, false, true, f.Type, f.tok, rhs);
             } else {
-              classWriter.DeclareField(f.CompileName, c.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, true));
+              classWriter.DeclareField(f.CompileName, c.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, Usage.Ordinary, true));
             }
 
             if (!FieldsInTraits) { // Create getters and setters for "traits" in languages that don't allow for non-final field declarations.
@@ -1074,7 +1074,7 @@ namespace Microsoft.Dafny {
                 Contract.Assert(wBody == null);  // since the previous line said not to create a body
               } else if (cf.Rhs == null) {
                 // create a backing field, since this constant field may be assigned in constructors
-                classWriter.DeclareField("_" + f.CompileName, c.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, true));
+                classWriter.DeclareField("_" + f.CompileName, c.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, Usage.Ordinary, true));
                 wBody = classWriter.CreateGetter(IdName(cf), cf.Type, cf.tok, false, true, cf);
                 Contract.Assert(wBody != null);  // since the previous line asked for a body
               } else {
@@ -1088,7 +1088,7 @@ namespace Microsoft.Dafny {
                   var sw = EmitReturnExpr(wBody);
                   EmitMemberSelect(EmitThis, cf, f.Type, internalAccess: true).EmitRead(sw);
                 } else {
-                  EmitReturnExpr(DefaultValue(cf.Type, wBody, cf.tok, true), wBody);
+                  EmitReturnExpr(DefaultValue(cf.Type, wBody, cf.tok, Usage.Ordinary, true), wBody);
                 }
               }
             } else {
@@ -1116,7 +1116,7 @@ namespace Microsoft.Dafny {
             TargetWriter wSet;
             classWriter.CreateGetterSetter(IdName(f), f.Type, f.tok, false, false, member, out wSet);
           } else {
-            classWriter.DeclareField(IdName(f), c.TypeArgs, f.IsStatic, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, true));
+            classWriter.DeclareField(IdName(f), c.TypeArgs, f.IsStatic, false, f.Type, f.tok, DefaultValue(f.Type, errorWr, f.tok, Usage.Ordinary, true));
           }
         } else if (member is Function) {
           var f = (Function)member;
@@ -1341,7 +1341,7 @@ namespace Microsoft.Dafny {
         var useReturnStyleOuts = UseReturnStyleOuts(m, nonGhostOutsCount);
         foreach (var p in m.Outs) {
           if (!p.IsGhost) {
-            DeclareLocalOutVar(IdName(p), p.Type, p.tok, p.Usage, DefaultValue(p.Type, w, p.tok, true), useReturnStyleOuts, w);
+            DeclareLocalOutVar(IdName(p), p.Type, p.tok, p.Usage, DefaultValue(p.Type, w, p.tok, p.Usage, true), useReturnStyleOuts, w);
           }
         }
 
@@ -1700,7 +1700,7 @@ namespace Microsoft.Dafny {
 
       bool hs, hz, ik;
       string dv;
-      TypeInitialization(type, null, null, null, out hs, out hz, out ik, out dv);
+      TypeInitialization(type, null, null, null, Usage.Ordinary, out hs, out hz, out ik, out dv);
       return hs;
     }
 
@@ -1712,7 +1712,7 @@ namespace Microsoft.Dafny {
 
       bool hs, hz, ik;
       string dv;
-      TypeInitialization(type, null, null, null, out hs, out hz, out ik, out dv);
+      TypeInitialization(type, null, null, null, Usage.Ordinary, out hs, out hz, out ik, out dv);
       return hz;
     }
 
@@ -1724,11 +1724,11 @@ namespace Microsoft.Dafny {
 
       bool hs, hz, ik;
       string dv;
-      TypeInitialization(type, null, null, null, out hs, out hz, out ik, out dv);
+      TypeInitialization(type, null, null, null, Usage.Ordinary, out hs, out hz, out ik, out dv);
       return ik;
     }
 
-    protected string DefaultValue(Type type, TextWriter wr, Bpl.IToken tok, bool inAutoInitContext = false) {
+    protected string DefaultValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool inAutoInitContext = false) {
       Contract.Requires(type != null);
       Contract.Requires(wr != null);
       Contract.Requires(tok != null);
@@ -1736,7 +1736,7 @@ namespace Microsoft.Dafny {
 
       bool hs, hz, ik;
       string dv;
-      TypeInitialization(type, this, wr, tok, out hs, out hz, out ik, out dv, inAutoInitContext);
+      TypeInitialization(type, this, wr, tok, usage, out hs, out hz, out ik, out dv, inAutoInitContext);
       return dv;
     }
 
@@ -1753,7 +1753,7 @@ namespace Microsoft.Dafny {
     ///   inAutoInitContext - If "true", the default value produced may have dummy values (outside the Dafny type) for
     ///                       components those type requires user-specified initialization.
     /// </summary>
-    static void TypeInitialization(Type type, Compiler/*?*/ compiler, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok,
+    static void TypeInitialization(Type type, Compiler/*?*/ compiler, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, Usage usage,
         out bool hasSimpleZeroInitializer, out bool hasZeroInitializer, out bool initializerIsKnown, out string defaultValue,
         bool inAutoInitContext = false) {
       Contract.Requires(type != null);
@@ -1768,7 +1768,7 @@ namespace Microsoft.Dafny {
         xType = new BoolType();
       }
 
-      defaultValue = compiler?.TypeInitializationValue(xType, wr, tok, inAutoInitContext);
+      defaultValue = compiler?.TypeInitializationValue(xType, wr, tok, usage, inAutoInitContext);
       if (xType is BoolType) {
         hasSimpleZeroInitializer = true;
         hasZeroInitializer = true;
@@ -1832,13 +1832,13 @@ namespace Microsoft.Dafny {
         } else if (td.NativeType != null) {
           bool ik;
           string dv;
-          TypeInitialization(td.BaseType, null, null, null, out hasSimpleZeroInitializer, out hasZeroInitializer, out ik, out dv);
+          TypeInitialization(td.BaseType, null, null, null, Usage.Ordinary, out hasSimpleZeroInitializer, out hasZeroInitializer, out ik, out dv);
           initializerIsKnown = true;
           return;
         } else {
           Contract.Assert(td.WitnessKind != SubsetTypeDecl.WKind.Special);  // this value is never used with NewtypeDecl
           string dv;
-          TypeInitialization(td.BaseType, compiler, wr, udt.tok, out hasSimpleZeroInitializer, out hasZeroInitializer, out initializerIsKnown, out dv);
+          TypeInitialization(td.BaseType, compiler, wr, udt.tok, Usage.Ordinary, out hasSimpleZeroInitializer, out hasZeroInitializer, out initializerIsKnown, out dv);
           Contract.Assert(compiler == null || string.Equals(dv, defaultValue));
           return;
         }
@@ -1866,7 +1866,7 @@ namespace Microsoft.Dafny {
             hasZeroInitializer = false;
             bool hs, hz;
             string dv;
-            TypeInitialization(udt.TypeArgs.Last(), compiler, wr, udt.tok, out hs, out hz, out initializerIsKnown, out dv);
+            TypeInitialization(udt.TypeArgs.Last(), compiler, wr, udt.tok, Usage.Ordinary, out hs, out hz, out initializerIsKnown, out dv);
             return;
           } else if (((NonNullTypeDecl)td).Class is ArrayClassDecl) {
             // non-null array type; we know how to initialize them
@@ -1883,7 +1883,7 @@ namespace Microsoft.Dafny {
           }
         } else {
           string dv;
-          TypeInitialization(td.RhsWithArgument(udt.TypeArgs), compiler, wr, udt.tok, out hasSimpleZeroInitializer, out hasZeroInitializer, out initializerIsKnown, out dv);
+          TypeInitialization(td.RhsWithArgument(udt.TypeArgs), compiler, wr, udt.tok, Usage.Ordinary, out hasSimpleZeroInitializer, out hasZeroInitializer, out initializerIsKnown, out dv);
           Contract.Assert(compiler == null || string.Equals(dv, defaultValue));
           return;
         }
@@ -3237,7 +3237,7 @@ namespace Microsoft.Dafny {
         // only emit non-ghosts (we get here only for local variables introduced implicitly by call statements)
         return;
       }
-      DeclareLocalVar(IdName(v), v.Type, v.Tok, v.Usage, false, alwaysInitialize ? DefaultValue(v.Type, wr, v.Tok) : null, wr);
+      DeclareLocalVar(IdName(v), v.Type, v.Tok, v.Usage, false, alwaysInitialize ? DefaultValue(v.Type, wr, v.Tok, v.Usage) : null, wr);
     }
 
     TargetWriter MatchCasePrelude(string source, UserDefinedType sourceType, DatatypeCtor ctor, List<BoundVar> arguments, int caseIndex, int caseCount, TargetWriter wr) {
@@ -3606,7 +3606,7 @@ namespace Microsoft.Dafny {
           } else {
             var w = CreateIIFE1(0, e.Body.Type, e.Body.tok, "_let_dummy_" + GetUniqueAstNumber(e), wr);
             foreach (var bv in e.BoundVars) {
-              DeclareLocalVar(IdName(bv), bv.Type, bv.tok, bv.Usage, false, DefaultValue(bv.Type, wr, bv.tok), w);
+              DeclareLocalVar(IdName(bv), bv.Type, bv.tok, bv.Usage, false, DefaultValue(bv.Type, wr, bv.tok, bv.Usage), w);
             }
             TrAssignSuchThat(new List<IVariable>(e.BoundVars).ConvertAll(bv => (IVariable)bv), e.RHSs[0], e.Constraint_Bounds, e.tok.line, w, inLetExprBody);
             EmitReturnExpr(e.Body, true, w);

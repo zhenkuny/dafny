@@ -183,7 +183,7 @@ namespace Microsoft.Dafny
       foreach (var member in iter.Members) {
         var f = member as Field;
         if (f != null && !f.IsGhost) {
-          cw.DeclareField(IdName(f), iter.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, w, f.tok));
+          cw.DeclareField(IdName(f), iter.TypeArgs, false, false, f.Type, f.tok, DefaultValue(f.Type, w, f.tok, Usage.Ordinary));
         } else if (member is Constructor) {
           Contract.Assert(ct == null);  // we're expecting just one constructor
           ct = (Constructor)member;
@@ -303,7 +303,7 @@ namespace Microsoft.Dafny
         string sep = "";
         foreach (Formal f in defaultCtor.Formals) {
           if (!f.IsGhost) {
-            wIf.Write("{0}{1}", sep, DefaultValue(f.Type, wIf, f.tok));
+            wIf.Write("{0}{1}", sep, DefaultValue(f.Type, wIf, f.tok, f.Usage));
             sep = ", ";
           }
         }
@@ -958,7 +958,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    public override string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, bool inAutoInitContext) {
+    public override string TypeInitializationValue(Type type, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, Usage usage, bool inAutoInitContext) {
       var xType = type.NormalizeExpandKeepConstraints();
 
       if (xType is BoolType) {
@@ -989,7 +989,7 @@ namespace Microsoft.Dafny
         } else if (td.NativeType != null) {
           return "0";
         } else {
-          return TypeInitializationValue(td.BaseType, wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.BaseType, wr, tok, Usage.Ordinary, inAutoInitContext);
         }
       } else if (cl is SubsetTypeDecl) {
         var td = (SubsetTypeDecl)cl;
@@ -1001,7 +1001,7 @@ namespace Microsoft.Dafny
           if (ArrowType.IsPartialArrowTypeName(td.Name)) {
             return string.Format("(({0})null)", TypeName(xType, wr, udt.tok));
           } else if (ArrowType.IsTotalArrowTypeName(td.Name)) {
-            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, inAutoInitContext);
+            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, Usage.Ordinary, inAutoInitContext);
             // return the lambda expression ((Ty0 x0, Ty1 x1, Ty2 x2) => rangeDefaultValue)
             return string.Format("(({0}) => {1})",
               Util.Comma(", ", udt.TypeArgs.Count - 1, i => string.Format("{0} x{1}", TypeName(udt.TypeArgs[i], wr, udt.tok), i)),
@@ -1019,7 +1019,7 @@ namespace Microsoft.Dafny
             return string.Format("default({0})", TypeName(xType, wr, udt.tok));
           }
         } else {
-          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, Usage.Ordinary, inAutoInitContext);
         }
       } else if (cl is ClassDecl) {
         bool isHandle = true;
@@ -1264,7 +1264,7 @@ namespace Microsoft.Dafny
       } else {
         wr.Write("Dafny.ArrayHelpers.InitNewArray{0}<{1}>", dimCount, TypeName(elmtType, wr, tok));
         wr.Write("(");
-        wr.Write(DefaultValue(elmtType, wr, tok));
+        wr.Write(DefaultValue(elmtType, wr, tok, Usage.Ordinary));
         for (var d = 0; d < dimCount; d++) {
           wr.Write(", ");
           var w = wr.Fork();

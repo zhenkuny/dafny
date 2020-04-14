@@ -590,14 +590,14 @@ namespace Microsoft.Dafny{
 
     protected void DeclareField(string name, bool isStatic, bool isConst, Type type, Bpl.IToken tok, string rhs, ClassWriter cw) {
       if (isStatic){
-        var r = RemoveParams((rhs != null) ? rhs : DefaultValue(type, cw.StaticMemberWriter, tok));
+        var r = RemoveParams((rhs != null) ? rhs : DefaultValue(type, cw.StaticMemberWriter, tok, Usage.Ordinary));
         var t = RemoveParams(TypeName(type, cw.StaticMemberWriter, tok));
         cw.StaticMemberWriter.WriteLine($"public static {t} {name} = {r};");
       }
       else{
         Contract.Assert(cw.CtorBodyWriter != null, "Unexpected instance field");
         cw.InstanceMemberWriter.WriteLine("public {0} {1};", TypeName(type, cw.InstanceMemberWriter, tok), name);
-        cw.CtorBodyWriter.WriteLine("this.{0} = {1};", name, rhs ?? DefaultValue(type, cw.CtorBodyWriter, tok, inAutoInitContext: true));
+        cw.CtorBodyWriter.WriteLine("this.{0} = {1};", name, rhs ?? DefaultValue(type, cw.CtorBodyWriter, tok, Usage.Ordinary, inAutoInitContext: true));
       }
     }
 
@@ -1671,7 +1671,7 @@ namespace Microsoft.Dafny{
       string sep = "";
       foreach (Formal f in defaultCtor.Formals) {
         if (!f.IsGhost) {
-          arguments += sep + DefaultValue(f.Type, wDefault, f.Tok);
+          arguments += sep + DefaultValue(f.Type, wDefault, f.Tok, Usage.Ordinary);
           sep = ", ";
         }
       }
@@ -2945,7 +2945,7 @@ namespace Microsoft.Dafny{
       }
     }
 
-    public override string TypeInitializationValue(Type type, TextWriter wr, Bpl.IToken tok, bool inAutoInitContext) {
+    public override string TypeInitializationValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool inAutoInitContext) {
       var xType = type.NormalizeExpandKeepConstraints();
       if (xType is BoolType) {
         return "false";
@@ -2987,7 +2987,7 @@ namespace Microsoft.Dafny{
         } else if (td.NativeType != null) {
           return GetNativeDefault(td.NativeType);
         } else {
-          return TypeInitializationValue(td.BaseType, wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.BaseType, wr, tok, Usage.Ordinary, inAutoInitContext);
         }
       } else if (cl is SubsetTypeDecl) {
         var td = (SubsetTypeDecl)cl;
@@ -2999,7 +2999,7 @@ namespace Microsoft.Dafny{
           if (ArrowType.IsPartialArrowTypeName(td.Name)) {
             return $"(({BoxedTypeName(xType, wr, udt.tok)}) null)";
           } else if (ArrowType.IsTotalArrowTypeName(td.Name)) {
-            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, inAutoInitContext);
+            var rangeDefaultValue = TypeInitializationValue(udt.TypeArgs.Last(), wr, tok, Usage.Ordinary, inAutoInitContext);
             // return the lambda expression ((Ty0 x0, Ty1 x1, Ty2 x2) -> rangeDefaultValue)
             return $"(({Util.Comma(", ", udt.TypeArgs.Count - 1, i => $"{BoxedTypeName(udt.TypeArgs[i], wr, udt.tok)} x{i}")}) -> {rangeDefaultValue})";
           } else if (((NonNullTypeDecl)td).Class is ArrayClassDecl) {
@@ -3030,7 +3030,7 @@ namespace Microsoft.Dafny{
             return "null";
           }
         } else {
-          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, inAutoInitContext);
+          return TypeInitializationValue(td.RhsWithArgument(udt.TypeArgs), wr, tok, Usage.Ordinary, inAutoInitContext);
         }
       } else if (cl is ClassDecl) {
         bool isHandle = true;
@@ -3410,7 +3410,7 @@ namespace Microsoft.Dafny{
         wBareArray = wr.Fork();
         wr.Write(")");
         if (mustInitialize) {
-          wr.Write($".fillThenReturn({DefaultValue(elmtType, wr, tok)})");
+          wr.Write($".fillThenReturn({DefaultValue(elmtType, wr, tok, Usage.Ordinary)})");
         }
       } else {
         if (!elmtType.IsTypeParameter) {
@@ -3421,7 +3421,7 @@ namespace Microsoft.Dafny{
         }
         wBareArray = wr.Fork();
         if (mustInitialize) {
-          wr.Write($", {DefaultValue(elmtType, wr, tok)})");
+          wr.Write($", {DefaultValue(elmtType, wr, tok, Usage.Ordinary)})");
         }
       }
 
