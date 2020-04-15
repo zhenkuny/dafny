@@ -420,7 +420,7 @@ namespace Microsoft.Dafny {
         var argNames = new List<string>();
         foreach (Formal arg in ctor.Formals) {
           if (!arg.IsGhost) {
-            ws.WriteLine("{0} {1};", TypeName(arg.Type, wdecl, arg.tok), FormalName(arg, i));
+            ws.WriteLine("{0} {1};", TypeName(arg.Type, wdecl, arg.tok, usage:arg.Usage), FormalName(arg, i));
             argNames.Add(FormalName(arg, i));
             i++;
           }
@@ -471,7 +471,7 @@ namespace Microsoft.Dafny {
         owr.WriteLine("size_t seed = 0;");
         foreach (var arg in ctor.Formals) {
           if (!arg.IsGhost) {
-            owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.CompileName);
+            owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
           }
         }
         owr.WriteLine("return seed;");
@@ -486,9 +486,9 @@ namespace Microsoft.Dafny {
           foreach (Formal arg in ctor.Formals) {
             if (!arg.IsGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive declaration needs to use a pointer
-                wstruct.WriteLine("std::shared_ptr<{0}> {1};", TypeName(arg.Type, wdecl, arg.tok), FormalName(arg, i));
+                wstruct.WriteLine("std::shared_ptr<{0}> {1};", TypeName(arg.Type, wdecl, arg.tok, usage:arg.Usage), FormalName(arg, i));
               } else {
-                wstruct.WriteLine("{0} {1};", TypeName(arg.Type, wdecl, arg.tok), FormalName(arg, i));
+                wstruct.WriteLine("{0} {1};", TypeName(arg.Type, wdecl, arg.tok, usage:arg.Usage), FormalName(arg, i));
               }
               i++;
             }
@@ -530,9 +530,9 @@ namespace Microsoft.Dafny {
             if (!arg.IsGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                 // Recursive destructor needs to use a pointer
-                owr.WriteLine("hash_combine<std::shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.CompileName);
+                owr.WriteLine("hash_combine<std::shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
               } else {
-                owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok), arg.CompileName);
+                owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
               }
               argCount++;
             }
@@ -621,7 +621,7 @@ namespace Microsoft.Dafny {
             if (dtor.EnclosingCtors[0] == ctor) {
               var arg = dtor.CorrespondingFormals[0];
               if (!arg.IsGhost && arg.HasName) {
-                var returnType = TypeName(arg.Type, ws, arg.tok);
+                var returnType = TypeName(arg.Type, ws, arg.tok, usage:arg.Usage);
                 if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                   // This is a recursive destuctor, so return a pointer
                   returnType = String.Format("std::shared_ptr<{0}>", returnType);

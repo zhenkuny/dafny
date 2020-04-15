@@ -4,8 +4,9 @@ import opened Types
 import opened LinearMaybe
 import opened LinearSequences
 import opened LinearLSeq
-//linear datatype Node =
-//  | Leaf(linear keys: seq<uint64>, linear values: seq<uint64>)
+
+linear datatype Node =
+  Leaf(linear keys: seq<uint64>, linear values: seq<uint64>)
 //  | Index(linear pivots: seq<uint64>, linear children: lseq<uint64>)
 
 method Test(name:string, b:bool) 

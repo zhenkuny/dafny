@@ -577,6 +577,17 @@ struct std::hash<DafnyArray<U>> {
     }
 };
 
+template<typename U>
+struct std::hash<std::vector<U>> {
+  std::size_t operator()(const std::    vector<U>& x) const {
+    size_t seed = 0;
+    for (size_t i = 0; i < x.size(); i++) {      
+      hash_combine<U>(seed, x[i]);
+    }
+    return seed;
+  }
+};
+
 /*********************************************************
  *  SETS                                                 *
  *********************************************************/
