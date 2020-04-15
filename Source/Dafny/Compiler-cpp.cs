@@ -450,13 +450,14 @@ namespace Microsoft.Dafny {
         }
         
         // Overload the comparison operator
-        ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", DtT_protected);
-        ws.Write("\treturn true ");
+        ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right);", DtT_protected);
+        var weq = wdef.NewNamedBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right) ", DtT_protected, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)));
+        weq.Write("\treturn true ");
         foreach (var arg in argNames) {
-            ws.WriteLine("\t\t&& left.{0} == right.{0}", arg);
+            weq.WriteLine("\t\t&& left.{0} == right.{0}", arg);
         }
-        ws.WriteLine(";\n}");
-        
+        weq.WriteLine(";");
+
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
 
@@ -494,17 +495,17 @@ namespace Microsoft.Dafny {
           }
           
           // Overload the comparison operator
-          wstruct.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", structName);
-
-          var preReturn = wstruct.Fork();
-          wstruct.Write("\treturn true ");
+          wstruct.WriteLine("friend bool operator==(const {0} &left, const {0} &right); ", structName);
+          var weq = wdef.NewBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right)", structName, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)));
+          var preReturn = weq.Fork();
+          weq.Write("\treturn true ");
           i = 0;
           foreach (Formal arg in ctor.Formals) {
             if (!arg.IsGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive destructor needs to use a pointer
-                wstruct.WriteLine("\t\t&& *(left.{0}) == *(right.{0})", FormalName(arg, i));
+                weq.WriteLine("\t\t&& *(left.{0}) == *(right.{0})", FormalName(arg, i));
               } else {
-                wstruct.WriteLine("\t\t&& left.{0} == right.{0}", FormalName(arg, i));
+                weq.WriteLine("\t\t&& left.{0} == right.{0}", FormalName(arg, i));
               }
               i++;
             }
@@ -513,9 +514,8 @@ namespace Microsoft.Dafny {
           if (i == 0) { // Avoid a warning from the C++ compiler
             preReturn.WriteLine("(void)left; (void) right;");
           }
-          
-          wstruct.WriteLine(";\n}");
-          
+          weq.WriteLine(";");
+
           // Overload the not-comparison operator
           wstruct.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", structName);
           
