@@ -88,7 +88,7 @@ namespace Microsoft.Dafny {
     protected abstract string GetHelperModuleName();
     protected interface IClassWriter {
       BlockTargetWriter/*?*/ CreateMethod(Method m, bool createBody);
-      BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl member);
+      BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Usage resultUsage, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl member);
       BlockTargetWriter/*?*/ CreateGetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl/*?*/ member);  // returns null iff !createBody
       BlockTargetWriter/*?*/ CreateGetterSetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl/*?*/ member, out TargetWriter setterWriter);  // if createBody, then result and setterWriter are non-null, else both are null
       void DeclareField(string name, List<TypeParameter> targs, bool isStatic, bool isConst, Type type, Bpl.IToken tok, string rhs);
@@ -768,7 +768,7 @@ namespace Microsoft.Dafny {
       public BlockTargetWriter/*?*/ CreateMethod(Method m, bool createBody) {
         return createBody ? block : null;
       }
-      public BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl member) {
+      public BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Usage resultUsage, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl member) {
         return createBody ? block : null;
       }
       public BlockTargetWriter/*?*/ CreateGetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl/*?*/ member) {
@@ -1065,7 +1065,7 @@ namespace Microsoft.Dafny {
               if (c is NewtypeDecl && !cf.IsStatic) {
                 // an instance field in a newtype needs to be modeled as a static function that takes a parameter,
                 // because a newtype value is always represented as some existing type
-                wBody = classWriter.CreateFunction(IdName(cf), new List<TypeParameter>(), new List<Formal>(), cf.Type, cf.tok, true, true, cf);
+                wBody = classWriter.CreateFunction(IdName(cf), new List<TypeParameter>(), new List<Formal>(), cf.Type, Usage.Ordinary, cf.tok, true, true, cf);
               } else if (cf.IsStatic) {
                 wBody = classWriter.CreateGetter(IdName(cf), cf.Type, cf.tok, true, true, cf);
                 Contract.Assert(wBody != null);  // since the previous line asked for a body
@@ -1141,7 +1141,7 @@ namespace Microsoft.Dafny {
               Error(f.tok, "Function {0} must be compiled to use the {{:test}} attribute", errorWr, f.FullName);
             }
           } else if (c is TraitDecl && !f.IsStatic) {
-            var w = classWriter.CreateFunction(IdName(f), f.TypeArgs, f.Formals, f.ResultType, f.tok, false, false, f);
+            var w = classWriter.CreateFunction(IdName(f), f.TypeArgs, f.Formals, f.ResultType, f.Result.Usage, f.tok, false, false, f);
             Contract.Assert(w == null);  // since we requested no body
           } else {
             CompileFunction(f, classWriter);
@@ -1277,7 +1277,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(f != null);
       Contract.Requires(cw != null);
 
-      var w = cw.CreateFunction(IdName(f), f.TypeArgs, f.Formals, f.ResultType, f.tok, f.IsStatic, !f.IsExtern(out _, out _), f);
+      var w = cw.CreateFunction(IdName(f), f.TypeArgs, f.Formals, f.ResultType, f.Result.Usage, f.tok, f.IsStatic, !f.IsExtern(out _, out _), f);
       if (w != null) {
         IVariable accVar = null;
         if (f.IsTailRecursive) {

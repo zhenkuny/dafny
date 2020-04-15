@@ -817,8 +817,8 @@ namespace Microsoft.Dafny {
       public BlockTargetWriter/*?*/ CreateMethod(Method m, bool createBody) {
         return Compiler.CreateMethod(m, createBody, MethodDeclWriter, MethodWriter);
       }
-      public BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl member) {
-        return Compiler.CreateFunction(member.EnclosingClass.CompileName, member.EnclosingClass.TypeArgs, name, typeArgs, formals, resultType, tok, isStatic, createBody, MethodDeclWriter, MethodWriter);
+      public BlockTargetWriter/*?*/ CreateFunction(string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Usage resultUsage, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl member) {
+        return Compiler.CreateFunction(member.EnclosingClass.CompileName, member.EnclosingClass.TypeArgs, name, typeArgs, formals, resultType, resultUsage, tok, isStatic, createBody, MethodDeclWriter, MethodWriter);
       }
       public BlockTargetWriter/*?*/ CreateGetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl/*?*/ member) {
         return Compiler.CreateGetter(name, resultType, tok, isStatic, createBody, MethodWriter);
@@ -886,7 +886,7 @@ namespace Microsoft.Dafny {
       return w;
     }
 
-    protected BlockTargetWriter/*?*/ CreateFunction(string className,  List<TypeParameter> classArgs, string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, BlockTargetWriter wdr, TargetWriter wr) {
+    protected BlockTargetWriter/*?*/ CreateFunction(string className,  List<TypeParameter> classArgs, string name, List<TypeParameter>/*?*/ typeArgs, List<Formal> formals, Type resultType, Usage resultUsage, Bpl.IToken tok, bool isStatic, bool createBody, BlockTargetWriter wdr, TargetWriter wr) {
       if (!createBody) {
         return null;
       }
@@ -901,10 +901,10 @@ namespace Microsoft.Dafny {
 
       wdr.Write("{0}{1} {2}",
         isStatic ? "static " : "",
-        TypeName(resultType, wr, tok),
+        TypeName(resultType, wr, tok, usage:resultUsage),
         name);
       wr.Write("{0} {1}{2}::{3}",
-        TypeName(resultType, wr, tok),
+        TypeName(resultType, wr, tok, usage:resultUsage),
         className,
         TemplateMethod(classArgs),
         name);

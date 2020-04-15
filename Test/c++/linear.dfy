@@ -9,6 +9,16 @@ linear datatype Node =
   Leaf(linear keys: seq<uint64>, linear values: seq<uint64>)
 //  | Index(linear pivots: seq<uint64>, linear children: lseq<uint64>)
 
+function method LinearReturn(linear s:seq<uint64>) : linear seq<uint64>
+{
+  s
+}
+
+method TestLinearRet(linear s:seq<uint64>) returns (linear s':seq<uint64>)
+{
+  s' := LinearReturn(s);
+}
+
 method Test(name:string, b:bool) 
   requires b;
 {
