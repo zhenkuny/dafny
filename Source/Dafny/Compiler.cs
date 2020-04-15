@@ -1277,7 +1277,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(f != null);
       Contract.Requires(cw != null);
 
-      var w = cw.CreateFunction(IdName(f), f.TypeArgs, f.Formals, f.ResultType, f.Result.Usage, f.tok, f.IsStatic, !f.IsExtern(out _, out _), f);
+      var w = cw.CreateFunction(IdName(f), f.TypeArgs, f.Formals, f.ResultType, (f.Result != null) ? f.Result.Usage : Usage.Ordinary, f.tok, f.IsStatic, !f.IsExtern(out _, out _), f);
       if (w != null) {
         IVariable accVar = null;
         if (f.IsTailRecursive) {
