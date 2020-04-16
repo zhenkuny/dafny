@@ -19,6 +19,9 @@ method TestLinearRet(linear s:seq<uint64>) returns (linear s':seq<uint64>)
   s' := LinearReturn(s);
 }
 
+linear datatype Val0 = Leaf(x:uint64) | Branch(linear v:Val0)
+datatype Val1 = Leaf(x:uint64) | Branch(v:Val1)
+
 method Test(name:string, b:bool) 
   requires b;
 {
@@ -29,6 +32,27 @@ method Test(name:string, b:bool)
   }
 }
 
+/*  
+// Disallowed because operator== expects ordinary arguments
+method LinearMaybeEqualityTest(linear a:maybe<uint64>, linear b:maybe<uint64>) 
+  requires has(a) && !has(b);
+{
+  var bar := a == b;
+  print "Maybe equality is ", bar;
+
+  var i := unwrap(a);
+  DiscardLinearInt(i);
+  var _ := discard(b);
+}
+
+// Disallowed here because type lseq is not type(==)
+method LinearLSeqEqualityTest() 
+{
+  var a:lseq<uint64>, b:lseq<uint64>;
+  var result := a == b;
+  print result;
+}
+*/
 
 //newtype{:nativeType "ulong"} uint64 = i:int | 0 <= i < 0x10000000000000000
 //
@@ -126,4 +150,9 @@ method Main()
   linear var x := MakeLinearInt(42);
   linear var y := TestLinearMaybe(x);
   DiscardLinearInt(y);
+
+//  linear var a := MakeLinearInt(12);
+//  linear var m_a := give(a);
+//  linear var m_b := empty<uint64>();
+//  LinearMaybeEqualityTest(m_a, m_b);
 }
