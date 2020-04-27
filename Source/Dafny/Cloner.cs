@@ -329,9 +329,6 @@ namespace Microsoft.Dafny
       } else if (expr is ApplySuffix) {
         var e = (ApplySuffix) expr;
         return CloneApplySuffix(e);
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr) expr;
-        return new RevealExpr(Tok(e.tok), CloneExpr(e.Expr));
       } else if (expr is MemberSelectExpr) {
         var e = (MemberSelectExpr)expr;
         return new MemberSelectExpr(Tok(e.tok), CloneExpr(e.Obj), e.MemberName);
@@ -455,6 +452,9 @@ namespace Microsoft.Dafny
       } else if (expr is ParensExpression) {
         var e = (ParensExpression)expr;
         return CloneExpr(e.E);  // skip the parentheses in the clone
+      } else if (expr is NestedMatchExpr) {
+        var e = (NestedMatchExpr) expr;
+        return new NestedMatchExpr(Tok(e.tok), CloneExpr(e.Source), e.Cases.ConvertAll(CloneNestedMatchCaseExpr), e.UsesOptionalBraces);
 
       } else if (expr is MatchExpr) {
         var e = (MatchExpr)expr;
@@ -471,14 +471,13 @@ namespace Microsoft.Dafny
 
     public MatchCaseExpr CloneMatchCaseExpr(MatchCaseExpr c) {
       Contract.Requires(c != null);
-      if (c.Arguments != null) {
-        Contract.Assert(c.CasePatterns == null);
-        return new MatchCaseExpr(Tok(c.tok), c.Id, c.Arguments.ConvertAll(CloneBoundVar), CloneExpr(c.Body));
-      } else {
-        Contract.Assert(c.Arguments == null);
-        Contract.Assert(c.CasePatterns != null);
-        return new MatchCaseExpr(Tok(c.tok), c.Id, c.CasePatterns.ConvertAll(CloneCasePattern), CloneExpr(c.Body));
-      }
+      Contract.Requires(c.Arguments != null);
+      return new MatchCaseExpr(Tok(c.tok), c.Ctor, c.Arguments.ConvertAll(CloneBoundVar), CloneExpr(c.Body));
+    }
+
+    public NestedMatchCaseExpr CloneNestedMatchCaseExpr(NestedMatchCaseExpr c) {
+      Contract.Requires(c != null);
+      return new NestedMatchCaseExpr(Tok(c.Tok), CloneExtendedPattern(c.Pat), CloneExpr(c.Body));
     }
 
     public virtual Expression CloneApplySuffix(ApplySuffix e) {
@@ -554,6 +553,10 @@ namespace Microsoft.Dafny
         var s = (AssertStmt)stmt;
         r = new AssertStmt(Tok(s.Tok), Tok(s.EndTok), CloneExpr(s.Expr), CloneBlockStmt(s.Proof), s.Label == null ? null : new AssertLabel(Tok(s.Label.Tok), s.Label.Name), null);
 
+      } else if (stmt is ExpectStmt) {
+        var s = (ExpectStmt)stmt;
+        r = new ExpectStmt(Tok(s.Tok), Tok(s.EndTok), CloneExpr(s.Expr), CloneExpr(s.Message), CloneAttributes(s.Attributes));
+
       } else if (stmt is AssumeStmt) {
         var s = (AssumeStmt)stmt;
         r = new AssumeStmt(Tok(s.Tok), Tok(s.EndTok), CloneExpr(s.Expr), null);
@@ -622,6 +625,9 @@ namespace Microsoft.Dafny
         }
         Contract.Assert(lines.Count == lineCount);
         r = new CalcStmt(Tok(s.Tok), Tok(s.EndTok), CloneCalcOp(s.UserSuppliedOp), lines, s.Hints.ConvertAll(CloneBlockStmt), s.StepOps.ConvertAll(CloneCalcOp), CloneAttributes(s.Attributes));
+      } else if (stmt is NestedMatchStmt) {
+        var s = (NestedMatchStmt)stmt;
+        r = new NestedMatchStmt(Tok(s.Tok), Tok(s.EndTok), CloneExpr(s.Source), s.Cases.ConvertAll(CloneNestedMatchCaseStmt), s.UsesOptionalBraces);
 
       } else if (stmt is MatchStmt) {
         var s = (MatchStmt)stmt;
@@ -637,7 +643,7 @@ namespace Microsoft.Dafny
 
       } else if (stmt is AssignOrReturnStmt) {
         var s = (AssignOrReturnStmt)stmt;
-        r = new AssignOrReturnStmt(Tok(s.Tok), Tok(s.EndTok), s.Lhss.ConvertAll(CloneExpr), CloneExpr(s.Rhs));
+        r = new AssignOrReturnStmt(Tok(s.Tok), Tok(s.EndTok), s.Lhss.ConvertAll(CloneExpr), CloneExpr(s.Rhs), s.ExpectToken == null ? null : Tok(s.ExpectToken));
 
       } else if (stmt is VarDeclStmt) {
         var s = (VarDeclStmt)stmt;
@@ -667,16 +673,26 @@ namespace Microsoft.Dafny
 
     public MatchCaseStmt CloneMatchCaseStmt(MatchCaseStmt c) {
       Contract.Requires(c != null);
-      if (c.Arguments != null) {
-        Contract.Assert(c.CasePatterns == null);
-        return new MatchCaseStmt(Tok(c.tok), c.Id, c.Arguments.ConvertAll(CloneBoundVar), c.Body.ConvertAll(CloneStmt));
-      } else {
-        Contract.Assert(c.Arguments == null);
-        Contract.Assert(c.CasePatterns != null);
-        return new MatchCaseStmt(Tok(c.tok), c.Id, c.CasePatterns.ConvertAll(CloneCasePattern), c.Body.ConvertAll(CloneStmt));
-      }
+      Contract.Assert(c.Arguments != null);
+      return new MatchCaseStmt(Tok(c.tok), c.Ctor, c.Arguments.ConvertAll(CloneBoundVar), c.Body.ConvertAll(CloneStmt));
     }
 
+    public ExtendedPattern CloneExtendedPattern(ExtendedPattern pat) {
+      if(pat is LitPattern) {
+        var p = (LitPattern)pat;
+        return new LitPattern(p.Tok, (LiteralExpr)CloneExpr(p.Lit));
+      } else if (pat is IdPattern) {
+        var p = (IdPattern)pat;
+        return new IdPattern(p.Tok, p.Id, p.Arguments.ConvertAll(CloneExtendedPattern));
+      } else {
+        Contract.Assert(false);
+        return null;
+      }
+    }
+    public NestedMatchCaseStmt CloneNestedMatchCaseStmt(NestedMatchCaseStmt c) {
+      Contract.Requires(c != null);
+      return new NestedMatchCaseStmt(c.Tok, CloneExtendedPattern(c.Pat), c.Body.ConvertAll(CloneStmt));
+    }
     public CalcStmt.CalcOp CloneCalcOp(CalcStmt.CalcOp op) {
       if (op == null) {
         return null;
@@ -1234,6 +1250,15 @@ namespace Microsoft.Dafny
       this.context = context;
       this.focalPredicates = focalPredicates;
     }
+    public override Statement CloneStmt(Statement stmt) {
+      if (stmt is ConcreteSyntaxStatement) {
+        var s = (ConcreteSyntaxStatement)stmt;
+        return CloneStmt(s.ResolvedStatement);
+      } else {
+        return base.CloneStmt(stmt);
+      }
+    }
+
     public override Expression CloneExpr(Expression expr) {
       if (DafnyOptions.O.RewriteFocalPredicates) {
         if (expr is FunctionCallExpr) {

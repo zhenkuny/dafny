@@ -17,6 +17,7 @@ namespace Microsoft.Dafny {
     DafnyOptions.PrintModes printMode;
     bool afterResolver;
     bool printingExportSet = false;
+    bool printingDesugared = false;
 
     [ContractInvariantMethod]
     void ObjectInvariant()
@@ -853,15 +854,10 @@ namespace Microsoft.Dafny {
     // ----------------------------- PrintMethod -----------------------------
 
     const int IndentAmount = 2; // The amount of indent for each new scope
-    const string BunchaSpaces = "                                ";
     void Indent(int amount)
     {
       Contract.Requires(0 <= amount);
-
-      while (0 < amount) {
-        wr.Write(BunchaSpaces.Substring(0, amount));
-        amount -= BunchaSpaces.Length;
-      }
+      wr.Write(new String(' ', amount));
     }
 
     private bool PrintModeSkipFunctionOrMethod(bool IsGhost, Attributes attributes, string name)
@@ -1130,7 +1126,10 @@ namespace Microsoft.Dafny {
         if (printMode == DafnyOptions.PrintModes.NoGhost) { return; }
         Expression expr = ((PredicateStmt)stmt).Expr;
         var assertStmt = stmt as AssertStmt;
-        wr.Write(assertStmt != null ? "assert" : "assume");
+        var expectStmt = stmt as ExpectStmt;
+        wr.Write(assertStmt != null ? "assert" :
+                 expectStmt != null ? "expect" :
+                 "assume");
         if (stmt.Attributes != null) {
           PrintAttributes(stmt.Attributes);
         }
@@ -1142,6 +1141,9 @@ namespace Microsoft.Dafny {
         if (assertStmt != null && assertStmt.Proof != null) {
           wr.Write(" by ");
           PrintStatement(assertStmt.Proof, indent);
+        } else if (expectStmt != null && expectStmt.Message != null) {
+          wr.Write(", ");
+          PrintExpression(expectStmt.Message, true);
         } else {
           wr.Write(";");
         }
@@ -1355,6 +1357,57 @@ namespace Microsoft.Dafny {
         }
         Indent(indent);
         wr.Write("}");
+      } else if (stmt is NestedMatchStmt) {
+        // Print ResolvedStatement, if present, as comment
+        var s = (NestedMatchStmt)stmt;
+
+        if (s.ResolvedStatement != null && DafnyOptions.O.DafnyPrintResolvedFile != null) {
+          wr.WriteLine();
+          if (!printingDesugared) {
+            Indent(indent); wr.WriteLine("/*---------- desugared ----------");
+          }
+
+          var savedDesugarMode = printingDesugared;
+          printingDesugared = true;
+          Indent(indent); PrintStatement(s.ResolvedStatement, indent);
+          printingDesugared = savedDesugarMode;
+
+          if (!printingDesugared) {
+            Indent(indent); wr.WriteLine("---------- end desugared ----------*/");
+          }
+          Indent(indent);
+        }
+
+        if (!printingDesugared) {
+          wr.Write("match ");
+          PrintExpression(s.Source, false);
+          if (s.UsesOptionalBraces) {
+            wr.Write(" {");
+          }
+          int caseInd = indent + (s.UsesOptionalBraces ? IndentAmount : 0);
+          foreach (NestedMatchCaseStmt mc in s.Cases) {
+            wr.WriteLine();
+            Indent(caseInd);
+            wr.Write("case ");
+            PrintExtendedPattern(mc.Pat);
+            wr.Write(" =>");
+            foreach (Statement bs in mc.Body) {
+              wr.WriteLine();
+              Indent(caseInd + IndentAmount);
+              PrintStatement(bs, caseInd + IndentAmount);
+            }
+          }
+          if (s.UsesOptionalBraces) {
+            wr.WriteLine();
+            Indent(indent);
+            wr.Write("}");
+          }
+        }
+      } else if (stmt is ConcreteSyntaxStatement && ((ConcreteSyntaxStatement)stmt).ResolvedStatement != null) {
+        var s = (ConcreteSyntaxStatement)stmt;
+        Indent(indent);
+        PrintStatement(s.ResolvedStatement, indent);
+        wr.WriteLine();
 
       } else if (stmt is MatchStmt) {
         var s = (MatchStmt)stmt;
@@ -1370,7 +1423,8 @@ namespace Microsoft.Dafny {
           foreach (MatchCaseStmt mc in s.Cases) {
             wr.WriteLine();
             Indent(caseInd);
-            wr.Write("case {0}", mc.Id);
+            wr.Write("case ");
+            if (!mc.Ctor.Name.StartsWith(BuiltIns.TupleTypeCtorNamePrefix)) wr.Write(mc.Ctor.Name);
             PrintMatchCaseArgument(mc);
             wr.Write(" =>");
             foreach (Statement bs in mc.Body) {
@@ -1447,6 +1501,9 @@ namespace Microsoft.Dafny {
         } else if (s.S is AssertStmt) {
           Contract.Assert(s.ConditionOmitted);
           wr.Write("assert ...;");
+        } else if (s.S is ExpectStmt) {
+          Contract.Assert(s.ConditionOmitted);
+          wr.Write("expect ...;");
         } else if (s.S is AssumeStmt) {
           Contract.Assert(s.ConditionOmitted);
           wr.Write("assume ...;");
@@ -1711,6 +1768,53 @@ namespace Microsoft.Dafny {
             return;
           }
         }
+
+      } else if (expr is NestedMatchExpr) {
+        var e = (NestedMatchExpr)expr;
+        if (e.ResolvedExpression != null && DafnyOptions.O.DafnyPrintResolvedFile != null) {
+          wr.WriteLine();
+          if (!printingDesugared) {
+            Indent(indent); wr.WriteLine("/*---------- desugared ----------");
+          }
+
+          var savedDesugarMode = printingDesugared;
+          printingDesugared = true;
+          PrintExtendedExpr(e.ResolvedExpression, indent, isRightmost, endWithCloseParen);
+          printingDesugared = savedDesugarMode;
+
+          if (!printingDesugared) {
+            Indent(indent); wr.WriteLine("---------- end desugared ----------*/");
+          }
+        }
+        if (!printingDesugared) {
+          Indent(indent);
+          var parensNeeded = !isRightmost && !e.UsesOptionalBraces;
+          if (parensNeeded) { wr.Write("("); }
+          wr.Write("match ");
+          PrintExpression(e.Source, isRightmost && e.Cases.Count == 0, false);
+          if (e.UsesOptionalBraces) {
+            wr.WriteLine(" {");
+          } else if (parensNeeded && e.Cases.Count == 0) {
+            wr.WriteLine(")");
+          } else {
+            wr.WriteLine();
+          }
+          int i = 0;
+          int ind = indent + (e.UsesOptionalBraces ? IndentAmount : 0);
+          foreach (var mc in e.Cases) {
+            bool isLastCase = i == e.Cases.Count - 1;
+            Indent(ind);
+            wr.Write("case ");
+            PrintExtendedPattern(mc.Pat);
+            wr.WriteLine(" =>");
+            PrintExtendedExpr(mc.Body, ind + IndentAmount, isLastCase, isLastCase && (parensNeeded || endWithCloseParen));
+            i++;
+          }
+          if (e.UsesOptionalBraces) {
+            Indent(indent);
+            wr.WriteLine("}");
+        }
+        }
       } else if (expr is MatchExpr) {
         var e = (MatchExpr)expr;
         if (DafnyOptions.O.DafnyPrintResolvedFile == null && e.OrigUnresolved != null) {
@@ -1727,7 +1831,7 @@ namespace Microsoft.Dafny {
           foreach (var mc in e.Cases) {
             bool isLastCase = i == e.Cases.Count - 1;
             Indent(ind);
-            wr.Write("case {0}", mc.Id);
+            wr.Write("case {0}", mc.Ctor.Name);
             PrintMatchCaseArgument(mc);
             wr.WriteLine(" =>");
             PrintExtendedExpr(mc.Body, ind + IndentAmount, isLastCase, isLastCase && (parensNeeded || endWithCloseParen));
@@ -1738,6 +1842,7 @@ namespace Microsoft.Dafny {
             wr.WriteLine("}");
           }
         }
+
       } else if (expr is LetExpr) {
         var e = (LetExpr)expr;
         Indent(indent);
@@ -1773,30 +1878,18 @@ namespace Microsoft.Dafny {
     }
 
     public void PrintMatchCaseArgument(MatchCase mc) {
-      if (mc.Arguments != null) {
-        if (mc.Arguments.Count != 0) {
-          string sep = "(";
-          foreach (BoundVar bv in mc.Arguments) {
-            wr.Write("{0}{1}", sep, bv.DisplayName);
-            string typeName = bv.Type.TypeName(null, true);
-            if (bv.Type is NonProxyType && !typeName.StartsWith("_")) {
-              wr.Write(": {0}", typeName);
-            }
-            sep = ", ";
+      Contract.Assert(mc.Arguments != null);
+      if (mc.Arguments.Count != 0) {
+        string sep = "(";
+        foreach (BoundVar bv in mc.Arguments) {
+          wr.Write("{0}{1}", sep, bv.DisplayName);
+          string typeName = bv.Type.TypeName(null, true);
+          if (bv.Type is NonProxyType && !typeName.StartsWith("_")) {
+            wr.Write(": {0}", typeName);
           }
-          wr.Write(")");
+          sep = ", ";
         }
-      } else {
-        Contract.Assert(mc.CasePatterns != null);
-        if (mc.CasePatterns.Count != 0) {
-          string sep = "(";
-          foreach (var cp in mc.CasePatterns) {
-            wr.Write(sep);
-            PrintCasePattern(cp);
-            sep = ", ";
-          }
-          wr.Write(")");
-        }
+        wr.Write(")");
       }
     }
 
@@ -1958,11 +2051,6 @@ namespace Microsoft.Dafny {
         string name = e.Lhs is NameSegment ? ((NameSegment)e.Lhs).Name : e.Lhs is ExprDotName ? ((ExprDotName)e.Lhs).SuffixName : null;
         PrintActualArguments(e.Args, name);
         if (parensNeeded) { wr.Write(")"); }
-
-      } else if (expr is RevealExpr) {
-        var e = (RevealExpr)expr;
-        wr.Write("reveal ");
-        PrintExpression(e.Expr, true);
 
       } else if (expr is MemberSelectExpr) {
         MemberSelectExpr e = (MemberSelectExpr)expr;
@@ -2484,7 +2572,7 @@ namespace Microsoft.Dafny {
       } else if (expr is StmtExpr) {
         var e = (StmtExpr)expr;
         bool parensNeeded;
-        if (e.S is AssertStmt || e.S is AssumeStmt || e.S is CalcStmt) {
+        if (e.S is AssertStmt || e.S is ExpectStmt || e.S is AssumeStmt || e.S is CalcStmt) {
           parensNeeded = !isRightmost;
         } else {
           parensNeeded = !isRightmost || isFollowedBySemicolon;
@@ -2523,7 +2611,26 @@ namespace Microsoft.Dafny {
         wr.Write(op);
         PrintExpr(e.E, opBindingStrength, false, parensNeeded || isRightmost, !parensNeeded && isFollowedBySemicolon, -1, keyword);
         if (parensNeeded) { wr.Write(")"); }
-
+      } else if (expr is NestedMatchExpr){
+        var e = (NestedMatchExpr)expr;
+        if (e.ResolvedExpression != null) {
+          PrintExpr(e.ResolvedExpression, contextBindingStrength, fragileContext, isRightmost, isFollowedBySemicolon, indent);
+        } else {
+          var parensNeeded = !isRightmost && !e.UsesOptionalBraces;
+          if (parensNeeded) { wr.Write("("); }
+          wr.Write("match ");
+          PrintExpression(e.Source, isRightmost && e.Cases.Count == 0, !parensNeeded && isFollowedBySemicolon);
+          if (e.UsesOptionalBraces) { wr.Write(" {"); }
+          int i = 0;
+          foreach (var mc in e.Cases) {
+            bool isLastCase = i == e.Cases.Count - 1;
+            wr.Write(" case {0}", mc.Pat.ToString());
+            wr.Write(" => ");
+            PrintExpression(mc.Body, isRightmost && isLastCase, !parensNeeded && isFollowedBySemicolon);
+            i++;
+          }
+          if (e.UsesOptionalBraces) { wr.Write(" }"); } else if (parensNeeded) { wr.Write(")"); }
+        }
       } else if (expr is MatchExpr) {
         var e = (MatchExpr)expr;
         if (DafnyOptions.O.DafnyPrintResolvedFile == null && e.OrigUnresolved != null) {
@@ -2537,7 +2644,7 @@ namespace Microsoft.Dafny {
           int i = 0;
           foreach (var mc in e.Cases) {
             bool isLastCase = i == e.Cases.Count - 1;
-            wr.Write(" case {0}", mc.Id);
+            wr.Write(" case {0}", mc.Ctor.Name);
             PrintMatchCaseArgument(mc);
             wr.Write(" => ");
             PrintExpression(mc.Body, isRightmost && isLastCase, !parensNeeded && isFollowedBySemicolon);
@@ -2598,6 +2705,33 @@ namespace Microsoft.Dafny {
         }
       }
     }
+
+    // Main difference with .ToString is that tuple constructors are not printed.
+    void PrintExtendedPattern(ExtendedPattern pat) {
+      Contract.Requires(pat != null);
+      switch (pat) {
+        case IdPattern idPat:
+          if (idPat.Id.StartsWith(BuiltIns.TupleTypeCtorNamePrefix)) {
+          } else {
+            wr.Write(idPat.Id);
+          }
+          if (idPat.Arguments.Count != 0) {
+            wr.Write("(");
+            var sep = "";
+            foreach (var arg in idPat.Arguments) {
+              wr.Write(sep);
+              PrintExtendedPattern(arg);
+              sep = ", ";
+            }
+            wr.Write(")");
+          }
+          break;
+        case LitPattern litPat:
+          wr.Write(litPat.ToString());
+          break;
+      }
+    }
+
 
     private void PrintQuantifierDomain(List<BoundVar> boundVars, Attributes attrs, Expression range) {
       Contract.Requires(boundVars != null);

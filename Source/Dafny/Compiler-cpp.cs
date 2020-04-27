@@ -97,7 +97,10 @@ namespace Microsoft.Dafny {
 
     public override void EmitCallToMain(Method mainMethod, TargetWriter wr) {
       var w = wr.NewBlock("int main()");
-      w.WriteLine(string.Format("{0}::{1}::{2}();", mainMethod.EnclosingClass.Module.CompileName, mainMethod.EnclosingClass.CompileName, mainMethod.Name));
+      var tryWr = w.NewBlock("try");
+      tryWr.WriteLine(string.Format("{0}::{1}::{2}();", mainMethod.EnclosingClass.Module.CompileName, mainMethod.EnclosingClass.CompileName, mainMethod.Name));
+      var catchWr = w.NewBlock("catch (DafnyHaltException & e)");
+      catchWr.WriteLine("std::cout << \"Program halted: \" << e.what() << std::endl;");
     }
 
     protected override BlockTargetWriter CreateStaticMain(IClassWriter cw) {
@@ -872,10 +875,6 @@ namespace Microsoft.Dafny {
       wdr.Write(");\n");
 
       var w = wr.NewBlock(")", null, BlockTargetWriter.BraceStyle.Newline, BlockTargetWriter.BraceStyle.Newline);
-      if (m.IsTailRecursive) {
-        w.WriteLine("goto TAIL_CALL_START;"); // Avoid warning about unused label
-        w.WriteLine("TAIL_CALL_START: ;");  // Extra semicolon in case there are no additional statements after this
-      }
 
       if (targetReturnTypeReplacement != null) {
         var r = new TargetWriter(w.IndentLevel);
@@ -944,44 +943,6 @@ namespace Microsoft.Dafny {
         }
       }
       */
-    }
-
-    List<TypeParameter> UsedTypeParameters(DatatypeDecl dt) {
-      Contract.Requires(dt != null);
-
-      var idt = dt as IndDatatypeDecl;
-      if (idt == null) {
-        return dt.TypeArgs;
-      } else {
-        Contract.Assert(idt.TypeArgs.Count == idt.TypeParametersUsedInConstructionByDefaultCtor.Length);
-        var tps = new List<TypeParameter>();
-        for (int i = 0; i < idt.TypeArgs.Count; i++) {
-          if (idt.TypeParametersUsedInConstructionByDefaultCtor[i]) {
-            tps.Add(idt.TypeArgs[i]);
-          }
-        }
-        return tps;
-      }
-    }
-
-    List<Type> UsedTypeParameters(DatatypeDecl dt, List<Type> typeArgs) {
-      Contract.Requires(dt != null);
-      Contract.Requires(typeArgs != null);
-      Contract.Requires(dt.TypeArgs.Count == typeArgs.Count);
-
-      var idt = dt as IndDatatypeDecl;
-      if (idt == null) {
-        return typeArgs;
-      } else {
-        Contract.Assert(typeArgs.Count == idt.TypeParametersUsedInConstructionByDefaultCtor.Length);
-        var ts = new List<Type>();
-        for (int i = 0; i < typeArgs.Count; i++) {
-          if (idt.TypeParametersUsedInConstructionByDefaultCtor[i]) {
-            ts.Add(typeArgs[i]);
-          }
-        }
-        return ts;
-      }
     }
 
     int WriteRuntimeTypeDescriptorsFormals(List<TypeParameter> typeParams, bool useAllTypeArgs, TargetWriter wr, string prefix = "") {
@@ -1109,6 +1070,12 @@ namespace Microsoft.Dafny {
         return null;
       }
     }
+    
+    protected override BlockTargetWriter EmitTailCallStructure(MemberDecl member, BlockTargetWriter wr) {
+      //wr.WriteLine("goto TAIL_CALL_START;");
+      wr.WriteLine("TAIL_CALL_START:");
+      return wr;
+    }
 
     protected override void EmitJumpToTailCallStart(TargetWriter wr) {
       wr.WriteLine("goto TAIL_CALL_START;");
@@ -1154,7 +1121,7 @@ namespace Microsoft.Dafny {
         ArrayClassDecl at = xType.AsArrayType;
         Contract.Assert(at != null);  // follows from type.IsArrayType
         Type elType = UserDefinedType.ArrayElementType(xType);
-        string typeNameSansBrackets, brackets;
+        //string typeNameSansBrackets, brackets;
         //TypeName_SplitArrayName(elType, wr, tok, out typeNameSansBrackets, out brackets);
         //return typeNameSansBrackets + TypeNameArrayBrackets(at.Dims) + brackets;
         if (at.Dims == 1) {
@@ -1259,8 +1226,6 @@ namespace Microsoft.Dafny {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
         } else {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
-          return "nullptr";
-          //return string.Format("{0}.Default", RuntimeTypeDescriptor(udt, udt.tok, wr));
         }
       }
       var cl = udt.ResolvedClass;
@@ -1269,9 +1234,6 @@ namespace Microsoft.Dafny {
         var td = (NewtypeDecl)cl;
         if (td.Witness != null) {
           return td.Module.CompileName + "::class_" + td.CompileName + "::Witness";
-          //return TypeName(udt, wr, udt.tok, null, true) + "::Witness";
-          //return TypeName(udt, wr, udt.tok, null, true) + "()";
-          //return "Witness";
         } else if (td.NativeType != null) {
           return "0";
         } else {
@@ -1281,9 +1243,6 @@ namespace Microsoft.Dafny {
         var td = (SubsetTypeDecl)cl;
         if (td.Witness != null) {
           return td.Module.CompileName + "::class_" + td.CompileName + "::Witness";
-          //return TypeName(udt, wr, udt.tok, null, true) + "::Witness";
-          //return TypeName(udt, wr, udt.tok, null, true) + "()";
-          //return "Witness";
         } else if (td.WitnessKind == SubsetTypeDecl.WKind.Special) {
           // WKind.Special is only used with -->, ->, and non-null types:
           Contract.Assert(ArrowType.IsPartialArrowTypeName(td.Name) || ArrowType.IsTotalArrowTypeName(td.Name) || td is NonNullTypeDecl);
@@ -1543,6 +1502,12 @@ namespace Microsoft.Dafny {
       }
       wr.WriteLine("throw \"{0}\";", message);
     }
+    
+    protected override void EmitHalt(Expression messageExpr, TargetWriter wr) {
+      wr.Write("throw DafnyHaltException(");
+      TrExpr(messageExpr, wr, false);
+      wr.WriteLine(");");
+    }
 
     protected override BlockTargetWriter CreateForLoop(string indexVar, string bound, TargetWriter wr) {
       return wr.NewNamedBlock("for (auto {0} = 0; {0} < {1}; {0}++)", indexVar, bound);
@@ -1643,7 +1608,12 @@ namespace Microsoft.Dafny {
         // TODO: the string should be converted to a Dafny seq<char>
         TrStringLiteral(str, wr);
       } else if (AsNativeType(e.Type) is NativeType nt) {
+        
         wr.Write("({0}){1}", GetNativeTypeName(nt), (BigInteger)e.Value);
+        if ((BigInteger) e.Value > 9223372036854775807) {
+          // Avoid compiler warning: integer literal is too large to be represented in a signed integer type
+          wr.Write("U");
+        }
       } else if (e.Value is BigInteger i) {
         EmitIntegerLiteral(i, wr);
       } else if (e.Value is Basetypes.BigDec) {
@@ -1718,10 +1688,6 @@ namespace Microsoft.Dafny {
 
       if (bvType.NativeType == null) {
         throw NotSupported("EmitBitvectorTruncation with BigInteger value");
-        wr.Write("(");
-        var middle = wr.Fork();
-        wr.Write(").mod(new BigNumber(2).exponentiatedBy({0}))", bvType.Width);
-        return middle;
       } else if (bvType.NativeType.Bitwidth == bvType.Width) {
         // no truncation needed
         return wr;
@@ -1736,44 +1702,18 @@ namespace Microsoft.Dafny {
 
     protected override void EmitRotate(Expression e0, Expression e1, bool isRotateLeft, TargetWriter wr, bool inLetExprBody, FCE_Arg_Translator tr) {
       throw NotSupported("EmitRotate");
-      string nativeName = null, literalSuffix = null;
-      bool needsCast = false;
-      var nativeType = AsNativeType(e0.Type);
-      if (nativeType != null) {
-        GetNativeInfo(nativeType.Sel, out nativeName, out literalSuffix, out needsCast);
-      }
-
-      var bv = e0.Type.AsBitVectorType;
-      if (bv.Width == 0) {
-        tr(e0, wr, inLetExprBody);
-      } else {
-        wr.Write("_dafny.{0}(", isRotateLeft ? "RotateLeft" : "RotateRight");
-        tr(e0, wr, inLetExprBody);
-        wr.Write(", (");
-        tr(e1, wr, inLetExprBody);
-        wr.Write(").toNumber(), {0})", bv.Width);
-        if (needsCast) {
-          wr.Write(".toNumber()");
-        }
-      }
     }
 
     protected override void EmitEmptyTupleList(string tupleTypeArgs, TargetWriter wr) {
       throw NotSupported("EmitEmptyTupleList");
-      wr.Write("[]", tupleTypeArgs);
     }
 
     protected override TargetWriter EmitAddTupleToList(string ingredients, string tupleTypeArgs, TargetWriter wr) {
       throw NotSupported("EmitAddTupleToList");
-      wr.Write("{0}.push(_dafny.Tuple.of(", ingredients, tupleTypeArgs);
-      var wrTuple = wr.Fork();
-      wr.WriteLine("));");
-      return wrTuple;
     }
 
     protected override void EmitTupleSelect(string prefix, int i, TargetWriter wr) {
       throw NotSupported("EmitTupleSelect");
-      wr.Write("{0}[{1}]", prefix, i);
     }
 
     protected override string IdProtect(string name) {
@@ -1945,7 +1885,6 @@ namespace Microsoft.Dafny {
         case SpecialField.ID.ArrayLength:
         case SpecialField.ID.ArrayLengthInt:
           throw NotSupported("taking an array's length");
-          break;
         case SpecialField.ID.Floor:
           compiledName = "int()";
           break;
@@ -1981,55 +1920,63 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override TargetWriter EmitMemberSelect(MemberDecl member, bool isLValue, Type expectedType, TargetWriter wr) {
-      var preSource = wr.Fork();
-      wr.Write("(");
-      var wSource = wr.Fork();
-      if (isLValue && member is ConstantField) {
-        wr.Write("->{0}", member.CompileName);
+    protected override ILvalue EmitMemberSelect(System.Action<TargetWriter> obj, MemberDecl member, Type expectedType, bool internalAccess = false) {
+      if (member.IsStatic && member is ConstantField) {
+        return SuffixLvalue(obj, "::{0}", member.CompileName);
       } else if (member is DatatypeDestructor dtor && dtor.EnclosingClass is TupleTypeDecl) {
-        wr.Write(".get_{0}()", dtor.Name);
-      //} else if (member is SpecialField sf && sf.SpecialId == SpecialField.ID.Con) {
-        
-      } else if (member is SpecialField sf2 && sf2.SpecialId == SpecialField.ID.UseIdParam && sf2.IdParam is string fieldName && fieldName.StartsWith("is_")) {
+        return SuffixLvalue(obj, ".get_{0}()", dtor.Name);
+      } else if (member is SpecialField sf2 && sf2.SpecialId == SpecialField.ID.UseIdParam && sf2.IdParam is string fieldName 
+                 && fieldName.StartsWith("is_")) {
         // Ugly hack of a check to figure out if this is a datatype query: f.Constructor?
-        //wr = EmitCoercionIfNecessary(from:sf2.Type, to:expectedType, tok:null, wr:wr);
-        wSource = wr.Fork();
-        wr.Write(".is_{0}_{1}()", IdProtect(sf2.EnclosingClass.CompileName), fieldName.Substring(3));
-      } else if (!isLValue && member is SpecialField sf) {
+        return SuffixLvalue(obj, ".is_{0}_{1}()", IdProtect(sf2.EnclosingClass.CompileName), fieldName.Substring(3));
+      } else if (member is SpecialField sf) {
         string compiledName, preStr, postStr;
         GetSpecialFieldInfo(sf.SpecialId, sf.IdParam, out compiledName, out preStr, out postStr);
-        if (sf is ConstantField && !member.IsStatic && compiledName.Length != 0) {
-          wr.Write("->{0}", compiledName);
-        } else if (sf.SpecialId == SpecialField.ID.Keys || sf.SpecialId == SpecialField.ID.Values) {
-          wr.Write(".{0}", compiledName);
+        if (sf.SpecialId == SpecialField.ID.Keys || sf.SpecialId == SpecialField.ID.Values) {
+          return SuffixLvalue(obj, ".{0}", compiledName);
         } else if (sf is DatatypeDestructor dtor2) {
           if (dtor2.EnclosingCtors.Count > 1) {
-            NotSupported(String.Format("Using the same destructor {0} with multiple constructors is ambiguous", member.Name), dtor2.tok);
+            NotSupported(
+              String.Format("Using the same destructor {0} with multiple constructors is ambiguous", member.Name),
+              dtor2.tok);
           }
+
           if (!(dtor2.EnclosingClass is IndDatatypeDecl)) {
-            NotSupported(String.Format("Unexpected use of a destructor {0} that isn't for an inductive datatype.  Panic!", member.Name), dtor2.tok);
+            NotSupported(
+              String.Format("Unexpected use of a destructor {0} that isn't for an inductive datatype.  Panic!",
+                member.Name), dtor2.tok);
           }
+
           var dt = dtor2.EnclosingClass as IndDatatypeDecl;
-          if (dt.Ctors.Count > 1) {
-            if (dtor2.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
-              // This a recursively defined datatype; need to dereference the pointer
-              preSource.Write("*");
+          return SimpleLvalue(wr => {
+            if (dt.Ctors.Count > 1) {
+              if (dtor2.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
+                // This a recursively defined datatype; need to dereference the pointer
+                wr.Write("*");
+              }
+
+              wr.Write("(");
+              obj(wr);
+              wr.Write(".dtor_{0}()", sf.CompileName);
+            } else {
+              wr.Write("(");
+              obj(wr);
+              wr.Write(".{0}", sf.CompileName);
             }
-            wr.Write(".dtor_{0}()", sf.CompileName);
-          } else {
-            wr.Write(".{0}", sf.CompileName);
-          }
+
+            wr.Write(")");
+          });
+        } else if (!member.IsStatic && compiledName.Length != 0) {
+          return SuffixLvalue(obj, "->{0}", compiledName);
         } else if (compiledName.Length != 0) {
-          wr.Write("::{0}", compiledName);
+          return SuffixLvalue(obj, "::{0}", compiledName);
         } else {
           // this member selection is handled by some kind of enclosing function call, so nothing to do here
+          return SimpleLvalue(obj);
         }
       } else {
-        wr.Write("->{0}", IdName(member));
+        return SuffixLvalue(obj, "->{0}", IdName(member));
       }
-      wr.Write(")");
-      return wSource;
     }
 
     protected override TargetWriter EmitArraySelect(List<string> indices, Type elmtType, TargetWriter wr) {
@@ -2119,7 +2066,7 @@ namespace Microsoft.Dafny {
             wr.Write(")");
           } else {
             wr.Write("DafnySequence<{0}>::SeqFromArraySlice(", typeName);
-            TrParenExpr(source, wr, inLetExprBody);
+            TrParenExpr(source, wr, inLetExprBody);  
             wr.Write(",");
             TrParenExpr(lo, wr, inLetExprBody);
             wr.Write(",");
@@ -2220,9 +2167,6 @@ namespace Microsoft.Dafny {
 
     protected override BlockTargetWriter CreateIIFE1(int source, Type resultType, Bpl.IToken resultTok, string bvName, TargetWriter wr) {
       throw NotSupported("CreateIIFE1", resultTok);
-      var w = wr.NewExprBlock("function ({0})", bvName);
-      wr.Write("({0})", source);
-      return w;
     }
 
     protected override void EmitUnaryExpr(ResolvedUnaryOp op, Expression expr, bool inLetExprBody, TargetWriter wr) {
@@ -2611,20 +2555,11 @@ namespace Microsoft.Dafny {
         wr.Write("})");
       } else if (ct is MultiSetType) {
         throw NotSupported("EmitCollectionDisplay/multiset", tok);
-        wr.Write("_dafny.MultiSet.fromElements");
-        TrExprList(elements, wr, inLetExprBody);
       } else {
         Contract.Assert(ct is SeqType);  // follows from precondition
-        TargetWriter wrElements;
         if (ct.Arg.IsCharType) {
           throw NotSupported("EmitCollectionDisplay/string", tok);
-          // We're really constructing a string.
-          // TODO: It may be that ct.Arg is a type parameter that may stand for char. We currently don't catch that case here.
-          wr.Write("[");
-          wrElements = wr.Fork();
-          wr.Write("].join(\"\")");
-        } else
-        {
+        } else {
           wr.Write("DafnySequence<{0}>::Create({{", TypeName(ct.TypeArgs[0], wr, tok, null, false));
           for (var i = 0; i < elements.Count; i++) {
             TrExpr(elements[i], wr, inLetExprBody);
@@ -2695,12 +2630,6 @@ namespace Microsoft.Dafny {
 
     protected override TargetWriter EmitMapBuilder_Add(MapType mt, Bpl.IToken tok, string collName, Expression term, bool inLetExprBody, TargetWriter wr) {
       throw NotSupported("EmitMapBuilder_Add", tok);
-      wr.Write("{0}.push([", collName);
-      var termLeftWriter = wr.Fork();
-      wr.Write(",");
-      TrExpr(term, wr, inLetExprBody);
-      wr.WriteLine("]);");
-      return termLeftWriter;
     }
 
     protected override string GetCollectionBuilder_Build(CollectionType ct, Bpl.IToken tok, string collName, TargetWriter wr) {
