@@ -361,14 +361,21 @@ struct DafnySequence {
     std::shared_ptr<T> sptr;
     T* start;
     size_t len;
-    T* dbg_underyling_ary;
+#if DEBUG_UNDERLYING
+    // Switch on to track cases where the subsequence optimization is hosing us
+    // because we are using 24 bytes from a 1MB allocation.
+    // Memory cost: 16B per DafnySequence ptr.
+    T* dbg_underlying_ary;
     size_t dbg_underlying_len;
+#endif // DEBUG_UNDERLYING
 
     DafnySequence() {
       sptr = nullptr;
       start = global_empty_ptr<T>;
       len = 0;
+#if DEBUG_UNDERLYING
       dbg_underlying_len = 0;
+#endif // DEBUG_UNDERLYING
     }
 
     explicit DafnySequence(uint64 len) {
@@ -377,20 +384,26 @@ struct DafnySequence {
       malloc_accounting_default_scope();
       start = &*sptr;
       this->len = len;
+#if DEBUG_UNDERLYING
       this->dbg_underlying_len = len;
+#endif // DEBUG_UNDERLYING
     }
 
     DafnySequence(const DafnySequence<T>& other) {
       sptr = other.sptr;
       start = other.start;
       len = other.len;
+#if DEBUG_UNDERLYING
       dbg_underlying_len = other.dbg_underlying_len;
+#endif // DEBUG_UNDERLYING
     }
 
     // Update one element
     DafnySequence(const DafnySequence<T>& other, uint64 i, T t) {
       len = other.length();
+#if DEBUG_UNDERLYING
       dbg_underlying_len = len;
+#endif // DEBUG_UNDERLYING
       malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "seq-update");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       malloc_accounting_default_scope();
@@ -402,7 +415,9 @@ struct DafnySequence {
 
     explicit DafnySequence(DafnyArray<T> arr) {
       len = arr.size();
+#if DEBUG_UNDERLYING
       dbg_underlying_len = len;
+#endif // DEBUG_UNDERLYING
       malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(),
           (horrible_amass_label != NULL) ? horrible_amass_label : "seq-from-array");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
@@ -413,7 +428,9 @@ struct DafnySequence {
 
     DafnySequence(DafnyArray<T> arr, uint64 lo, uint64 hi) {
       len = hi - lo;
+#if DEBUG_UNDERLYING
       dbg_underlying_len = len;
+#endif // DEBUG_UNDERLYING
       malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "seq-from-array-slice");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       malloc_accounting_default_scope();
@@ -423,7 +440,9 @@ struct DafnySequence {
 
     DafnySequence(std::initializer_list<T> il) {
       len = il.size();
+#if DEBUG_UNDERLYING
       dbg_underlying_len = len;
+#endif // DEBUG_UNDERLYING
       malloc_accounting_set_scope(malloc_accounting_get_type_name<T>(), "literal-seq");
       sptr = std::shared_ptr<T> (new T[len], std::default_delete<T[]>());
       malloc_accounting_default_scope();
@@ -499,7 +518,9 @@ struct DafnySequence {
         ret.sptr = sptr;
         ret.start = start + lo;
         ret.len = hi - lo;
+#if DEBUG_UNDERLYING
         ret.dbg_underlying_len = dbg_underlying_len;
+#endif // DEBUG_UNDERLYING
 #else // SUBSEQUENCE_OPTIMIZATION
         ret = DafnySequence(hi - lo);
         std::copy(start + lo, start + hi, ret.start);
