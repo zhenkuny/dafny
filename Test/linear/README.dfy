@@ -269,8 +269,9 @@ function method seq_set<A>(linear s1:seq<A>, i:nat, a:A):(linear s2:seq<A>) // c
 function method seq_length<A>(shared s:seq<A>):(n:nat)
     ensures n == |s|
 
-method seq_alloc<A>(length:nat) returns(linear s:seq<A>)
+method seq_alloc<A>(length:nat, a:A) returns(linear s:seq<A>)
     ensures |s| == length
+    ensures forall i :: 0 <= i < |s| ==> s[i] == a
 
 method seq_free<A>(linear s:seq<A>)
 
@@ -372,7 +373,7 @@ method SeqExample<A>(linear s_in:lseq<nlList<A>>) returns(linear s:lseq<nlList<A
     // Compute length of every list in s_in
     s := s_in;
     var len := lseq_length(s);
-    lens := seq_alloc(len);
+    lens := seq_alloc(len, 0);
     var i:nat := 0;
     while (i < len)
         invariant i <= len
