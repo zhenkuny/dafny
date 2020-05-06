@@ -137,17 +137,17 @@ function MX(d:dx):nat
 {
     match d { case DX(tx) => |tx| }
 }
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
+
+linear datatype fd = FD(i:int)
+{
+  linear function method f1():(linear r:fd) {this}
+  shared function method f2():int {this.i}
+  linear function method f3():(linear r:fd) {this.f1()}
+  linear method m1() returns(linear r:fd) {r := this;}
+  linear method m2() returns(linear r:fd) {r := m1();}
+  linear method m3() returns(linear r:fd) {var i := f2(); r := m1();}
+}
+
 //
 //
 //
@@ -571,4 +571,13 @@ method TupleBad(shared x:(int, linear int), y:(int, int, bool), linear l:int) re
     linear var z:(int, linear int) := (i, linear l);
     linear var (a, linear b) := z;
     q := b;
+}
+
+linear datatype fd' = FD'(i:int)
+{
+  linear function method f1():(linear r:fd') {FD'(this.i)}
+  shared function method f2():int {f1().i}
+  function method f3():int {f2()}
+  linear method m1() returns(linear r:fd') {r := FD'(this.i);}
+  method m2() returns(linear r:fd') {r := m1();}
 }

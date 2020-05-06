@@ -67,6 +67,8 @@ enum AllowedDeclModifiers {
   AlreadyGhost = 4,
   Static = 8,
   Protected = 16,
+  Linear = 32,
+  Shared = 64,
 };
 
 /// <summary>
@@ -85,10 +87,16 @@ void CheckDeclModifiers(DeclModifierData dmod, string declCaption, AllowedDeclMo
   }
   if (dmod.Usage != Usage.Ordinary) {
     if ((allowed & AllowedDeclModifiers.AlreadyGhost) != 0) {
-      SemErr(dmod.UsageToken, declCaption + " cannot be declared ghost (they are 'ghost' by default).");
+      SemErr(dmod.UsageToken, declCaption + " cannot be declared " + Resolver.UsageName(dmod.Usage) + " (they are 'ghost' by default).");
       dmod.Usage = Usage.Ordinary;
-    } else if ((allowed & AllowedDeclModifiers.Ghost) == 0) {
+    } else if (dmod.Usage == Usage.Ghost && (allowed & AllowedDeclModifiers.Ghost) == 0) {
       SemErr(dmod.UsageToken, declCaption + " cannot be declared 'ghost'.");
+      dmod.Usage = Usage.Ordinary;
+    } else if (dmod.Usage == Usage.Linear && (allowed & AllowedDeclModifiers.Linear) == 0) {
+      SemErr(dmod.UsageToken, declCaption + " cannot be declared 'linear'.");
+      dmod.Usage = Usage.Ordinary;
+    } else if (dmod.Usage == Usage.Shared && (allowed & AllowedDeclModifiers.Shared) == 0) {
+      SemErr(dmod.UsageToken, declCaption + " cannot be declared 'shared'.");
       dmod.Usage = Usage.Ordinary;
     }
   }
@@ -869,6 +877,8 @@ Dafny
 DeclModifier<ref DeclModifierData dmod>
 = ( "abstract"                             (. dmod.IsAbstract = true;  CheckAndSetToken(ref dmod.AbstractToken); .)
   | "ghost"                                (. dmod.Usage = Usage.Ghost;  CheckAndSetToken(ref dmod.UsageToken); .)
+  | "linear"                               (. dmod.Usage = Usage.Linear;  CheckAndSetToken(ref dmod.UsageToken); .)
+  | "shared"                               (. dmod.Usage = Usage.Shared;  CheckAndSetToken(ref dmod.UsageToken); .)
   | "static"                               (. dmod.IsStatic = true; CheckAndSetToken(ref dmod.StaticToken); .)
   | "protected"                            (. dmod.IsProtected = true; CheckAndSetToken(ref dmod.ProtectedToken); .)
   )
@@ -1125,12 +1135,10 @@ DatatypeDecl<DeclModifierData dmod, ModuleDefinition/*!*/ module, out DatatypeDe
      List<DatatypeCtor/*!*/> ctors = new List<DatatypeCtor/*!*/>();
      IToken bodyStart = Token.NoToken;  // dummy assignment
      bool co = false;
-     bool linear = false;
-     CheckDeclModifiers(dmod, "Datatypes or codatatypes", AllowedDeclModifiers.None);
+     CheckDeclModifiers(dmod, "Datatypes or codatatypes", AllowedDeclModifiers.Linear);
      var members = new List<MemberDecl>();
   .)
   SYNC
-  [ "linear"         (. linear = true; .) ]
   ( "datatype"
   | "codatatype"     (. co = true; .)
   )
@@ -1144,7 +1152,7 @@ DatatypeDecl<DeclModifierData dmod, ModuleDefinition/*!*/ module, out DatatypeDe
   (. if (co) {
        dt = new CoDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs);
      } else {
-       dt = new IndDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs, linear);
+       dt = new IndDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs, dmod.Usage == Usage.Linear);
      }
      dt.BodyStartTok = bodyStart;
      dt.BodyEndTok = t;
@@ -1533,7 +1541,8 @@ MethodDecl<DeclModifierData dmod, bool allowConstructor, bool isWithinAbstractMo
   .)
   SYNC
   ( "method"                        (. isPlainOlMethod = true; caption = "Methods";
-                                       allowed = AllowedDeclModifiers.Ghost | AllowedDeclModifiers.Static; .)
+                                       allowed = AllowedDeclModifiers.Ghost | AllowedDeclModifiers.Static
+                                         | AllowedDeclModifiers.Linear | AllowedDeclModifiers.Shared; .)
   | "lemma"                         (. isLemma = true; caption = "Lemmas";
                                        allowed = AllowedDeclModifiers.AlreadyGhost | AllowedDeclModifiers.Static
                                          | AllowedDeclModifiers.Protected; .)
@@ -1574,7 +1583,7 @@ MethodDecl<DeclModifierData dmod, bool allowConstructor, bool isWithinAbstractMo
     [ GenericParameters<typeArgs, false> ]
     [ KType<ref kType>              (. if (!(isCoLemma || isIndLemma)) { SemErr(t, "type of _k can only be specified for inductive lemmas and co-lemmas"); } .)
     ]
-    (. var isCompilable = (isPlainOlMethod && dmod.Usage == Usage.Ordinary) || isConstructor; .)
+    (. var isCompilable = (isPlainOlMethod && dmod.Usage != Usage.Ghost) || isConstructor; .)
     Formals<true, isCompilable, isTwoStateLemma, ins>
     [ "returns"                                 (. if (isConstructor) { SemErr(t, "constructors cannot have out-parameters"); } .)
       Formals<false, isCompilable, false, outs>
@@ -1611,7 +1620,7 @@ MethodDecl<DeclModifierData dmod, bool allowConstructor, bool isWithinAbstractMo
                              req, new Specification<FrameExpression>(mod, modAttrs),
                              ens, new Specification<Expression>(dec, decAttrs), body, attrs, signatureEllipsis);
      } else {
-       m = new Method(tok, id.val, dmod.IsStatic, dmod.Usage == Usage.Ghost, typeArgs, ins, outs,
+       m = new Method(tok, id.val, dmod.IsStatic, dmod.Usage, typeArgs, ins, outs,
                       req, new Specification<FrameExpression>(mod, modAttrs), ens, new Specification<Expression>(dec, decAttrs), body, attrs, signatureEllipsis);
      }
      m.BodyStartTok = bodyStart;
@@ -1924,6 +1933,8 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
        string caption = "Functions";
        if (isFunctionMethod) {
          caption = "Function methods";
+         allowed |= AllowedDeclModifiers.Linear | AllowedDeclModifiers.Shared;
+         allowed &= ~AllowedDeclModifiers.AlreadyGhost;
        }
        CheckDeclModifiers(dmod, caption, allowed);
     .)
@@ -1966,6 +1977,8 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
        string caption = "Predicates";
        if (isFunctionMethod) {
          caption = "Predicate methods";
+         allowed |= AllowedDeclModifiers.Linear | AllowedDeclModifiers.Shared;
+         allowed &= ~AllowedDeclModifiers.AlreadyGhost;
        }
        CheckDeclModifiers(dmod, caption, allowed);
     .)
@@ -2033,7 +2046,7 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
         f = new TwoStateFunction(tok, id.val, dmod.IsStatic, typeArgs, formals, result, returnType,
                                  reqs, reads, ens, new Specification<Expression>(decreases, null), body, attrs, signatureEllipsis);
      } else if (isPredicate) {
-        f = new Predicate(tok, id.val, dmod.IsStatic, dmod.IsProtected, !isFunctionMethod, typeArgs, formals,
+        f = new Predicate(tok, id.val, dmod.IsStatic, dmod.IsProtected, isFunctionMethod ? dmod.Usage : Usage.Ghost, typeArgs, formals,
                           reqs, reads, ens, new Specification<Expression>(decreases, null), body, Predicate.BodyOriginKind.OriginalOrInherited, attrs, signatureEllipsis);
      } else if (isIndPredicate) {
         f = new InductivePredicate(tok, id.val, dmod.IsStatic, dmod.IsProtected, kType, typeArgs, formals,
@@ -2042,7 +2055,7 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
         f = new CoPredicate(tok, id.val, dmod.IsStatic, dmod.IsProtected, kType, typeArgs, formals,
                             reqs, reads, ens, body, attrs, signatureEllipsis);
      } else {
-        f = new Function(tok, id.val, dmod.IsStatic, dmod.IsProtected, !isFunctionMethod, typeArgs, formals, result, returnType,
+        f = new Function(tok, id.val, dmod.IsStatic, dmod.IsProtected, isFunctionMethod ? dmod.Usage : Usage.Ghost, typeArgs, formals, result, returnType,
                          reqs, reads, ens, new Specification<Expression>(decreases, null), body, attrs, signatureEllipsis);
      }
      f.BodyStartTok = bodyStart;

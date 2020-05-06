@@ -171,7 +171,7 @@ namespace Microsoft.Dafny
       readonly ISet<MemberDecl> Pool = new HashSet<MemberDecl>();
       ISet<MemberDecl> IAmbiguousThing<MemberDecl>.Pool { get { return Pool; } }
       private AmbiguousMemberDecl(ModuleDefinition m, string name, ISet<MemberDecl> pool)
-        : base(pool.First().tok, name, true, pool.First().IsGhost, null) {
+        : base(pool.First().tok, name, true, pool.First().Usage, null) {
         Contract.Requires(name != null);
         Contract.Requires(pool != null && 2 <= pool.Count);
         Pool = pool;
@@ -1737,7 +1737,7 @@ namespace Microsoft.Dafny
             new Specification<Expression>(new List<Expression>(), null),
             null, null, null);
           // --- here comes predicate Valid()
-          var valid = new Predicate(iter.tok, "Valid", false, true, true, new List<TypeParameter>(),
+          var valid = new Predicate(iter.tok, "Valid", false, true, Usage.Ghost, new List<TypeParameter>(),
             new List<Formal>(),
             new List<MaybeFreeExpression>(),
             new List<FrameExpression>(),
@@ -1745,7 +1745,7 @@ namespace Microsoft.Dafny
             new Specification<Expression>(new List<Expression>(), null),
             null, Predicate.BodyOriginKind.OriginalOrInherited, null, null);
           // --- here comes method MoveNext
-          var moveNext = new Method(iter.tok, "MoveNext", false, false, new List<TypeParameter>(),
+          var moveNext = new Method(iter.tok, "MoveNext", false, Usage.Ordinary, new List<TypeParameter>(),
             new List<Formal>(), new List<Formal>() { new Formal(iter.tok, "more", Type.Bool, false, Usage.Ordinary) },
             new List<MaybeFreeExpression>(),
             new Specification<FrameExpression>(new List<FrameExpression>(), null),
@@ -3052,7 +3052,10 @@ namespace Microsoft.Dafny
           if (member is Method) {
             var m = (Method)member;
             if (m.Body != null) {
-              UsageContext usageContext = new UsageContext();
+              UsageContext usageContext = new UsageContext(member.Usage);
+              if (!member.IsStatic && member.Usage == Usage.Linear) {
+                usageContext.available.Add(usageContext.thisId.Var, Available.Available);
+              }
               foreach (Formal x in m.Ins) {
                 if (x.IsLinear) usageContext.available.Add(x, Available.Available);
               }
@@ -3063,6 +3066,9 @@ namespace Microsoft.Dafny
               usageContext = ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
               CheckExpression(m.Body, this, m);
               PopUsageContext(m.Body.EndTok, outer, usageContext);
+              if (!member.IsStatic && m.Usage == Usage.Linear && usageContext.available[usageContext.thisId.Var] != Available.Consumed) {
+                reporter.Error(MessageSource.Resolver, member.tok, "linear 'this' must be unavailable at method exit");
+              }
               foreach (Formal x in m.Ins) {
                 if (x.IsLinear && usageContext.available[x] != Available.Consumed) {
                   reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
@@ -3078,11 +3084,17 @@ namespace Microsoft.Dafny
           } else if (member is Function) {
             var f = (Function)member;
             if (!f.IsGhost && f.Body != null) {
-              UsageContext usageContext = new UsageContext();
+              UsageContext usageContext = new UsageContext(member.Usage);
+              if (!member.IsStatic && member.Usage == Usage.Linear) {
+                usageContext.available.Add(usageContext.thisId.Var, Available.Available);
+              }
               foreach (Formal x in f.Formals) {
                 if (x.IsLinear) usageContext.available.Add(x, Available.Available);
               }
               CheckIsCompilable(f.Body, usageContext, f.Result != null ? f.Result.Usage : Usage.Ordinary);
+              if (!member.IsStatic && member.Usage == Usage.Linear && usageContext.available[usageContext.thisId.Var] != Available.Consumed) {
+                reporter.Error(MessageSource.Resolver, member.tok, "linear 'this' must be unavailable at function exit");
+              }
               foreach (Formal x in f.Formals) {
                 if (x.IsLinear && usageContext.available[x] != Available.Consumed) {
                   reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at function exit");
@@ -7363,7 +7375,7 @@ namespace Microsoft.Dafny
             int j;
             bool returnsShared = callee.Outs.Exists(o => o.IsShared);
             if (!callee.IsGhost) {
-              resolver.CheckIsCompilable(s.Receiver);
+              resolver.CheckIsCompilable(s.Receiver, usageContext, callee.Usage);
               j = 0;
               foreach (var e in s.Args) {
                 Contract.Assume(j < callee.Ins.Count);  // this should have already been checked by the resolver
@@ -14916,9 +14928,19 @@ namespace Microsoft.Dafny
 
     class UsageContext {
       internal Dictionary<IVariable, Available> available = new Dictionary<IVariable, Available>();
+      internal IdentifierExpr thisId;
+
+      internal UsageContext(IdentifierExpr thisId) {
+        this.thisId = thisId;
+      }
+
+      internal UsageContext(Usage thisUsage)
+        : this(new IdentifierExpr(Token.NoToken,
+          new Formal(Token.NoToken, "this", new SelfType()/*arbitrary, type doesn't matter*/, true, thisUsage))) {
+      }
 
       internal UsageContext Copy() {
-        UsageContext uc = new UsageContext();
+        UsageContext uc = new UsageContext(thisId);
         foreach (var k in available.Keys) {
           uc.available.Add(k, available[k]);
         }
@@ -14966,8 +14988,8 @@ namespace Microsoft.Dafny
 
     // Check that any extra variables in inner are unavailable, remove extra variables
     void PopUsageContext(IToken tok, UsageContext outer, UsageContext inner) {
-      if (inner == null) inner = new UsageContext();
-      if (outer == null) outer = new UsageContext();
+      if (inner == null) inner = new UsageContext(null);
+      if (outer == null) outer = new UsageContext(null);
       foreach (var k in inner.available.Keys.ToList()) {
         if (!outer.available.ContainsKey(k)) {
           if (inner.available[k] != Available.Consumed) {
@@ -14983,8 +15005,8 @@ namespace Microsoft.Dafny
     // Make them consistent with each other with respect to Borrowed.
     // requires: uc1 and uc2 have same keys in available
     void MergeUsageContexts(IToken tok, UsageContext uc1, UsageContext uc2, bool isWhile = false) {
-      if (uc1 == null) uc1 = new UsageContext();
-      if (uc2 == null) uc2 = new UsageContext();
+      if (uc1 == null) uc1 = new UsageContext(null);
+      if (uc2 == null) uc2 = new UsageContext(null);
       foreach (var k in uc1.available.Keys.Concat(uc2.available.Keys)) {
         // double-check same keys:
         var a1 = uc1.available[k];
@@ -15012,8 +15034,8 @@ namespace Microsoft.Dafny
     // (used as part of inferring "let!(x)")
     static List<IVariable> RemoveInnerBorrowed(UsageContext outer, UsageContext inner) {
       List<IVariable> borrow = new List<IVariable>();
-      if (inner == null) inner = new UsageContext();
-      if (outer == null) outer = new UsageContext();
+      if (inner == null) inner = new UsageContext(null);
+      if (outer == null) outer = new UsageContext(null);
       foreach (var k in new List<IVariable>(inner.available.Keys)) {
         if (outer.available[k] == Available.Available && inner.available[k] == Available.Borrowed) {
           inner.available[k] = Available.Available;
@@ -15047,10 +15069,15 @@ namespace Microsoft.Dafny
         "ordinary";
     }
 
-    static IdentifierExpr ExprAsIdentifier(Expression expr) {
+    static IdentifierExpr ExprAsIdentifier(UsageContext usageContext, Expression expr) {
       IdentifierExpr i = expr as IdentifierExpr;
       ConcreteSyntaxExpression c = expr as ConcreteSyntaxExpression;
-      return (i != null) ? i : (c != null) ? ExprAsIdentifier(c.ResolvedExpression) : null;
+      ThisExpr t = expr as ThisExpr;
+      return
+        (i != null) ? i :
+        (c != null) ? ExprAsIdentifier(usageContext, c.ResolvedExpression) :
+        (t != null && usageContext != null) ? usageContext.thisId :
+        null;
     }
 
     /// <summary>
@@ -15062,7 +15089,7 @@ namespace Microsoft.Dafny
     }
 
     void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage) {
-      IdentifierExpr x = ExprAsIdentifier(expr);
+      IdentifierExpr x = ExprAsIdentifier(usageContext, expr);
       if (usageContext != null && expectedUsage == Usage.Shared && x != null && x.Var.Usage == Usage.Linear) {
         // Try to borrow x
         if (usageContext.available[x.Var] == Available.Consumed) {
@@ -15108,6 +15135,9 @@ namespace Microsoft.Dafny
         }
         return e.Var.Usage;
 
+      } else if (expr is ThisExpr && usageContext != null) {
+        return CheckIsCompilable(usageContext.thisId, usageContext);
+
       } else if (expr is MemberSelectExpr) {
         var e = (MemberSelectExpr)expr;
         if (e.Member != null && e.Member.IsGhost) {
@@ -15118,7 +15148,7 @@ namespace Microsoft.Dafny
         var s = e.Member as SpecialField;
         if (d != null || s != null) {
           bool linearDestructor = (d == null) ? false : d.CorrespondingFormals.Exists(x => x.IsLinear);
-          var id = ExprAsIdentifier(e.Obj);
+          var id = ExprAsIdentifier(usageContext, e.Obj);
           if (id != null && (id.Var.IsLinear || id.Var.IsShared)) {
             // Try to share id
             CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
@@ -15143,7 +15173,7 @@ namespace Microsoft.Dafny
             return Usage.Ordinary;
           }
           // function is okay, so check all NON-ghost arguments
-          CheckIsCompilable(e.Receiver, usageContext, Usage.Ordinary);
+          CheckIsCompilable(e.Receiver, usageContext, e.Function.Usage);
           for (int i = 0; i < e.Function.Formals.Count; i++) {
             var usage = e.Function.Formals[i].Usage;
             if (usage != Usage.Ghost) {

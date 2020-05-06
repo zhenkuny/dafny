@@ -1,3 +1,9 @@
+LinearDatatype.dfy(578,25): Error: linear 'this' must be unavailable at function exit
+LinearDatatype.dfy(579,35): Error: expected linear expression, found shared expression
+LinearDatatype.dfy(579,40): Error: cannot select from linear expression
+LinearDatatype.dfy(580,28): Error: expected shared expression, found ordinary expression
+LinearDatatype.dfy(581,16): Error: linear 'this' must be unavailable at method exit
+LinearDatatype.dfy(582,42): Error: expected linear expression, found ordinary expression
 LinearDatatype.dfy(183,20): Error: expected ordinary expression, found linear expression
 LinearDatatype.dfy(190,4): Error: cannot borrow o when assigning to shared variable
 LinearDatatype.dfy(197,11): Error: cannot borrow o when assigning to shared variable
@@ -129,4 +135,4 @@ LinearDatatype.dfy(564,16): Error: expected shared expression, found linear expr
 LinearDatatype.dfy(569,22): Error: expected shared expression, found ordinary expression
 LinearDatatype.dfy(570,15): Error: expected ordinary expression, found shared expression
 LinearDatatype.dfy(571,39): Error: expected ordinary expression, found shared expression
-131 resolution/type errors detected in LinearDatatype.dfy
+137 resolution/type errors detected in LinearDatatype.dfy
