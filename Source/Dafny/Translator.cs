@@ -3514,7 +3514,7 @@ namespace Microsoft.Dafny {
       Contract.Ensures(Contract.ValueAtReturn(out arguments) != null);
 
       if (member.IsStatic) {
-        receiver = new StaticReceiverExpr(tok, (ClassDecl)member.EnclosingClass, true);  // this also resolves it
+        receiver = new StaticReceiverExpr(tok, (TopLevelDeclWithMembers)member.EnclosingClass, true);  // this also resolves it
       } else {
         receiver = new ImplicitThisExpr(tok);
         receiver.Type = Resolver.GetThisType(tok, (TopLevelDeclWithMembers)member.EnclosingClass);  // resolve here
