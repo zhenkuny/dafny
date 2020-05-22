@@ -7210,6 +7210,21 @@ namespace Microsoft.Dafny
             var targetIsLoop = s.TargetStmt is WhileStmt || s.TargetStmt is AlternativeLoopStmt;
             Error(stmt, "ghost-context break statement is not allowed to break out of non-ghost " + (targetIsLoop ? "loop" : "structure"));
           }
+          Method method = codeContext as Method;
+          var targetWhile = s.TargetStmt as WhileStmt;
+          if (targetWhile != null && !s.IsGhost) {
+            UsageContext outer = (UsageContext)targetWhile.usageContext;
+            UsageContext uc = UsageContext.Copy(usageContext);
+            resolver.PopUsageContext(stmt.EndTok, outer, uc);
+            resolver.MergeUsageContexts(s.Tok, outer, uc, true);
+            usageContext.unreachable = true;
+          } else if (method != null) {
+            bool linearInOut = method.Ins.Concat(method.Outs).ToList().Exists(x => x.IsLinear);
+            bool linearHere = usageContext != null && usageContext.available.Count > 0;
+            if (linearInOut || linearHere) {
+              Error(stmt, "break statement is not allowed when using linear");
+            }
+          }
 
         } else if (stmt is ProduceStmt) {
           var s = (ProduceStmt)stmt;
@@ -7486,6 +7501,7 @@ namespace Microsoft.Dafny
           if (usageContext != null) usageContext.Unborrow();
           if (s.Body != null) {
             UsageContext uc1 = UsageContext.Copy(usageContext);
+            s.usageContext = uc1;
             Visit(s.Body, s.IsGhost);
             if (s.Body.IsGhost && !s.Decreases.Expressions.Exists(e => e is WildcardExpr)) {
               s.IsGhost = true;
@@ -14929,6 +14945,7 @@ namespace Microsoft.Dafny
     class UsageContext {
       internal Dictionary<IVariable, Available> available = new Dictionary<IVariable, Available>();
       internal IdentifierExpr thisId;
+      internal bool unreachable = false;
 
       internal UsageContext(IdentifierExpr thisId) {
         this.thisId = thisId;
@@ -14944,6 +14961,7 @@ namespace Microsoft.Dafny
         foreach (var k in available.Keys) {
           uc.available.Add(k, available[k]);
         }
+        uc.unreachable = unreachable;
         return uc;
       }
 
@@ -15007,6 +15025,16 @@ namespace Microsoft.Dafny
     void MergeUsageContexts(IToken tok, UsageContext uc1, UsageContext uc2, bool isWhile = false) {
       if (uc1 == null) uc1 = new UsageContext(null);
       if (uc2 == null) uc2 = new UsageContext(null);
+      if (uc1.unreachable) {
+        uc1.available = uc2.Copy().available;
+      }
+      if (uc2.unreachable) {
+        uc2.available = uc1.Copy().available;
+      }
+      if (!uc1.unreachable || !uc2.unreachable) {
+        uc1.unreachable = false;
+        uc2.unreachable = false;
+      }
       foreach (var k in uc1.available.Keys.Concat(uc2.available.Keys)) {
         // double-check same keys:
         var a1 = uc1.available[k];

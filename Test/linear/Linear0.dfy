@@ -104,6 +104,28 @@ method V3(linear l_in:int, shared s_in:int) returns(linear l:int, shared s:int)
   l := l_in;
 }
 
+method Alloc() returns(linear x:int)
+method Free(linear x:int)
+method Loop1()
+  decreases *
+{
+  linear var y := Alloc();
+  while true
+    decreases *
+  {
+    if true {
+      break;
+    }
+    linear var x := Alloc();
+    if true {
+      Free(x);
+      break;
+    }
+    Free(x);
+  }
+  Free(y);
+}
+
 // ---------- fails ------------------------------------
 
 function method F1_a(x_in:int):linear int
@@ -249,4 +271,42 @@ method Lambda0(linear x:int)
 method Lambda1(shared x:int)
 {
   var f := (i:int) => x;
+}
+
+method Loop2()
+  decreases *
+{
+  while true
+    decreases *
+  {
+    if true {
+      break;
+    }
+    linear var x := Alloc();
+    if true {
+      break;
+    }
+    Free(x);
+  }
+}
+
+method Loop3()
+  decreases *
+{
+  linear var y := Alloc();
+  while true
+    decreases *
+  {
+    if true {
+      break;
+    }
+    linear var x := Alloc();
+    if true {
+      Free(x);
+      Free(y);
+      break;
+    }
+    Free(x);
+  }
+  Free(y);
 }

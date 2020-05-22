@@ -7407,6 +7407,7 @@ namespace Microsoft.Dafny {
     public readonly Expression/*?*/ Guard;
     public readonly BlockStmt/*?*/ Body;
     public LoopBodySurrogate/*?*/ BodySurrogate;  // set by Resolver; remains null unless Body==null
+    public object usageContext; // used by Resolver for break statements
 
     public class LoopBodySurrogate
     {
