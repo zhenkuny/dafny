@@ -3052,7 +3052,7 @@ namespace Microsoft.Dafny
           if (member is Method) {
             var m = (Method)member;
             if (m.Body != null) {
-              UsageContext usageContext = new UsageContext(member.Usage);
+              UsageContext usageContext = new UsageContext(m, member.Usage);
               if (!member.IsStatic && member.Usage == Usage.Linear) {
                 usageContext.available.Add(usageContext.thisId.Var, Available.Available);
               }
@@ -3084,7 +3084,7 @@ namespace Microsoft.Dafny
           } else if (member is Function) {
             var f = (Function)member;
             if (!f.IsGhost && f.Body != null) {
-              UsageContext usageContext = new UsageContext(member.Usage);
+              UsageContext usageContext = new UsageContext(f, member.Usage);
               if (!member.IsStatic && member.Usage == Usage.Linear) {
                 usageContext.available.Add(usageContext.thisId.Var, Available.Available);
               }
@@ -14946,18 +14946,20 @@ namespace Microsoft.Dafny
       internal Dictionary<IVariable, Available> available = new Dictionary<IVariable, Available>();
       internal IdentifierExpr thisId;
       internal bool unreachable = false;
+      internal ICallable codeContext;
 
-      internal UsageContext(IdentifierExpr thisId) {
+      internal UsageContext(ICallable codeContext, IdentifierExpr thisId) {
+        this.codeContext = codeContext;
         this.thisId = thisId;
       }
 
-      internal UsageContext(Usage thisUsage)
-        : this(new IdentifierExpr(Token.NoToken,
+      internal UsageContext(ICallable codeContext, Usage thisUsage)
+        : this(codeContext, new IdentifierExpr(Token.NoToken,
           new Formal(Token.NoToken, "this", new SelfType()/*arbitrary, type doesn't matter*/, true, thisUsage))) {
       }
 
       internal UsageContext Copy() {
-        UsageContext uc = new UsageContext(thisId);
+        UsageContext uc = new UsageContext(codeContext, thisId);
         foreach (var k in available.Keys) {
           uc.available.Add(k, available[k]);
         }
@@ -15006,8 +15008,8 @@ namespace Microsoft.Dafny
 
     // Check that any extra variables in inner are unavailable, remove extra variables
     void PopUsageContext(IToken tok, UsageContext outer, UsageContext inner) {
-      if (inner == null) inner = new UsageContext(null);
-      if (outer == null) outer = new UsageContext(null);
+      if (inner == null) inner = new UsageContext(null, null);
+      if (outer == null) outer = new UsageContext(null, null);
       foreach (var k in inner.available.Keys.ToList()) {
         if (!outer.available.ContainsKey(k)) {
           if (inner.available[k] != Available.Consumed) {
@@ -15023,8 +15025,8 @@ namespace Microsoft.Dafny
     // Make them consistent with each other with respect to Borrowed.
     // requires: uc1 and uc2 have same keys in available
     void MergeUsageContexts(IToken tok, UsageContext uc1, UsageContext uc2, bool isWhile = false) {
-      if (uc1 == null) uc1 = new UsageContext(null);
-      if (uc2 == null) uc2 = new UsageContext(null);
+      if (uc1 == null) uc1 = new UsageContext(null, null);
+      if (uc2 == null) uc2 = new UsageContext(null, null);
       if (uc1.unreachable) {
         uc1.available = uc2.Copy().available;
       }
@@ -15062,8 +15064,8 @@ namespace Microsoft.Dafny
     // (used as part of inferring "let!(x)")
     static List<IVariable> RemoveInnerBorrowed(UsageContext outer, UsageContext inner) {
       List<IVariable> borrow = new List<IVariable>();
-      if (inner == null) inner = new UsageContext(null);
-      if (outer == null) outer = new UsageContext(null);
+      if (inner == null) inner = new UsageContext(null, null);
+      if (outer == null) outer = new UsageContext(null, null);
       foreach (var k in new List<IVariable>(inner.available.Keys)) {
         if (outer.available[k] == Available.Available && inner.available[k] == Available.Borrowed) {
           inner.available[k] = Available.Available;
@@ -15199,6 +15201,10 @@ namespace Microsoft.Dafny
           if (e.Function.IsGhost) {
             reporter.Error(MessageSource.Resolver, expr, "function calls are allowed only in specification contexts (consider declaring the function a 'function method')");
             return Usage.Ordinary;
+          }
+          var functionContext = (usageContext == null) ? null : (usageContext.codeContext as Function);
+          if (e.Function.CallerMustBePure && (functionContext == null || !functionContext.ContextIsPure)) {
+            reporter.Error(MessageSource.Resolver, e, "cannot call caller_must_be_pure function from method or from function with shared return values");
           }
           // function is okay, so check all NON-ghost arguments
           CheckIsCompilable(e.Receiver, usageContext, e.Function.Usage);

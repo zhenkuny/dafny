@@ -5690,6 +5690,13 @@ namespace Microsoft.Dafny {
     [Pure]
     public bool IsFuelAware() { return IsRecursive || IsFueled; }
     public virtual bool ReadsHeap { get { return Reads.Count != 0; } }
+
+    public bool CallerMustBePure { get { return Attributes.Contains(Attributes, "caller_must_be_pure"); } }
+    public bool ContextIsPure {
+      get {
+        return CallerMustBePure || this.Result.Usage != Usage.Shared;
+      }
+    }
   }
 
   public class Predicate : Function

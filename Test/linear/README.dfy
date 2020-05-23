@@ -419,10 +419,17 @@ class BoxedLinear<A>
         modifies this
         ensures a2 == old(Read())
         ensures Read() == a1
+    function method{:caller_must_be_pure} Borrow():(shared a:A)
+        reads this
+        ensures a == Read()
 }
 /*
 Note, however, that this adapter doesn't stop an object from being silently discarded
 during garbage collection, so it's possible to leak linear data using this adapter.
+Also note that Borrow() has a special attribute, caller_must_be_pure, which
+requires callers to be functions or function methods (not methods)
+and disallows callers from returning shared values (unless the caller is also caller_must_be_pure).
+This ensures that Swap cannot be called while using the shared value returned from Borrow.
 */
 class MaybeLinear<A>
 {
@@ -467,6 +474,13 @@ class MaybeLinear<A>
     {
         linear var x := box.Swap(give(a));
         var _ := discard(x);
+    }
+    function method{:caller_must_be_pure} Borrow():(shared a:A)
+        reads this, box
+        requires Has()
+        ensures a == Read()
+    {
+        peek(box.Borrow())
     }
 }
 

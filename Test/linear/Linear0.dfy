@@ -310,3 +310,15 @@ method Loop3()
   }
   Free(y);
 }
+
+function method{:caller_must_be_pure} NoMod():shared int
+
+method Mod1()
+{
+  shared var _ := NoMod(); // caller_must_be_pure function can't be called from method
+}
+
+function method Mod3():shared int
+{
+  NoMod() // can't return shared value
+}
