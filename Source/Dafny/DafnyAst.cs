@@ -5694,7 +5694,7 @@ namespace Microsoft.Dafny {
     public bool CallerMustBePure { get { return Attributes.Contains(Attributes, "caller_must_be_pure"); } }
     public bool ContextIsPure {
       get {
-        return CallerMustBePure || this.Result.Usage != Usage.Shared;
+        return CallerMustBePure || this.Result == null || this.Result.Usage != Usage.Shared;
       }
     }
   }
