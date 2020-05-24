@@ -407,8 +407,9 @@ namespace Microsoft.Dafny {
       if (IsRecursiveDatatype(dt)) { // Note that if this is true, there must be more than one constructor!
         // Add some forward declarations
         wdecl.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
-        wdecl.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, TemplateMethod(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
       }
+      // Forward decl to cope with linker issues
+      wdecl.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, TemplateMethod(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
 
       // Optimize a not-uncommon case
       if (dt.Ctors.Count == 1) {
@@ -450,7 +451,7 @@ namespace Microsoft.Dafny {
         }
         
         // Overload the comparison operator
-        ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right);", DtT_protected);
+        ws.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right);", DtT_protected, TemplateMethod(dt.TypeArgs));
         var weq = wdef.NewNamedBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right) ", DtT_protected, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)));
         weq.Write("\treturn true ");
         foreach (var arg in argNames) {
@@ -480,6 +481,10 @@ namespace Microsoft.Dafny {
         /*** Create one struct for each constructor ***/
         foreach (var ctor in dt.Ctors) {
           string structName = DatatypeSubStructName(ctor);
+          // First add a forward declaration of the type and the equality operator to workaround templating issues
+          wdecl.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), structName);
+          wdecl.WriteLine("{0}\nbool operator==(const {1}{2} &left, const {1}{2} &right); ", DeclareTemplate(dt.TypeArgs), structName, TemplateMethod(dt.TypeArgs));
+          
           var wstruct = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), structName), ";");
           // Declare the struct members
           var i = 0;
@@ -495,7 +500,7 @@ namespace Microsoft.Dafny {
           }
           
           // Overload the comparison operator
-          wstruct.WriteLine("friend bool operator==(const {0} &left, const {0} &right); ", structName);
+          wstruct.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right); ", structName, TemplateMethod(dt.TypeArgs));
           var weq = wdef.NewBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right)", structName, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)));
           var preReturn = weq.Fork();
           weq.Write("\treturn true ");

@@ -32,15 +32,20 @@ datatype Option<V> = None | Some(value:V)
 //  count: uint64,
 //  /* ghost */ contents: map<uint64, Option<V>>)
 
-datatype LinearHashMap<V> = LinearHashMap(
-    //underlying: FixedSizeLinearHashMap<V>,
-    o:Option<V>,
-    count: uint64)
-    ///* ghost */ contents: map<uint64, V>)
+//datatype LinearHashMap<V> = LinearHashMap(
+//    //underlying: FixedSizeLinearHashMap<V>,
+//    o:Option<V>,
+//    count: uint64)
+//    ///* ghost */ contents: map<uint64, V>)
 
 method Main() {
   var u:uint64 := 5;
-  var d := LinearHashMap(Some(u), u);
+//  var d := LinearHashMap(Some(u), u);
+//  var e := LinearHashMap(Some(u), u);
+//  var b := d == e;
+  var x := Some(u);
+  var y := Some(u);
+  var b := x == y;
   /*
   var t := new Test(true);
   var u := new UseTest();
