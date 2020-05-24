@@ -1084,7 +1084,11 @@ namespace Microsoft.Dafny {
     }
 
     protected void Warn(string msg, Bpl.IToken tok) {
-      Console.Error.WriteLine("WARNING: {3} ({0}:{1}:{2})", tok.filename, tok.line, tok.col, msg);
+      if (tok == null) {
+        Console.Error.WriteLine("WARNING: {0}", msg);
+      } else {
+        Console.Error.WriteLine("WARNING: {3} ({0}:{1}:{2})", tok.filename, tok.line, tok.col, msg);
+      }
     }
     
     // Use class_name = true if you want the actual name of the class, not the type used when declaring variables/arguments/etc.
@@ -1873,7 +1877,7 @@ namespace Microsoft.Dafny {
         if (dt.Ctors.Count == 1) {
           wr.Write("{3}::{0}{1}({2})",
             dtName,
-            TemplateMethod(dt.TypeArgs), 
+            TemplateMethod(dtv.InferredTypeArgs), 
             arguments,
             dt.Module.CompileName);
         } else {
