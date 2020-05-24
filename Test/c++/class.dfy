@@ -1,5 +1,4 @@
 newtype{:nativeType "uint"} uint32 = i:int | 0 <= i < 0x100000000
-
 class MyClass {
   var a: uint32
   const b: uint32
@@ -170,8 +169,25 @@ method TestEquality() {
   }
 }
 
+class GenericClass<A> {
+  var a:A;
+
+  constructor(a_in:A) {
+    a := a_in;
+  }
+
+  function method Get() : A
+    reads this;
+  {
+    a
+  }
+}
+
+
+
 method Main() {
   TestMyClass();
   TestEquality();
+  var c := new GenericClass<uint32>(5);
 }
 

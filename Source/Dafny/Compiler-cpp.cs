@@ -901,7 +901,7 @@ namespace Microsoft.Dafny {
         wr.WriteLine(DeclareTemplate(typeArgs));
       }
       if (classArgs != null && classArgs.Count != 0) {
-        wr.WriteLine(DeclareTemplate(typeArgs));
+        wr.WriteLine(DeclareTemplate(classArgs));
       }
 
       wdr.Write("{0}{1} {2}",
