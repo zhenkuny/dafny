@@ -33,6 +33,9 @@ Linear0.dfy(273,22): Error: shared variable is out of scope here
 Linear0.dfy(273,22): Error: expected ordinary expression, found shared expression
 Linear0.dfy(287,11): Error: linear variable x must be unavailable at end of block
 Linear0.dfy(307,6): Error: in while, linear variable y must be have same availability before and after the loop body
-Linear0.dfy(318,18): Error: cannot call caller_must_be_pure function from method or from function with shared return values
-Linear0.dfy(323,2): Error: cannot call caller_must_be_pure function from method or from function with shared return values
-37 resolution/type errors detected in Linear0.dfy
+Linear0.dfy(322,18): Error: cannot call caller_must_be_pure function method from method except as an argument to a method with no modifies or shared returns
+Linear0.dfy(327,2): Error: cannot call caller_must_be_pure function from function with shared return values, unless function is also marked caller_must_be_pure
+Linear0.dfy(339,23): Error: cannot call caller_must_be_pure function method from method except as an argument to a method with no modifies or shared returns
+Linear0.dfy(344,7): Error: cannot call caller_must_be_pure function method from method except as an argument to a method with no modifies or shared returns
+Linear0.dfy(350,18): Error: cannot call caller_must_be_pure function method from method except as an argument to a method with no modifies or shared returns
+40 resolution/type errors detected in Linear0.dfy

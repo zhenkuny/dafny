@@ -311,6 +311,10 @@ method Loop3()
   Free(y);
 }
 
+// We guarantee that the value returned by a caller_must_be_pure is limited
+// to a scope where no currently allocated objects can be modified.
+// (i.e. the scope is limited to a function method
+// or a borrowing in a call to a method with no modifies clause.)
 function method{:caller_must_be_pure} NoMod():shared int
 
 method Mod1()
@@ -318,7 +322,30 @@ method Mod1()
   shared var _ := NoMod(); // caller_must_be_pure function can't be called from method
 }
 
-function method Mod3():shared int
+function method Mod2():shared int
 {
   NoMod() // can't return shared value
+}
+
+method Mod3(shared s:int)
+
+method Mod4(shared s:int) returns(shared q:int)
+
+method Mod5(shared s:int)
+  modifies {}
+
+method Mod6()
+{
+  shared var q := Mod4(NoMod()); // can't borrow caller_must_be_pure when calling method that returns shared
+}
+
+method Mod7()
+{
+  Mod5(NoMod()); // can't borrow caller_must_be_pure when calling method with modifies clause
+}
+
+method Mod8()
+{
+  Mod3(NoMod()); // ok
+  shared var s := NoMod(); // can't directly call caller_must_be_pure from method (only allowed when borrowing in method call)
 }

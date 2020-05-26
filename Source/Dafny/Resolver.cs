@@ -7389,15 +7389,22 @@ namespace Microsoft.Dafny
           } else {
             int j;
             bool returnsShared = callee.Outs.Exists(o => o.IsShared);
+            bool isPureCall = callee.Mod.Expressions.Count == 0 && callee.Outs.TrueForAll(x => x.Usage != Usage.Shared);
             if (!callee.IsGhost) {
               resolver.CheckIsCompilable(s.Receiver, usageContext, callee.Usage);
               j = 0;
+              if (usageContext != null) {
+                usageContext.insidePureCall = isPureCall;
+              }
               foreach (var e in s.Args) {
                 Contract.Assume(j < callee.Ins.Count);  // this should have already been checked by the resolver
                 if (!callee.Ins[j].IsGhost) {
                   resolver.CheckIsCompilable(e, usageContext, callee.Ins[j].Usage);
                 }
                 j++;
+              }
+              if (usageContext != null) {
+                usageContext.insidePureCall = false;
               }
             }
             if (returnsShared && usageContext.Borrows()) {
@@ -14947,6 +14954,7 @@ namespace Microsoft.Dafny
       internal IdentifierExpr thisId;
       internal bool unreachable = false;
       internal ICallable codeContext;
+      internal bool insidePureCall;
 
       internal UsageContext(ICallable codeContext, IdentifierExpr thisId) {
         this.codeContext = codeContext;
@@ -14964,6 +14972,7 @@ namespace Microsoft.Dafny
           uc.available.Add(k, available[k]);
         }
         uc.unreachable = unreachable;
+        uc.insidePureCall = insidePureCall;
         return uc;
       }
 
@@ -15100,7 +15109,7 @@ namespace Microsoft.Dafny
     }
 
     static IdentifierExpr ExprAsIdentifier(UsageContext usageContext, Expression expr) {
-      IdentifierExpr i = expr as IdentifierExpr;
+      var i = expr as IdentifierExpr;
       ConcreteSyntaxExpression c = expr as ConcreteSyntaxExpression;
       ThisExpr t = expr as ThisExpr;
       return
@@ -15203,8 +15212,13 @@ namespace Microsoft.Dafny
             return Usage.Ordinary;
           }
           var functionContext = (usageContext == null) ? null : (usageContext.codeContext as Function);
-          if (e.Function.CallerMustBePure && (functionContext == null || !functionContext.ContextIsPure)) {
-            reporter.Error(MessageSource.Resolver, e, "cannot call caller_must_be_pure function from method or from function with shared return values");
+          bool insidePureCall = (usageContext == null) ? false : usageContext.insidePureCall;
+          if (e.Function.CallerMustBePure && !insidePureCall && (functionContext == null || !functionContext.ContextIsPure)) {
+            if (functionContext != null) {
+              reporter.Error(MessageSource.Resolver, e, "cannot call caller_must_be_pure function from function with shared return values, unless function is also marked caller_must_be_pure");
+            } else {
+              reporter.Error(MessageSource.Resolver, e, "cannot call caller_must_be_pure function method from method except as an argument to a method with no modifies or shared returns");
+            }
           }
           // function is okay, so check all NON-ghost arguments
           CheckIsCompilable(e.Receiver, usageContext, e.Function.Usage);
