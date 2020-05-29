@@ -429,7 +429,9 @@ during garbage collection, so it's possible to leak linear data using this adapt
 Also note that Borrow() has a special attribute, caller_must_be_pure, which
 requires callers to be functions or function methods (not methods)
 and disallows callers from returning shared values (unless the caller is also caller_must_be_pure).
-This ensures that Swap cannot be called while using the shared value returned from Borrow.
+In addition, expressions in arguments to method calls may also call Borrow as long as
+the called method has no modifies clause and no shared return values.
+These restrictions ensure that Swap cannot be called while using the shared value returned from Borrow.
 */
 class MaybeLinear<A>
 {
