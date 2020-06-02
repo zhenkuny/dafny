@@ -48,7 +48,10 @@ namespace Extern {
   template <typename A>
   class GenericClass {
     public:
-    GenericClass(A (*inc)(A), A x) { inc(x); }
+    GenericClass(A (*inc)(A), A x) { a = inc(x); }
+    A get() { return a; }
+    private:
+    A a;
   };
 /*
 class __default {
