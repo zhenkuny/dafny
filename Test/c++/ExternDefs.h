@@ -34,6 +34,22 @@ namespace Extern {
     public:
       ExternClass2(uint64 x) { (void)x; }
   };
+
+
+  uint64 Caller(uint64 (*inc)(uint64), uint64 x) {
+    return inc(x);
+  }
+  
+  template <typename A>
+  A GenericCaller(A (*inc)(A), A x) {
+    return inc(x);
+  }
+
+  template <typename A>
+  class GenericClass {
+    public:
+    GenericClass(A (*inc)(A), A x) { inc(x); }
+  };
 /*
 class __default {
 

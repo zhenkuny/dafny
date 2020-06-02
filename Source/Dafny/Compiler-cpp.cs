@@ -1974,6 +1974,12 @@ namespace Microsoft.Dafny {
           // this member selection is handled by some kind of enclosing function call, so nothing to do here
           return SimpleLvalue(obj);
         }
+      } else if (member is Function) {
+        return StringLvalue(String.Format("{0}::{1}::{2}",
+          IdProtect(member.EnclosingClass.Module.CompileName),
+          IdName(member.EnclosingClass),
+          IdName(member)
+        ));
       } else {
         return SuffixLvalue(obj, "->{0}", IdName(member));
       }
