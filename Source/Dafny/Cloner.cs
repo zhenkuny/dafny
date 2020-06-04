@@ -179,7 +179,8 @@ namespace Microsoft.Dafny
         return new MapType(tt.Finite, CloneType(tt.Domain), CloneType(tt.Range));
       } else if (t is ArrowType) {
         var tt = (ArrowType)t;
-        return new ArrowType(Tok(tt.tok), tt.Args.ConvertAll(CloneType), CloneType(tt.Result));
+        return new ArrowType(Tok(tt.tok), tt.Args.ConvertAll(CloneType), CloneType(tt.Result),
+          tt.ResultUsage, tt.Usages);
       } else if (t is UserDefinedType) {
         var tt = (UserDefinedType)t;
 #if TEST_TYPE_SYNONYM_TRANSPARENCY

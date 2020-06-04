@@ -1854,31 +1854,24 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
     }
     (. ty = new UserDefinedType(e.tok, e); .)
   )
-  [ (. int arrowKind = 0; /* 0: any, 1: partial, 2: total */
+  [ (. Arrow arrow = Arrow.Any;
        Type t2;
+       usage = Usage.Ordinary;
     .)
-    ( "~>"           (. tok = t; arrowKind = 0; .)
-    | "-->"          (. tok = t; arrowKind = 1; .)
-    | "->"           (. tok = t; arrowKind = 2; .)
+    ( "~>"           (. tok = t; arrow = Arrow.Any; .)
+    | "-->"          (. tok = t; arrow = Arrow.Partial; .)
+    | "->"           (. tok = t; arrow = Arrow.Total; .)
     )
+    [ "linear"                  (. usage = Usage.Linear; .) ]
+    // TODO: we could also support shared in function types (but not in tuple types)
     Type<out t2>
     (. if (tupleArgTypes != null) {
          gt = tupleArgTypes;
-        } else {
-         gt = new List<Type>{ ty };
-       }
-       var arity = gt.Count;
-       theBuiltIns.CreateArrowTypeDecl(arity);
-       if (arrowKind == 0) {
-         ty = new ArrowType(tok, gt, t2);
        } else {
-         gt.Add(t2);
-         if (arrowKind == 1) {
-           ty = new UserDefinedType(tok, ArrowType.PartialArrowTypeName(arity), gt);
-         } else {
-           ty = new UserDefinedType(tok, ArrowType.TotalArrowTypeName(arity), gt);
-         }
+         gt = new List<Type>{ ty };
+         usages = new List<Usage>{ Usage.Ordinary };
        }
+       ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
     .)
   ]
   .
@@ -2060,10 +2053,12 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
      }
      f.BodyStartTok = bodyStart;
      f.BodyEndTok = bodyEnd;
-     theBuiltIns.CreateArrowTypeDecl(formals.Count);
+     theBuiltIns.CreateArrowTypeDecl(formals.Count, f.ResultUsage, f.Usages);
      if (isIndPredicate || isCoPredicate) {
        // also create an arrow type for the corresponding prefix predicate
-       theBuiltIns.CreateArrowTypeDecl(formals.Count + 1);
+       var usages2 = new List<Usage>(f.Usages);
+       usages2.Add(Usage.Ghost);
+       theBuiltIns.CreateArrowTypeDecl(formals.Count + 1, f.ResultUsage, usages2);
      }
   .)
   .
@@ -3474,7 +3469,7 @@ LambdaExpression<out Expression e, bool allowSemi, bool allowBitwiseOps>
   LambdaArrow
   Expression<out body, allowSemi, true, allowBitwiseOps>
   (. e = new LambdaExpr(x, bvs, req, reads, body);
-     theBuiltIns.CreateArrowTypeDecl(bvs.Count);
+     theBuiltIns.CreateArrowTypeDecl(bvs.Count, Usage.Ordinary, null);
   .)
   .
 ParensExpression<out Expression e, bool allowSemi, bool allowLambda>

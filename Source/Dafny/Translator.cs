@@ -763,7 +763,9 @@ namespace Microsoft.Dafny {
         } else if (d is ArrowTypeDecl) {
           var ad = (ArrowTypeDecl)d;
           GetClassTyCon(ad);
-          AddArrowTypeAxioms(ad);
+          if (ad.ResultUsage == Usage.Ordinary && ad.Usages.TrueForAll(u => u == Usage.Ordinary)) {
+            AddArrowTypeAxioms(ad);
+          }
         } else if (d is ClassDecl) {
           var cl = (ClassDecl)d;
           AddClassMembers(cl, true);

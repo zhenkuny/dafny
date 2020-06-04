@@ -956,7 +956,7 @@ namespace Microsoft.Dafny
       for (int i = 0; i < f.Formals.Count; i++) {
         args.Add(new IntType());
       }
-      rr.Type = new ArrowType(f.tok, args, new IntType());
+      rr.Type = new ArrowType(f.tok, args, new IntType(), Usage.Ordinary, f.Usages.ConvertAll(_ => Usage.Ordinary));
       nameSegment.ResolvedExpression = rr;
       nameSegment.Type = rr.Type;
       LiteralExpr low = new LiteralExpr(f.tok, 1);

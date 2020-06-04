@@ -2511,7 +2511,7 @@ namespace Microsoft.Dafny {
       var fromType = (UserDefinedType)expr.Initializer.Type.NormalizeExpand();
       var atd = (ArrowTypeDecl)fromType.ResolvedClass;
       var tParam = new UserDefinedType(expr.tok, new TypeParameter(expr.tok, "X", TypeParameter.TPVarianceSyntax.NonVariant_Strict));
-      var toType = new ArrowType(expr.tok, atd, new List<Type>() { Type.Int }, tParam);
+      var toType = new ArrowType(expr.tok, atd, new List<Type>() { Type.Int }, tParam, atd.ResultUsage, atd.Usages);
       var initWr = EmitCoercionIfNecessary(fromType, toType, expr.tok, wr);
       TrExpr(expr.Initializer, initWr, inLetExprBody);
       wr.Write(")");

@@ -205,7 +205,8 @@ namespace Microsoft.Dafny
       // Map#Items relies on the two destructors for 2-tuples
       builtIns.TupleType(Token.NoToken, 2, true);
       // Several methods and fields rely on 1-argument arrow types
-      builtIns.CreateArrowTypeDecl(1);
+      builtIns.CreateArrowTypeDecl(1, Usage.Ordinary, null);
+      builtIns.CreateArrowTypeDecl(1, Usage.Ghost, new List<Usage>{Usage.Ghost});
 
       valuetypeDecls = new ValuetypeDecl[] {
         new ValuetypeDecl("bool", builtIns.SystemModule, 0, t => t.IsBoolType, typeArgs => Type.Bool),
@@ -2473,8 +2474,8 @@ namespace Microsoft.Dafny
                     reporter.Error(MessageSource.Resolver, other,
                       "shared destructors must agree on whether or not they are ghost, but '{0}' is {1} in constructor '{2}' and {3} in constructor '{4}'",
                       rolemodel.Name,
-                      UsageName(rolemodel.Usage).Replace("ordinary", "non-ghost"), dtor.EnclosingCtors[0].Name,
-                      UsageName(other.Usage).Replace("ordinary", "non-ghost"), dtor.EnclosingCtors[i].Name);
+                      UsageNameNonGhost(rolemodel.Usage), dtor.EnclosingCtors[0].Name,
+                      UsageNameNonGhost(other.Usage), dtor.EnclosingCtors[i].Name);
                   }
                 }
               }
@@ -11875,12 +11876,12 @@ namespace Microsoft.Dafny
             ResolveExpression(rr.ElementInit, new ResolveOpts(codeContext, false));
             // Check
             //     int^N -> rr.EType  :>  rr.ElementInit.Type
-            builtIns.CreateArrowTypeDecl(rr.ArrayDimensions.Count);  // TODO: should this be done already in the parser?
+            //builtIns.CreateArrowTypeDecl(rr.ArrayDimensions.Count);  // TODO: should this be done already in the parser?
             var args = new List<Type>();
             for (int ii = 0; ii < rr.ArrayDimensions.Count; ii++) {
               args.Add(Type.Int);
             }
-            var arrowType = new ArrowType(rr.ElementInit.tok, builtIns.ArrowTypeDecls[rr.ArrayDimensions.Count], args, rr.EType);
+            var arrowType = builtIns.CreateArrowType(rr.ElementInit.tok, true, Arrow.Any, args, rr.EType, Usage.Ordinary, null);
             string underscores;
             if (rr.ArrayDimensions.Count == 1) {
               underscores = "_";
@@ -12540,7 +12541,8 @@ namespace Microsoft.Dafny
         }
       } else if (type is ArrowType) {
         var t = (ArrowType)type;
-        var at = new ArrowType(t.tok, t.Args.ConvertAll(u => SubstType(u, subst)), SubstType(t.Result, subst));
+        var at = new ArrowType(t.tok, t.Args.ConvertAll(u => SubstType(u, subst)), SubstType(t.Result, subst),
+          t.ResultUsage, t.Usages);
         at.ResolvedClass = t.ResolvedClass;
         return at;
       } else if (type is UserDefinedType) {
@@ -12889,6 +12891,11 @@ namespace Microsoft.Dafny
       } else if (expr is ExprDotName) {
         var e = (ExprDotName)expr;
         ResolveDotSuffix(e, true, null, opts, false);
+        var select = e.Resolved as MemberSelectExpr;
+        var fn = (select == null) ? null : select.Member as Function;
+        if (fn != null && HasLinearity(fn.Usage)) {
+          reporter.Error(MessageSource.Resolver, e.tok, "cannot use shared/linear function {0} as first-class function value", fn.Name);
+        }
         if (e.Type is Resolver_IdentifierExpr.ResolverType_Module) {
           reporter.Error(MessageSource.Resolver, e.tok, "name of module ({0}) is used as a variable", e.SuffixName);
           e.ResetTypeAssignment();  // the rest of type checking assumes actual types
@@ -12933,7 +12940,7 @@ namespace Microsoft.Dafny
           }
           subst = BuildTypeArgumentSubstitute(subst);
           e.Type = SelectAppropriateArrowType(fn.tok, fn.Formals.ConvertAll(f => SubstType(f.Type, subst)), SubstType(fn.ResultType, subst),
-            fn.Reads.Count != 0, fn.Req.Count != 0);
+            fn.ResultUsage, fn.Usages, fn.Reads.Count != 0, fn.Req.Count != 0);
           AddCallGraphEdge(opts.codeContext, fn, e, false);
         } else if (member is Field) {
           var field = (Field)member;
@@ -13044,7 +13051,7 @@ namespace Microsoft.Dafny
         ResolveExpression(e.N, opts);
         ConstrainToIntegerType(e.N, "sequence construction must use an integer-based expression for the sequence size (got {0})");
         ResolveExpression(e.Initializer, opts);
-        var arrowType = new ArrowType(e.tok, builtIns.ArrowTypeDecls[1], new List<Type>() { Type.Int }, elementType);
+        var arrowType = builtIns.CreateArrowType(e.tok, true, Arrow.Any, new List<Type>() { Type.Int }, elementType, Usage.Ordinary, null);
         var hintString = " (perhaps write '_ =>' in front of the expression you gave in order to make it an arrow type)";
         ConstrainSubtypeRelation(arrowType, e.Initializer.Type, e.Initializer, "sequence-construction initializer expression expected to have type '{0}' (instead got '{1}'){2}",
           arrowType, e.Initializer.Type, new LazyString_OnTypeEquals(elementType, e.Initializer.Type, hintString));
@@ -13480,7 +13487,8 @@ namespace Microsoft.Dafny
         ResolveExpression(e.Term, opts);
         Contract.Assert(e.Term.Type != null);
         scope.PopMarker();
-        expr.Type = SelectAppropriateArrowType(e.tok, e.BoundVars.ConvertAll(v => v.Type), e.Body.Type, e.Reads.Count != 0, e.Range != null);
+        expr.Type = SelectAppropriateArrowType(e.tok, e.BoundVars.ConvertAll(v => v.Type), e.Body.Type,
+          Usage.Ordinary, null, e.Reads.Count != 0, e.Range != null);
       } else if (expr is WildcardExpr) {
         expr.Type = new SetType(true, builtIns.ObjectQ());
       } else if (expr is StmtExpr) {
@@ -13573,22 +13581,13 @@ namespace Microsoft.Dafny
       EnsureSupportsErrorHandling(expr.tok, PartiallyResolveTypeForMemberSelection(expr.tok, tempType), expectExtract);
     }
 
-    private Type SelectAppropriateArrowType(IToken tok, List<Type> typeArgs, Type resultType, bool hasReads, bool hasReq) {
+    private Type SelectAppropriateArrowType(IToken tok, List<Type> typeArgs, Type resultType,
+        Usage resultUsage, List<Usage> usages, bool hasReads, bool hasReq) {
       Contract.Requires(tok != null);
       Contract.Requires(typeArgs != null);
       Contract.Requires(resultType != null);
-      var arity = typeArgs.Count;
-      var typeArgsAndResult = Util.Snoc(typeArgs, resultType);
-      if (hasReads) {
-        // any arrow
-        return new ArrowType(tok, builtIns.ArrowTypeDecls[arity], typeArgsAndResult);
-      } else if (hasReq) {
-        // partial arrow
-        return new UserDefinedType(tok, ArrowType.PartialArrowTypeName(arity), builtIns.PartialArrowTypeDecls[arity], typeArgsAndResult);
-      } else {
-        // total arrow
-        return new UserDefinedType(tok, ArrowType.TotalArrowTypeName(arity), builtIns.TotalArrowTypeDecls[arity], typeArgsAndResult);
-      }
+      Arrow arrow = hasReads ? Arrow.Any : hasReq ? Arrow.Partial : Arrow.Total;
+      return builtIns.CreateArrowType(tok, true, arrow, typeArgs, resultType, resultUsage, usages);
     }
 
     /// <summary>
@@ -14611,7 +14610,7 @@ namespace Microsoft.Dafny
       return null;
     }
 
-    Expression ResolveExprDotCall(IToken tok, Expression receiver, Type receiverTypeBound/*?*/, MemberDecl member, List<Expression> args, List<Type> optTypeArguments, ResolveOpts opts, bool allowMethodCall) {
+    MemberSelectExpr ResolveExprDotCall(IToken tok, Expression receiver, Type receiverTypeBound/*?*/, MemberDecl member, List<Expression> args, List<Type> optTypeArguments, ResolveOpts opts, bool allowMethodCall) {
       Contract.Requires(tok != null);
       Contract.Requires(receiver != null);
       Contract.Requires(receiver.WasResolved());
@@ -14668,6 +14667,7 @@ namespace Microsoft.Dafny
         rr.Type = SelectAppropriateArrowType(fn.tok,
           fn.Formals.ConvertAll(f => SubstType(f.Type, subst)),
           SubstType(fn.ResultType, subst),
+          fn.ResultUsage, fn.Usages,
           fn.Reads.Count != 0, fn.Req.Count != 0);
         AddCallGraphEdge(opts.codeContext, fn, rr, IsFunctionReturnValue(fn, args, opts));
       } else {
@@ -15095,7 +15095,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    static bool HasLinearity(Usage u) {
+    public static bool HasLinearity(Usage u) {
       return u != Usage.Ghost && u != Usage.Ordinary;
     }
 
@@ -15106,6 +15106,24 @@ namespace Microsoft.Dafny
         (u == Usage.Shared) ? "shared" :
         (u == Usage.Inout) ? "inout" :
         "ordinary";
+    }
+
+    public static string UsageNameNonGhost(Usage u) {
+      return
+        (u == Usage.Ghost) ? "ghost" :
+        (u == Usage.Linear) ? "linear" :
+        (u == Usage.Shared) ? "shared" :
+        (u == Usage.Inout) ? "inout" :
+        "non-ghost";
+    }
+
+    public static string UsagePrefix(Usage u) {
+      return
+        (u == Usage.Ghost) ? "ghost " :
+        (u == Usage.Linear) ? "linear " :
+        (u == Usage.Shared) ? "shared " :
+        (u == Usage.Inout) ? "inout " :
+        "";
     }
 
     static IdentifierExpr ExprAsIdentifier(UsageContext usageContext, Expression expr) {

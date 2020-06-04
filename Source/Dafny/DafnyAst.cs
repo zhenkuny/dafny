@@ -104,13 +104,15 @@ namespace Microsoft.Dafny {
     }
   }
 
+  public enum Arrow { Any, Partial, Total }
+
   public class BuiltIns
   {
     public readonly ModuleDefinition SystemModule = new ModuleDefinition(Token.NoToken, "_System", new List<IToken>(), false, false, false, null, null, null, true, true, true);
     readonly Dictionary<int, ClassDecl> arrayTypeDecls = new Dictionary<int, ClassDecl>();
-    public readonly Dictionary<int, ArrowTypeDecl> ArrowTypeDecls = new Dictionary<int, ArrowTypeDecl>();
-    public readonly Dictionary<int, SubsetTypeDecl> PartialArrowTypeDecls = new Dictionary<int, SubsetTypeDecl>();  // same keys as arrowTypeDecl
-    public readonly Dictionary<int, SubsetTypeDecl> TotalArrowTypeDecls = new Dictionary<int, SubsetTypeDecl>();  // same keys as arrowTypeDecl
+    readonly Dictionary<object, ArrowTypeDecl> arrowTypeDecls = new Dictionary<object, ArrowTypeDecl>();
+    readonly Dictionary<Tuple<Arrow, object>, SubsetTypeDecl> arrowSubsets =
+      new Dictionary<Tuple<Arrow, object>, SubsetTypeDecl>();
     readonly Dictionary<object, TupleTypeDecl> tupleTypeDecls = new Dictionary<object, TupleTypeDecl>();
     public readonly ISet<int> Bitwidths = new HashSet<int>();
     public SpecialField ORDINAL_Offset;  // filled in by the resolver, used by the translator
@@ -142,7 +144,7 @@ namespace Microsoft.Dafny {
       UserDefinedType tmp = ArrayType(1, Type.Int, true);
       // Arrow types of other dimensions may be added during parsing as the parser detects the need for these.  For the 0-arity
       // arrow type, the resolver adds a Valid() predicate for iterators, whose corresponding arrow type is conveniently created here.
-      CreateArrowTypeDecl(0);
+      CreateArrowTypeDecl(0, Usage.Ghost, null);
       // Note, in addition to these types, the _System module contains tuple types.  These tuple types are added to SystemModule
       // by the parser as the parser detects the need for these.
 
@@ -169,7 +171,7 @@ namespace Microsoft.Dafny {
           new List<MemberDecl>() { rankFun });
         rankFun.EnclosingClass = defaultClass;
         SystemModule.TopLevelDecls.Add(defaultClass);
-        CreateArrowTypeDecl(2);
+        CreateArrowTypeDecl(2, Usage.Ghost, new List<Usage>{Usage.Ghost, Usage.Ghost});
       }
       // <== Add rank_is_less_than
     }
@@ -222,13 +224,53 @@ namespace Microsoft.Dafny {
       }
     }
 
+    // Dafny doesn't seem ready to distinguish between (t)->t and (ghost t)->t, so suppress ghost in function types
+    public static Usage Deghost(Usage u) {
+      return (u == Usage.Ghost) ? Usage.Ordinary : u;
+    }
+
+    public static List<Usage> Deghosts(List<Usage> u) {
+      return (u == null) ? null : u.ConvertAll(Deghost);
+    }
+
+    public Type CreateArrowType(IToken tok, bool resolved, Arrow arrow, List<Type> typeArgs, Type result,
+        Usage resultUsage, List<Usage> usages) {
+      if (usages == null) {
+        usages = new Usage[typeArgs.Count].ToList().ConvertAll(_ => Usage.Ordinary);
+      }
+      resultUsage = Deghost(resultUsage);
+      usages = Deghosts(usages);
+      CreateArrowTypeDecl(typeArgs.Count, resultUsage, usages);
+      object key = Tuple.Create(resultUsage, MakeTupleKey(usages, usages.Count));
+      if (arrow == Arrow.Any) {
+        return resolved ? new ArrowType(tok, arrowTypeDecls[key], typeArgs, result, resultUsage, usages)
+          : new ArrowType(tok, typeArgs, result, resultUsage, usages);
+      } else {
+        string name = ArrowType.ArrowTypeName(arrow, resultUsage, usages);
+        var types = typeArgs.Concat(new Type[] {result}).ToList();
+        return resolved ? new UserDefinedType(tok, name, arrowSubsets[Tuple.Create(arrow, key)], types)
+          : new UserDefinedType(tok, name, types);
+      }
+    }
+
     /// <summary>
     /// Idempotently add an arrow type with arity 'arity' to the system module, and along
     /// with this arrow type, the two built-in subset types based on the arrow type.
     /// </summary>
-    public void CreateArrowTypeDecl(int arity) {
+    public void CreateArrowTypeDecl(int arity, Usage resultUsage, List<Usage> usages) {
+      resultUsage = Deghost(resultUsage);
+      usages = Deghosts(usages);
+      CreateArrowTypeDeclInternal(arity, Usage.Ordinary, null);
+      CreateArrowTypeDeclInternal(arity, resultUsage, usages);
+    }
+
+    private void CreateArrowTypeDeclInternal(int arity, Usage resultUsage, List<Usage> usages) {
       Contract.Requires(0 <= arity);
-      if (!ArrowTypeDecls.ContainsKey(arity)) {
+      if (usages == null) {
+        usages = new Usage[arity].ToList().ConvertAll(_ => Usage.Ordinary);
+      }
+      object key = Tuple.Create(resultUsage, MakeTupleKey(usages, arity));
+      if (!arrowTypeDecls.ContainsKey(key)) {
         IToken tok = Token.NoToken;
         var tps = Util.Map(Enumerable.Range(0, arity + 1), x => x < arity ?
           new TypeParameter(tok, "T" + x, TypeParameter.TPVarianceSyntax.Contravariance) :
@@ -253,8 +295,8 @@ namespace Microsoft.Dafny {
           null, null, null);
         readsIS.Function = reads;  // just so we can really claim the member declarations are resolved
         readsIS.TypeArgumentSubstitutions = Util.Dict(tps, tys);  // ditto
-        var arrowDecl = new ArrowTypeDecl(tps, req, reads, SystemModule, DontCompile());
-        ArrowTypeDecls.Add(arity, arrowDecl);
+        var arrowDecl = new ArrowTypeDecl(tps, req, reads, SystemModule, resultUsage, usages, DontCompile());
+        arrowTypeDecls.Add(key, arrowDecl);
         SystemModule.TopLevelDecls.Add(arrowDecl);
 
         // declaration of read-effect-free arrow-type, aka heap-independent arrow-type, aka partial-function arrow-type
@@ -262,11 +304,11 @@ namespace Microsoft.Dafny {
           new TypeParameter(tok, "T" + x, TypeParameter.TPVarianceSyntax.Contravariance) :
           new TypeParameter(tok, "R", TypeParameter.TPVarianceSyntax.Covariant_Strict));
         tys = tps.ConvertAll(tp => (Type)(new UserDefinedType(tp)));
-        var id = new BoundVar(tok, "f", new ArrowType(tok, arrowDecl, tys));
-        var partialArrow = new SubsetTypeDecl(tok, ArrowType.PartialArrowTypeName(arity),
+        var id = new BoundVar(tok, "f", new ArrowType(tok, arrowDecl, tys, resultUsage, usages));
+        var partialArrow = new SubsetTypeDecl(tok, ArrowType.ArrowTypeName(Arrow.Partial, resultUsage, usages),
           new TypeParameter.TypeParameterCharacteristics(false), tps, SystemModule,
           id, ArrowSubtypeConstraint(tok, id, reads, tps, false), SubsetTypeDecl.WKind.Special, null, DontCompile());
-        PartialArrowTypeDecls.Add(arity, partialArrow);
+        arrowSubsets.Add(Tuple.Create(Arrow.Partial, key), partialArrow);
         SystemModule.TopLevelDecls.Add(partialArrow);
 
         // declaration of total arrow-type
@@ -276,10 +318,10 @@ namespace Microsoft.Dafny {
           new TypeParameter(tok, "R", TypeParameter.TPVarianceSyntax.Covariant_Strict));
         tys = tps.ConvertAll(tp => (Type)(new UserDefinedType(tp)));
         id = new BoundVar(tok, "f", new UserDefinedType(tok, partialArrow.Name, partialArrow, tys));
-        var totalArrow = new SubsetTypeDecl(tok, ArrowType.TotalArrowTypeName(arity),
+        var totalArrow = new SubsetTypeDecl(tok, ArrowType.ArrowTypeName(Arrow.Total, resultUsage, usages),
           new TypeParameter.TypeParameterCharacteristics(false), tps, SystemModule,
           id, ArrowSubtypeConstraint(tok, id, req, tps, true), SubsetTypeDecl.WKind.Special, null, DontCompile());
-        TotalArrowTypeDecls.Add(arity, totalArrow);
+        arrowSubsets.Add(Tuple.Create(Arrow.Total, key), totalArrow);
         SystemModule.TopLevelDecls.Add(totalArrow);
       }
     }
@@ -359,10 +401,33 @@ namespace Microsoft.Dafny {
       return tt;
     }
 
-    public static string TupleTypeName(List<Usage> usages) {
-      var uchars = usages.ConvertAll(u => u == Usage.Linear ? "L" : u == Usage.Ghost ? "G" : "_");
-      return "_tuple#" + usages.Count + ((usages.All(u => u == Usage.Ordinary)) ? "" : String.Concat(uchars));
+    public static char UsageChar(Usage u) {
+      return u == Usage.Linear ? 'L' : u == Usage.Shared ? 'S' : u == Usage.Ghost ? 'G' : 'O';
     }
+
+    public static Usage UsageFromChar(char c) {
+      return c == 'L' ? Usage.Linear : c == 'S' ? Usage.Shared : c == 'G' ? Usage.Ghost : Usage.Ordinary;
+    }
+
+    public static string UsagesString(Usage result, List<Usage> usages) {
+      return usages.Count + ((result == Usage.Ordinary && usages.All(u => u == Usage.Ordinary))
+        ? "" : UsageChar(result) + String.Concat(usages.ConvertAll(UsageChar)));
+    }
+
+    public static Tuple<Usage, List<Usage>> UsagesFromString(string s, int count) {
+      List<Usage> usages = new Usage[count].ToList();
+      if (System.Char.IsDigit(s[s.Length - 1])) {
+        return Tuple.Create(Usage.Ordinary, usages.ConvertAll(_ => Usage.Ordinary));
+      } else {
+        usages = usages.Select((_, i) => s[s.Length - count + i]).ToList().ConvertAll(UsageFromChar);
+        return Tuple.Create(UsageFromChar(s[s.Length - count - 1]), usages);
+      }
+    }
+
+    public static string TupleTypeName(List<Usage> usages) {
+      return "_tuple#" + UsagesString(Usage.Ordinary, usages);
+    }
+
     public static bool IsTupleTypeName(string s) {
       Contract.Requires(s != null);
       return s.StartsWith("_tuple#");
@@ -1494,7 +1559,7 @@ namespace Microsoft.Dafny {
       } else if (t is ArrowType) {
         var s = (ArrowType)t;
         var args = s.TypeArgs.ConvertAll(_ => (Type)new InferredTypeProxy());
-        return new ArrowType(s.tok, (ArrowTypeDecl)s.ResolvedClass, args);
+        return new ArrowType(s.tok, (ArrowTypeDecl)s.ResolvedClass, args, s.ResultUsage, s.Usages);
       } else {
         var s = (UserDefinedType)t;
         var args = s.TypeArgs.ConvertAll(_ => (Type)new InferredTypeProxy());
@@ -1698,7 +1763,7 @@ namespace Microsoft.Dafny {
           return null;
         }
         var arr = (ArrowType)aa;
-        return new ArrowType(arr.tok, (ArrowTypeDecl)arr.ResolvedClass, typeArgs);
+        return new ArrowType(arr.tok, (ArrowTypeDecl)arr.ResolvedClass, typeArgs, arr.ResultUsage, arr.Usages);
       } else if (b.IsObjectQ) {
         var udtB = (UserDefinedType)b;
         return !a.IsRefType ? null : abNonNullTypes ? UserDefinedType.CreateNonNullType(udtB) : udtB;
@@ -1930,7 +1995,7 @@ namespace Microsoft.Dafny {
           return null;
         }
         var arr = (ArrowType)aa;
-        return new ArrowType(arr.tok, (ArrowTypeDecl)arr.ResolvedClass, typeArgs);
+        return new ArrowType(arr.tok, (ArrowTypeDecl)arr.ResolvedClass, typeArgs, arr.ResultUsage, arr.Usages);
       } else if (b.IsObjectQ) {
         return a.IsRefType ? a : null;
       } else if (a.IsObjectQ) {
@@ -2127,6 +2192,9 @@ namespace Microsoft.Dafny {
 
   public class ArrowType : UserDefinedType
   {
+    public readonly Usage ResultUsage;
+    public readonly List<Usage> Usages;
+
     public List<Type> Args {
       get { return TypeArgs.GetRange(0, Arity); }
     }
@@ -2142,27 +2210,35 @@ namespace Microsoft.Dafny {
     /// <summary>
     /// Constructs a(n unresolved) arrow type.
     /// </summary>
-    public ArrowType(IToken tok, List<Type> args, Type result)
-      :  base(tok, ArrowTypeName(args.Count), Util.Snoc(args, result)) {
+    public ArrowType(IToken tok, List<Type> args, Type result, Usage resultUsage, List<Usage> usages)
+      :  base(tok, ArrowTypeName(Arrow.Any, resultUsage, usages), Util.Snoc(args, result)) {
       Contract.Requires(tok != null);
       Contract.Requires(args != null);
       Contract.Requires(result != null);
+      resultUsage = BuiltIns.Deghost(resultUsage);
+      usages = BuiltIns.Deghosts(usages);
+      ResultUsage = resultUsage;
+      Usages = usages;
     }
     /// <summary>
     /// Constructs and returns a resolved arrow type.
     /// </summary>
-    public ArrowType(IToken tok, ArrowTypeDecl atd, List<Type> typeArgsAndResult)
-      : base(tok, ArrowTypeName(atd.Arity), atd, typeArgsAndResult) {
+    public ArrowType(IToken tok, ArrowTypeDecl atd, List<Type> typeArgsAndResult, Usage resultUsage, List<Usage> usages)
+      : base(tok, ArrowTypeName(Arrow.Any, resultUsage, usages), atd, typeArgsAndResult) {
       Contract.Requires(tok != null);
       Contract.Requires(atd != null);
       Contract.Requires(typeArgsAndResult != null);
       Contract.Requires(typeArgsAndResult.Count == atd.Arity + 1);
+      resultUsage = BuiltIns.Deghost(resultUsage);
+      usages = BuiltIns.Deghosts(usages);
+      ResultUsage = resultUsage;
+      Usages = usages;
     }
     /// <summary>
     /// Constructs and returns a resolved arrow type.
     /// </summary>
-    public ArrowType(IToken tok, ArrowTypeDecl atd, List<Type> typeArgs, Type result)
-      : this(tok, atd, Util.Snoc(typeArgs, result)) {
+    public ArrowType(IToken tok, ArrowTypeDecl atd, List<Type> typeArgs, Type result, Usage resultUsage, List<Usage> usages)
+      : this(tok, atd, Util.Snoc(typeArgs, result), resultUsage, usages) {
       Contract.Requires(tok != null);
       Contract.Requires(atd != null);
       Contract.Requires(typeArgs!= null);
@@ -2172,8 +2248,9 @@ namespace Microsoft.Dafny {
 
     public const string Arrow_FullCompileName = "Func";  // this is the same for all arities
 
-    public static string ArrowTypeName(int arity) {
-      return "_#Func" + arity;
+    public static string ArrowTypeName(Arrow arrow, Usage resultUsage, List<Usage> usages) {
+      string s = (arrow == Arrow.Partial) ? "_#PartialFunc" : (arrow == Arrow.Total) ? "_#TotalFunc" : "_#Func";
+      return s + BuiltIns.UsagesString(BuiltIns.Deghost(resultUsage), BuiltIns.Deghosts(usages));
     }
 
     [Pure]
@@ -2181,17 +2258,9 @@ namespace Microsoft.Dafny {
       return s.StartsWith("_#Func");
     }
 
-    public static string PartialArrowTypeName(int arity) {
-      return "_#PartialFunc" + arity;
-    }
-
     [Pure]
     public static bool IsPartialArrowTypeName(string s) {
       return s.StartsWith("_#PartialFunc");
-    }
-
-    public static string TotalArrowTypeName(int arity) {
-      return "_#TotalFunc" + arity;
     }
 
     [Pure]
@@ -2204,14 +2273,15 @@ namespace Microsoft.Dafny {
     public const string TOTAL_ARROW = "->";
 
     public override string TypeName(ModuleDefinition context, bool parseAble) {
-      return PrettyArrowTypeName(ANY_ARROW, Args, Result, context, parseAble);
+      return PrettyArrowTypeName(ANY_ARROW, Args, Result, context, parseAble, Tuple.Create(ResultUsage, Usages));
     }
 
     /// <summary>
     /// Pretty prints an arrow type.  If "result" is null, then all arguments, including the result type are expected in "typeArgs".
     /// If "result" is non-null, then only the in-arguments are in "typeArgs".
     /// </summary>
-    public static string PrettyArrowTypeName(string arrow, List<Type> typeArgs, Type result, ModuleDefinition context, bool parseAble) {
+    public static string PrettyArrowTypeName(string arrow, List<Type> typeArgs, Type result, ModuleDefinition context, bool parseAble,
+        Tuple<Usage, List<Usage>> usage) {
       Contract.Requires(arrow != null);
       Contract.Requires(typeArgs != null);
       Contract.Requires(result != null || 1 <= typeArgs.Count);
@@ -2221,7 +2291,7 @@ namespace Microsoft.Dafny {
       if (arity != 1) {
         // 0 or 2-or-more arguments:  need parentheses
         domainNeedsParens = true;
-      } else if (typeArgs[0].IsBuiltinArrowType) {
+      } else if (typeArgs[0].IsBuiltinArrowType || usage.Item2[0] != Usage.Ordinary) {
         // arrows are right associative, so we need parentheses around the domain type
         domainNeedsParens = true;
       } else {
@@ -2234,10 +2304,11 @@ namespace Microsoft.Dafny {
       }
       string s = "";
       if (domainNeedsParens) { s += "("; }
-      s += Util.Comma(", ", typeArgs.Take(arity), arg => arg.TypeName(context, parseAble));
+      s += Util.Comma(", ", typeArgs.Take(arity).Zip(usage.Item2), arg =>
+        Resolver.UsagePrefix(arg.Item2) + arg.Item1.TypeName(context, parseAble));
       if (domainNeedsParens) { s += ")"; }
       s += " " + arrow + " ";
-      s += (result ?? typeArgs.Last()).TypeName(context, parseAble);
+      s += Resolver.UsagePrefix(usage.Item1) + (result ?? typeArgs.Last()).TypeName(context, parseAble);
       return s;
     }
 
@@ -2506,7 +2577,8 @@ namespace Microsoft.Dafny {
       Contract.Assert((cd is ArrowTypeDecl) == ArrowType.IsArrowTypeName(cd.Name));
       var args = (typeArgs ?? cd.TypeArgs).ConvertAll(tp => (Type)new UserDefinedType(tp));
       if (cd is ArrowTypeDecl) {
-        return new ArrowType(tok, (ArrowTypeDecl)cd, args);
+        var a = cd as ArrowTypeDecl;
+        return new ArrowType(tok, a, args, a.ResultUsage, a.Usages);
       } else if (cd is ClassDecl && !(cd is DefaultClassDecl)) {
         return new UserDefinedType(tok, cd.Name + "?", cd, args);
       } else {
@@ -2646,19 +2718,15 @@ namespace Microsoft.Dafny {
       Contract.Ensures(Contract.Result<string>() != null);
       if (BuiltIns.IsTupleTypeName(Name)) {
         // Unfortunately, ResolveClass may be null, so Name is all we have.  Reverse-engineer the string name.
-        List<string> usages = new string[TypeArgs.Count].ToList();
-        if (System.Char.IsDigit(Name[Name.Length - 1])) {
-          usages = usages.ConvertAll(_ => "");
-        } else {
-          usages = usages.Select((_, i) => Name[Name.Length - usages.Count + i]).ToList().ConvertAll(c =>
-            (c == 'L') ? "linear " : (c == 'G') ? "ghost " : "");
-        }
+        List<Usage> usages = BuiltIns.UsagesFromString(Name, TypeArgs.Count).Item2;
         return "(" + Util.Comma(", ", TypeArgs.Zip(usages),
-          (ty_u) => ty_u.Item2 + ty_u.Item1.TypeName(context, parseAble)) + ")";
+          (ty_u) => Resolver.UsagePrefix(ty_u.Item2) + ty_u.Item1.TypeName(context, parseAble)) + ")";
       } else if (ArrowType.IsPartialArrowTypeName(Name)) {
-        return ArrowType.PrettyArrowTypeName(ArrowType.PARTIAL_ARROW, TypeArgs, null, context, parseAble);
+        return ArrowType.PrettyArrowTypeName(ArrowType.PARTIAL_ARROW, TypeArgs, null, context, parseAble,
+          BuiltIns.UsagesFromString(Name, TypeArgs.Count - 1));
       } else if (ArrowType.IsTotalArrowTypeName(Name)) {
-        return ArrowType.PrettyArrowTypeName(ArrowType.TOTAL_ARROW, TypeArgs, null, context, parseAble);
+        return ArrowType.PrettyArrowTypeName(ArrowType.TOTAL_ARROW, TypeArgs, null, context, parseAble,
+          BuiltIns.UsagesFromString(Name, TypeArgs.Count - 1));
       } else {
 #if TEST_TYPE_SYNONYM_TRANSPARENCY
         if (Name == "type#synonym#transparency#test" && ResolvedClass is TypeSynonymDecl) {
@@ -3967,21 +4035,28 @@ namespace Microsoft.Dafny {
   {
     public override string WhatKind { get { return "function type"; } }
     public readonly int Arity;
+    public readonly Usage ResultUsage;
+    public readonly List<Usage> Usages;
     public readonly Function Requires;
     public readonly Function Reads;
 
-    public ArrowTypeDecl(List<TypeParameter> tps, Function req, Function reads, ModuleDefinition module, Attributes attributes)
-      : base(Token.NoToken, ArrowType.ArrowTypeName(tps.Count - 1), module, tps,
+    public ArrowTypeDecl(List<TypeParameter> tps, Function req, Function reads, ModuleDefinition module,
+        Usage resultUsage, List<Usage> usages, Attributes attributes)
+      : base(Token.NoToken, ArrowType.ArrowTypeName(Arrow.Any, resultUsage, usages), module, tps,
              new List<MemberDecl> { req, reads }, attributes, null) {
       Contract.Requires(tps != null && 1 <= tps.Count);
       Contract.Requires(req != null);
       Contract.Requires(reads != null);
       Contract.Requires(module != null);
+      resultUsage = BuiltIns.Deghost(resultUsage);
+      usages = BuiltIns.Deghosts(usages);
       Arity = tps.Count - 1;
       Requires = req;
       Reads = reads;
       Requires.EnclosingClass = this;
       Reads.EnclosingClass = this;
+      ResultUsage = resultUsage;
+      Usages = usages;
     }
   }
 
@@ -5560,7 +5635,8 @@ namespace Microsoft.Dafny {
     public Type Type {
       get {
         // Note, the following returned type can contain type parameters from the function and its enclosing class
-        return new ArrowType(tok, Formals.ConvertAll(f => f.Type), ResultType);
+        return new ArrowType(tok, Formals.ConvertAll(f => f.Type), ResultType,
+          ResultUsage, Formals.ConvertAll(f => f.Usage));
       }
     }
 
@@ -5695,6 +5771,16 @@ namespace Microsoft.Dafny {
     public bool ContextIsPure {
       get {
         return CallerMustBePure || this.Result == null || this.Result.Usage != Usage.Shared;
+      }
+    }
+    public Usage ResultUsage {
+      get {
+        return Result != null ? Result.Usage : IsGhost ? Usage.Ghost : Usage.Ordinary;
+      }
+    }
+    public List<Usage> Usages {
+      get {
+        return Formals.ConvertAll(f => f.Usage);
       }
     }
   }

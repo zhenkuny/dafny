@@ -1923,10 +1923,12 @@ int StringToInt(string s, int defaultValue, string errString) {
 		}
 		f.BodyStartTok = bodyStart;
 		f.BodyEndTok = bodyEnd;
-		theBuiltIns.CreateArrowTypeDecl(formals.Count);
+		theBuiltIns.CreateArrowTypeDecl(formals.Count, f.ResultUsage, f.Usages);
 		if (isIndPredicate || isCoPredicate) {
 		 // also create an arrow type for the corresponding prefix predicate
-		 theBuiltIns.CreateArrowTypeDecl(formals.Count + 1);
+		 var usages2 = new List<Usage>(f.Usages);
+		 usages2.Add(Usage.Ghost);
+		 theBuiltIns.CreateArrowTypeDecl(formals.Count + 1, f.ResultUsage, usages2);
 		}
 		
 	}
@@ -2524,37 +2526,32 @@ int StringToInt(string s, int defaultValue, string errString) {
 		default: SynErr(199); break;
 		}
 		if (la.kind == 114 || la.kind == 115 || la.kind == 116) {
-			int arrowKind = 0; /* 0: any, 1: partial, 2: total */
+			Arrow arrow = Arrow.Any;
 			Type t2;
+			usage = Usage.Ordinary;
 			
 			if (la.kind == 114) {
 				Get();
-				tok = t; arrowKind = 0; 
+				tok = t; arrow = Arrow.Any; 
 			} else if (la.kind == 115) {
 				Get();
-				tok = t; arrowKind = 1; 
+				tok = t; arrow = Arrow.Partial; 
 			} else {
 				Get();
-				tok = t; arrowKind = 2; 
+				tok = t; arrow = Arrow.Total; 
+			}
+			if (la.kind == 74) {
+				Get();
+				usage = Usage.Linear; 
 			}
 			Type(out t2);
 			if (tupleArgTypes != null) {
 			 gt = tupleArgTypes;
 			} else {
 			 gt = new List<Type>{ ty };
+			 usages = new List<Usage>{ Usage.Ordinary };
 			}
-			var arity = gt.Count;
-			theBuiltIns.CreateArrowTypeDecl(arity);
-			if (arrowKind == 0) {
-			 ty = new ArrowType(tok, gt, t2);
-			} else {
-			 gt.Add(t2);
-			 if (arrowKind == 1) {
-			   ty = new UserDefinedType(tok, ArrowType.PartialArrowTypeName(arity), gt);
-			 } else {
-			   ty = new UserDefinedType(tok, ArrowType.TotalArrowTypeName(arity), gt);
-			 }
-			}
+			ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
 			
 		}
 	}
@@ -5212,7 +5209,7 @@ List<Expression> decreases, ref Attributes decAttrs, ref Attributes modAttrs, st
 		LambdaArrow();
 		Expression(out body, allowSemi, true, allowBitwiseOps);
 		e = new LambdaExpr(x, bvs, req, reads, body);
-		theBuiltIns.CreateArrowTypeDecl(bvs.Count);
+		theBuiltIns.CreateArrowTypeDecl(bvs.Count, Usage.Ordinary, null);
 		
 	}
 
