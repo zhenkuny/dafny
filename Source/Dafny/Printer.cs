@@ -224,7 +224,14 @@ namespace Microsoft.Dafny {
           if (i++ != 0) { wr.WriteLine(); }
           Indent(indent);
           PrintClassMethodHelper("type", at.Attributes, at.Name + TPCharacteristicsSuffix(at.TheType.Characteristics), d.TypeArgs);
-          wr.WriteLine();
+          if (at.Members.Count == 0) {
+            wr.WriteLine();
+          } else {
+            wr.WriteLine(" {");
+            PrintMembers(at.Members, indent + IndentAmount, fileBeingPrinted);
+            Indent(indent);
+            wr.WriteLine("}");
+          }
         } else if (d is NewtypeDecl) {
           var dd = (NewtypeDecl)d;
           if (i++ != 0) { wr.WriteLine(); }
@@ -428,6 +435,14 @@ namespace Microsoft.Dafny {
     void PrintModuleExportDecl(ModuleExportDecl m, int indent, string fileBeingPrinted) {
       Contract.Requires(m != null);
 
+      if (m.RevealAll) {
+        Indent(indent);
+        wr.WriteLine("reveals *");
+      }
+      if (m.ProvideAll) {
+        Indent(indent);
+        wr.WriteLine("provides *");
+      }
       var i = 0;
       while (i < m.Exports.Count) {
         var start = i;
@@ -565,7 +580,7 @@ namespace Microsoft.Dafny {
       Indent(indent);
       PrintClassMethodHelper((c is TraitDecl) ? "trait" : "class", c.Attributes, c.Name, c.TypeArgs);
       string sep = " extends ";
-      foreach (var trait in c.TraitsTyp) {
+      foreach (var trait in c.ParentTraits) {
         wr.Write(sep);
         PrintType(trait);
         sep = ", ";
@@ -2015,7 +2030,9 @@ namespace Microsoft.Dafny {
       } else if (expr is NameSegment) {
         var e = (NameSegment)expr;
         wr.Write(e.Name);
-        PrintTypeInstantiation(e.OptTypeArguments);
+        if (e.OptTypeArguments != null) {
+          PrintTypeInstantiation(e.OptTypeArguments);
+        }
 
       } else if (expr is ExprDotName) {
         var e = (ExprDotName)expr;
@@ -2027,6 +2044,16 @@ namespace Microsoft.Dafny {
         if (parensNeeded) { wr.Write("("); }
         if (!e.Lhs.IsImplicit) {
           PrintExpr(e.Lhs, opBindingStrength, false, false, !parensNeeded && isFollowedBySemicolon, -1, keyword);
+          if (e.Lhs.Type is Resolver_IdentifierExpr.ResolverType_Type) {
+            Contract.Assert(e.Lhs is NameSegment || e.Lhs is ExprDotName);  // these are the only expressions whose .Type can be ResolverType_Type
+            if (DafnyOptions.O.DafnyPrintResolvedFile != null && DafnyOptions.O.PrintMode == DafnyOptions.PrintModes.Everything) {
+              // The printing of e.Lhs printed the type arguments only if they were given explicitly in the input.
+              var optionalTypeArgs = e.Lhs is NameSegment ns ? ns.OptTypeArguments : ((ExprDotName)e.Lhs).OptTypeArguments;
+              if (optionalTypeArgs == null && e.Lhs.Resolved is Resolver_IdentifierExpr ri) {
+                PrintTypeInstantiation(ri.TypeArgs);
+              }
+            }
+          }
           wr.Write(".");
         }
         wr.Write(e.SuffixName);

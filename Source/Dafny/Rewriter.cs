@@ -139,7 +139,10 @@ namespace Microsoft.Dafny
                     Fi = ll.Obj;
                     lhsBuilder = e => {
                       var l = new MemberSelectExpr(ll.tok, e, ll.MemberName);
-                      l.Member = ll.Member; l.TypeApplication = ll.TypeApplication; l.Type = ll.Type;
+                      l.Member = ll.Member;
+                      l.TypeApplication_AtEnclosingClass = ll.TypeApplication_AtEnclosingClass;
+                      l.TypeApplication_JustMember = ll.TypeApplication_JustMember;
+                      l.Type = ll.Type;
                       return l; };
                   } else if (lhs is SeqSelectExpr) {
                     var ll = (SeqSelectExpr)lhs;
@@ -210,7 +213,7 @@ namespace Microsoft.Dafny
             for (int i = 0; i < s0.Method.Ins.Count; i++) {
               argsSubstMap.Add(s0.Method.Ins[i], s0.Args[i]);
             }
-            var substituter = new Translator.AlphaConverting_Substituter(s0.Receiver, argsSubstMap, s0.MethodSelect.TypeArgumentSubstitutions());
+            var substituter = new Translator.AlphaConverting_Substituter(s0.Receiver, argsSubstMap, s0.MethodSelect.TypeArgumentSubstitutionsWithParents());
             // Strengthen the range of the "forall" statement with the precondition of the call, suitably substituted with the actual parameters.
             if (Attributes.Contains(s.Attributes, "_autorequires")) {
               var range = s.Range;
@@ -860,11 +863,8 @@ namespace Microsoft.Dafny
       var call = new FunctionCallExpr(tok, Valid.Name, receiver, tok, new List<Expression>());
       call.Function = Valid;
       call.Type = Type.Bool;
-      // Add the identity substitution to this call
-      call.TypeArgumentSubstitutions = new Dictionary<TypeParameter, Type>();
-      for (int i = 0; i < Valid.EnclosingClass.TypeArgs.Count; i++) {
-        call.TypeArgumentSubstitutions.Add(Valid.EnclosingClass.TypeArgs[i], receiver.Type.TypeArgs[i]);
-      }
+      call.TypeApplication_AtEnclosingClass = receiver.Type.TypeArgs;
+      call.TypeApplication_JustFunction = new List<Type>();
       callingContext.EnclosingModule.CallGraph.AddEdge(callingContext, Valid);
       return call;
     }
@@ -939,19 +939,19 @@ namespace Microsoft.Dafny
         receiver = new ImplicitThisExpr(f.tok);
         //receiver.Type = GetThisType(expr.tok, (TopLevelDeclWithMembers)member.EnclosingClass);  // resolve here
       }
-      List<Type> typeApplication = null;
-      if (f.TypeArgs.Count > 0) {
-        typeApplication = new List<Type>();
-        for (int i = 0; i < f.TypeArgs.Count; i++) {
-          // doesn't matter what type, just so we have it to make the resolver happy when resolving function member of
-          // the fuel attribute. This might not be needed after fixing codeplex issue #172.
-          typeApplication.Add(new IntType());
-        }
+      var typeApplication = new List<Type>();
+      var typeApplication_JustForMember = new List<Type>();
+      for (int i = 0; i < f.TypeArgs.Count; i++) {
+        // doesn't matter what type, just so we have it to make the resolver happy when resolving function member of
+        // the fuel attribute. This might not be needed after fixing codeplex issue #172.
+        typeApplication.Add(new IntType());
+        typeApplication_JustForMember.Add(new IntType());
       }
-      var nameSegment = new NameSegment(f.tok, f.Name, typeApplication);
+      var nameSegment = new NameSegment(f.tok, f.Name, f.TypeArgs.Count == 0 ? null : typeApplication);
       var rr = new MemberSelectExpr(f.tok, receiver, f.Name);
       rr.Member = f;
-      rr.TypeApplication = typeApplication ?? new List<Type>();
+      rr.TypeApplication_AtEnclosingClass = typeApplication;
+      rr.TypeApplication_JustMember = typeApplication_JustForMember;
       List<Type> args = new List<Type>();
       for (int i = 0; i < f.Formals.Count; i++) {
         args.Add(new IntType());
@@ -1423,38 +1423,49 @@ namespace Microsoft.Dafny
       var declarations = m.TopLevelDecls;
 
       foreach (var d in declarations) {
-        if (d is ModuleExportDecl) {
-          var me = (ModuleExportDecl)d;
-
+        if (d is ModuleExportDecl me) {
           var revealAll = me.RevealAll || DafnyOptions.O.DisableScopes;
 
+          HashSet<string> explicitlyRevealedTopLevelIDs = null;
+          if (!revealAll) {
+            explicitlyRevealedTopLevelIDs = new HashSet<string>();
+            foreach (var esig in me.Exports) {
+              if (esig.ClassId == null && !esig.Opaque) {
+                explicitlyRevealedTopLevelIDs.Add(esig.Id);
+              }
+            }
+          }
+
           if (revealAll || me.ProvideAll) {
+            foreach (var newt in declarations) {
+              if (!newt.CanBeExported()) {
+                continue;
+              }
 
-              foreach (var newt in declarations) {
-                if (!newt.CanBeExported())
-                  continue;
+              if (!(newt is DefaultClassDecl)) {
+                me.Exports.Add(new ExportSignature(newt.tok, newt.Name, !revealAll || !newt.CanBeRevealed()));
+              }
 
-                if (!(newt is DefaultClassDecl)) {
-                  me.Exports.Add(new ExportSignature(newt.tok, newt.Name, !revealAll || !newt.CanBeRevealed()));
-                }
+              if (newt is TopLevelDeclWithMembers) {
+                var cl = (TopLevelDeclWithMembers)newt;
+                var newtIsRevealed = revealAll || explicitlyRevealedTopLevelIDs.Contains(newt.Name);
 
-                if (newt is ClassDecl) {
-                  var cl = (ClassDecl)newt;
-
-                  foreach (var mem in cl.Members) {
-                    var opaque = !revealAll || !mem.CanBeRevealed();
-                    if (newt is DefaultClassDecl) {
-                      me.Exports.Add(new ExportSignature(mem.tok, mem.Name, opaque));
-                    } else {
-                      me.Exports.Add(new ExportSignature(cl.tok, cl.Name, mem.tok, mem.Name, opaque));
-                    }
+                foreach (var mem in cl.Members) {
+                  var opaque = !revealAll || !mem.CanBeRevealed();
+                  if (newt is DefaultClassDecl) {
+                    // add everything from the default class
+                    me.Exports.Add(new ExportSignature(mem.tok, mem.Name, opaque));
+                  } else if (mem is Constructor && !newtIsRevealed) {
+                    // "provides *" does not pick up class constructors, unless the class is to be revealed
+                  } else if (opaque && mem is Field field && !(mem is ConstantField) && !newtIsRevealed) {
+                    // "provides *" does not pick up mutable fields, unless the class is to be revealed
+                  } else {
+                    me.Exports.Add(new ExportSignature(cl.tok, cl.Name, mem.tok, mem.Name, opaque));
                   }
                 }
               }
             }
-          me.RevealAll = false;
-          me.ProvideAll = false;
-
+          }
         }
       }
     }
