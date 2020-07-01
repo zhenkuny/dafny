@@ -773,7 +773,6 @@ namespace Microsoft.Dafny {
     protected virtual void EmitIntegerRange(Type type, out TargetWriter wLo, out TargetWriter wHi, TargetWriter wr) {
       if (AsNativeType(type) != null) {
         wr.Write("{0}.IntegerRange(", IdProtect(type.AsNewtype.FullCompileName));
-        //wr.Write("IntegerRange(");
       } else {
         wr.Write("{0}.IntegerRange(", GetHelperModuleName());
       }
@@ -4294,16 +4293,6 @@ namespace Microsoft.Dafny {
         tr(e.Receiver, wr, inLetExprBody);
         wr.Write("){0}", ClassAccessor);
         compileName = IdName(f);
-/*
-      }
-      wr.Write(compileName);
-      List<Type> typeArgs;
-      if (f.TypeArgs.Count != 0) {
-        typeArgs = f.TypeArgs.ConvertAll(ta => e.TypeArgumentSubstitutions[ta]);
-        EmitActualTypeArgs(typeArgs, f.tok, wr);
-      } else {
-        typeArgs = new List<Type>();
-*/
       }
       var actualTypeArguments = CombineTypeArguments(f, e.TypeApplication_AtEnclosingClass, e.TypeApplication_JustFunction);
       EmitNameAndActualTypeArgs(compileName, actualTypeArguments.ConvertAll(ta => ta.Actual), f.tok, wr);
