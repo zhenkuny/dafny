@@ -674,6 +674,10 @@ namespace Microsoft.Dafny
                 java - Compilation to Java
                 cpp - Compilation to C++
                 php - Compilation to PHP
+
+                Note that the C++ backend has various limitations (see Test/c++/LIMITATIONS.md).
+                This includes lack of support for BigIntegers (aka int), most higher order
+                functions, and advanced features like traits or co-inductive types.
   /compileVerbose:<n>
                 0 - don't print status of compilation to the console
                 1 (default) - print information such as files being written by
