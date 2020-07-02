@@ -691,7 +691,6 @@ namespace Microsoft.Dafny
       if (!completeProgram) {
         return false;
       }
-
       // If we got until here, compilation to C# succeeded
       if (!invokeCompiler) {
         return true; // If we're not asked to invoke the C# to assembly compiler, we can report success
