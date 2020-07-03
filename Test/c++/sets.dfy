@@ -69,14 +69,6 @@ method SetComprehension(s:set<uint32>)
   requires forall i :: 0 <= i < 10 ==> i in s;
   requires |s| == 10;
 {
-  /*
-  var s:set<uint32> := set x:uint32 | 0 <= x < 10;
-  Test("SetComprehensionMembership1", 1 in s);
-  Test("SetComprehensionMembership2", 2 in s);
-  Test("SetComprehensionMembership9", 9 in s);
-  Test("SetComprehensionNonMembership1", !(11 in s));
-  */
-
   var t:set<uint32> := set y:uint32 | y in s;
   Test("SetComprehensionInEquality", t == s);
   Test("SetComprehensionInMembership", 0 in t);
@@ -89,19 +81,6 @@ method LetSuchThat() {
     print e, "\n";
     Test("LetSuchThatMembership", e in s);
     Test("LetSuchThatValue", e == 0 || e == 1 || e == 2 || e == 3);
-}
-
-/*
-method ValueEquality() {
-    var m0:seq<uint32> := [1, 2, 3];
-    var m1:seq<uint32> := m0[1..];
-    var m2:seq<uint32> := [2, 3];
-    if m1 == m2 {
-        print "ValueEquality: This is expected\n";
-    } else {
-        print "ValueEquality: This is unexpected\n";
-        assert false;
-    }
 }
 
 method Contains() {
