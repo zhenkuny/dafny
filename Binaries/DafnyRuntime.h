@@ -11,12 +11,6 @@
 #include <variant>
 #include <exception>
 
-class _dafny {
-  public:
-    static void Print(std::string s) { std::cout << s << std::endl; }
-};
-
-
 typedef uint8_t  uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
