@@ -3896,7 +3896,7 @@ namespace Microsoft.Dafny {
             wr.Write(")");
           } else {
             void writeObj(TargetWriter w) {
-              Contract.Assert(!sf.IsStatic);
+              //Contract.Assert(!sf.IsStatic);
               w = EmitCoercionIfNecessary(e.Obj.Type, UserDefinedType.UpcastToMemberEnclosingType(e.Obj.Type, e.Member), e.tok, w);
               TrParenExpr(e.Obj, w, inLetExprBody);
             }
