@@ -115,7 +115,6 @@ method Contains() {
         assert false;
     }
 }
-*/
 
 method Main() {
     Basic();
