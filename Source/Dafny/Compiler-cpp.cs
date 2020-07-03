@@ -200,7 +200,8 @@ namespace Microsoft.Dafny {
       classDeclWriter.WriteLine("class {0};", name);
       
       methodDeclWriter.Write("public:\n");
-      methodDeclWriter.WriteLine("// Default constructor\n {0}() {{}}", name);
+      methodDeclWriter.WriteLine("// Default constructor");
+      methodDeclWriter.WriteLine("{0}() {{}}", name);
 
       // Create the code for the specialization of get_default
       var fullName = moduleName + "::" + name;
@@ -321,12 +322,12 @@ namespace Microsoft.Dafny {
         }
 
         // Overload the comparison operator
-        ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", DtT_protected);
-        ws.Write("\treturn true ");
+        var wrCompOp = ws.NewNamedBlock("friend bool operator==(const {0} &left, const {0} &right)", DtT_protected);
+        wrCompOp.Write("\treturn true");
         foreach (var arg in argNames) {
-            ws.WriteLine("\t\t&& left.{0} == right.{0}", arg);
+          wrCompOp.WriteLine("\t\t&& left.{0} == right.{0}", arg);
         }
-        ws.WriteLine(";\n}");
+        wrCompOp.WriteLine(";");
 
         // Overload the not-comparison operator
         ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
