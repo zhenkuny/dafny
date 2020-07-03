@@ -686,7 +686,7 @@ namespace Microsoft.Dafny {
         return Compiler.CreateFunction(member.EnclosingClass.CompileName, member.EnclosingClass.TypeArgs, name, typeArgs, formals, resultType, tok, isStatic, createBody, MethodDeclWriter, MethodWriter);
       }
       public BlockTargetWriter/*?*/ CreateGetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl/*?*/ member, bool forBodyInheritance) {
-        return Compiler.CreateGetter(name, resultType, tok, isStatic, createBody, MethodWriter);
+        return Compiler.CreateGetter(name, resultType, tok, isStatic, createBody, MethodDeclWriter, MethodWriter);
       }
       public BlockTargetWriter/*?*/ CreateGetterSetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, MemberDecl/*?*/ member, out TargetWriter setterWriter, bool forBodyInheritance) {
         return Compiler.CreateGetterSetter(name, resultType, tok, isStatic, createBody, out setterWriter, MethodWriter);
@@ -808,9 +808,19 @@ namespace Microsoft.Dafny {
       throw NotSupported(string.Format("RuntimeTypeDescriptor {0} not yet supported", type), tok);
     }
 
-    protected BlockTargetWriter/*?*/ CreateGetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, TargetWriter wr) {
-      // We don't use getters
-      return createBody ? new TargetWriter().NewBlock("") : null;
+    protected BlockTargetWriter/*?*/ CreateGetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, TargetWriter wdr, TargetWriter wr) {
+      // Compiler insists on using Getter for constants, but we just use the raw variable name to hold the value,
+      // because o/w Compiler tries to use the Getter function as an Lvalue in assignments
+      // Unfortunately, Compiler doesn't tell us what the initial value is, so we hack around it
+      // by declaring the variable and a function to statically initialize it
+      BlockTargetWriter w = null;
+      string postfix = "";
+      if (createBody) {
+        w = wdr.NewNamedBlock("{0}{1} init__{2}()", isStatic ? "static " : "", TypeName(resultType, wr, tok), name);
+        postfix = String.Format(" = init__{0}()", name);
+      } 
+      wdr.Write("{0}{1} {2}{3};", isStatic ? "static " : "", TypeName(resultType, wr, tok), name, postfix);
+      return w;
     }
 
     protected BlockTargetWriter/*?*/ CreateGetterSetter(string name, Type resultType, Bpl.IToken tok, bool isStatic, bool createBody, out TargetWriter setterWriter, TargetWriter wr) {
