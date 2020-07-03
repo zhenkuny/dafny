@@ -638,8 +638,6 @@ struct DafnySet {
                 ret.set.insert(elt);
             }
         }
-        // This attempts to sort the elements (which then requires defining an ordering on DafnySeq, DafnySet, etc.)
-        //set_difference(set.begin(), set.end(), other.set.begin(), other.set.end(), inserter(ret.set, ret.set.end()));
         return ret;
     }
 
@@ -746,47 +744,6 @@ struct DafnyMap {
         }
         return ret;
     }
-
-    /*
-    bool disjoint(const DafnyMap<K,V>& other) {
-        for (auto const& elt:map) {
-            if (other.find(elt) != other.map.end()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    DafnyMap<K,V> Union(const DafnyMap<K,V>& other) {
-        DafnyMap<K,V> ret = DafnyMap(other);
-        ret.map.insert(map.begin(), map.end());
-        return ret;
-    }
-
-
-    // Returns a DafnyMap containing elements only found in the current DafnyMap
-    DafnyMap<K,V> Difference(const DafnyMap<K,V>& other) {
-        DafnyMap<K,V> ret;
-        for (auto const& elt:map) {
-            if (!other.contains(elt)) {
-                ret.map.insert(elt);
-            }
-        }
-        // K,Vhis attempts to sort the elements (which then requires defining an ordering on DafnySeq, DafnyMap, etc.)
-        //map_difference(map.begin(), map.end(), other.map.begin(), other.map.end(), inserter(ret.map, ret.map.end()));
-        return ret;
-    }
-
-    DafnyMap<K,V> Intersection(const DafnyMap<K,V>& other) {
-        DafnyMap<K,V> ret;
-        for (auto const& elt:map) {
-            if (other.map.find(elt) != other.map.end()) {
-                ret.map.insert(elt);
-            }
-        }
-        return ret;
-    }
-    */
 
     uint64 size () const { return map.size(); }
 
