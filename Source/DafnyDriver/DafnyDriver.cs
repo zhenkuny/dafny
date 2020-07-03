@@ -537,7 +537,7 @@ namespace Microsoft.Dafny
           break;
         case DafnyOptions.CompilationTarget.Cpp:
           targetExtension = "cpp";
-          break;        
+          break;
         default:
           Contract.Assert(false);
           throw new cce.UnreachableException();
