@@ -14996,9 +14996,10 @@ namespace Microsoft.Dafny
     
     
     enum Available {
-      Available, // if x is available, it can be borrowed or consumed (A --> B, A --> C)
+      Available, // if x is available, it can be borrowed or consumed (A --> B, A --> C, A --> M)
       Borrowed,  // if x is borrowed, it can be borrowed again (but not consumed) (B --> B)
       Consumed,  // if x is consumed, it cannot be consumed or borrowed
+      MutablyBorrowed, // if x is mutably borrowed, it cannot be consumed or borrowed
       // Borrowed is used to implement Wadler's "let!(x) y = e1 in e2" expression,
       // in which linear x is borrowed (appears as "shared") inside e1 before being
       // consumed by e2.  (See Wadler, "Linear types can change the world!")
@@ -15012,7 +15013,7 @@ namespace Microsoft.Dafny
       //   assuming call-by-value evaluation, even if expression evaluation is otherwise unordered)
       // If e2 does not consume x, x stays Borrowed.
       // Borrowed is only meaningful in expressions; it does not propagate across statements.
-      // If statement s contains expressions that borrow x, x is reset to Available after s is checked.
+      // If statement s contains expressions that (mutably) borrow x, x is reset to Available after s is checked.
       // (In other words, if s does not consume x, s can borrow x temporarily, releasing x after s finishes.)
     }
 
@@ -15061,7 +15062,7 @@ namespace Microsoft.Dafny
       // Replace Borrowed with Available (after each statement)
       internal void Unborrow() {
         foreach (var k in available.Keys.ToList()) {
-          if (available[k] == Available.Borrowed) {
+          if (available[k] == Available.Borrowed || available[k] == Available.MutablyBorrowed) {
             available[k] = Available.Available;
           }
         }
@@ -15242,10 +15243,7 @@ namespace Microsoft.Dafny
             if (available.ContainsKey(e.Var)) {
               if (available[e.Var] == Available.Available) {
                 ok = true;
-                // TODO(andrea) only consume when not mutably borrowing
-                if (!inoutUsage) {
-                  available[e.Var] = Available.Consumed;
-                }
+                available[e.Var] = (inoutUsage) ? Available.MutablyBorrowed : Available.Consumed;
               }
             }
           }
