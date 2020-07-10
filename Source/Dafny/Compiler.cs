@@ -3003,7 +3003,7 @@ namespace Microsoft.Dafny {
           if (!p.IsGhost) {
             string inTmp = idGenerator.FreshId("_in");
             inTmps.Add(inTmp);
-            DeclareLocalVar(inTmp, null, null, p.Usage, s.Args[i], false, wr, p.Type);
+            DeclareLocalVar(inTmp, null, null, p.Usage, s.Args[i].Expr, false, wr, p.Type);
           }
         }
         // Now, assign to the formals
@@ -3150,11 +3150,11 @@ namespace Microsoft.Dafny {
           if (!p.IsGhost) {
             wr.Write(sep);
             // Order of coercions is important here: EmitCoercionToNativeForm may coerce into a type we're unaware of, so it *has* to be second
-            var w = EmitCoercionIfNecessary(s.Args[i].Type, s.Method.Ins[i].Type, s.Tok, wr);
+            var w = EmitCoercionIfNecessary(s.Args[i].Expr.Type, s.Method.Ins[i].Type, s.Tok, wr);
             if (s.Method.IsExtern(out _, out _)) {
               w = EmitCoercionToNativeForm(s.Method.Ins[i].Type, s.Tok, w);
             }
-            TrExpr(s.Args[i], w, false);
+            TrExpr(s.Args[i].Expr, w, false);
             sep = ", ";
           }
         }

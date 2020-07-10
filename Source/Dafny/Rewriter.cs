@@ -208,7 +208,7 @@ namespace Microsoft.Dafny
             var argsSubstMap = new Dictionary<IVariable, Expression>();  // maps formal arguments to actuals
             Contract.Assert(s0.Method.Ins.Count == s0.Args.Count);
             for (int i = 0; i < s0.Method.Ins.Count; i++) {
-              argsSubstMap.Add(s0.Method.Ins[i], s0.Args[i]);
+              argsSubstMap.Add(s0.Method.Ins[i], s0.Args[i].Expr);
             }
             var substituter = new Translator.AlphaConverting_Substituter(s0.Receiver, argsSubstMap, s0.MethodSelect.TypeArgumentSubstitutions());
             // Strengthen the range of the "forall" statement with the precondition of the call, suitably substituted with the actual parameters.

@@ -1231,7 +1231,7 @@ namespace Microsoft.Dafny
           Formal p = ctor.Ins[i];
           if (!p.IsGhost) {
             wr.Write(sep);
-            TrExpr(initCall.Args[i], wr, false);
+            TrExpr(initCall.Args[i].Expr, wr, false);
             sep = ", ";
           }
         }

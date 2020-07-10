@@ -4534,7 +4534,6 @@ namespace Microsoft.Dafny {
     Ordinary,
     Shared,
     Linear,
-    Inout,
     Ghost,
   }
 
@@ -5499,7 +5498,7 @@ namespace Microsoft.Dafny {
     }
     public readonly bool IsOld;
 
-    public readonly bool inout;
+    public readonly bool Inout;
 
     public Formal(IToken tok, string name, Type type, bool inParam, Usage usage, bool isOld = false, bool inout = false)
       : base(tok, name, type, usage) {
@@ -5508,6 +5507,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(type != null);
       InParam = inParam;
       IsOld = isOld;
+      Inout = inout;
     }
 
     public bool HasName {
@@ -5969,6 +5969,7 @@ namespace Microsoft.Dafny {
     public readonly ISet<IVariable> AssignedAssumptionVariables = new HashSet<IVariable>();
     public Method OverriddenMethod;
     private static BlockStmt emptyBody = new BlockStmt(Token.NoToken, Token.NoToken, new List<Statement>());
+    public readonly bool HasInoutThis;
 
     public override IEnumerable<Expression> SubExpressions {
       get {
@@ -6000,6 +6001,7 @@ namespace Microsoft.Dafny {
 
     public Method(IToken tok, string name,
                   bool hasStaticKeyword, Usage usage,
+                  bool hasInoutThis,
                   [Captured] List<TypeParameter> typeArgs,
                   [Captured] List<Formal> ins, [Captured] List<Formal> outs,
                   [Captured] List<MaybeFreeExpression> req, [Captured] Specification<FrameExpression> mod,
@@ -6026,6 +6028,7 @@ namespace Microsoft.Dafny {
       this.Decreases = decreases;
       this.methodBody = body;
       this.SignatureEllipsis = signatureEllipsis;
+      this.HasInoutThis = hasInoutThis;
       MustReverify = false;
     }
 
@@ -6113,7 +6116,7 @@ namespace Microsoft.Dafny {
                  [Captured] Specification<Expression> decreases,
                  [Captured] BlockStmt body,
                  Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, Usage.Ghost, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, signatureEllipsis) {
+      : base(tok, name, hasStaticKeyword, Usage.Ghost, false, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, signatureEllipsis) {
     }
   }
 
@@ -6130,7 +6133,7 @@ namespace Microsoft.Dafny {
                  [Captured] Specification<Expression> decreases,
                  [Captured] BlockStmt body,
                  Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, Usage.Ghost, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, signatureEllipsis) {
+      : base(tok, name, hasStaticKeyword, Usage.Ghost, false, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, signatureEllipsis) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(typeArgs != null);
@@ -6176,7 +6179,7 @@ namespace Microsoft.Dafny {
                   Specification<Expression> decreases,
                   DividedBlockStmt body,
                   Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, false, Usage.Ordinary, typeArgs, ins, new List<Formal>(), req, mod, ens, decreases, body, attributes, signatureEllipsis) {
+      : base(tok, name, false, Usage.Ordinary, false, typeArgs, ins, new List<Formal>(), req, mod, ens, decreases, body, attributes, signatureEllipsis) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(cce.NonNullElements(typeArgs));
@@ -6206,7 +6209,7 @@ namespace Microsoft.Dafny {
                        List<TypeParameter> typeArgs, Formal k, List<Formal> ins, List<Formal> outs,
                        List<MaybeFreeExpression> req, Specification<FrameExpression> mod, List<MaybeFreeExpression> ens, Specification<Expression> decreases,
                        BlockStmt body, Attributes attributes, FixpointLemma fixpointLemma)
-      : base(tok, name, hasStaticKeyword, Usage.Ghost, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, null) {
+      : base(tok, name, hasStaticKeyword, Usage.Ghost, false, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, null) {
       Contract.Requires(k != null);
       Contract.Requires(ins != null && 1 <= ins.Count && ins[0] == k);
       Contract.Requires(fixpointLemma != null);
@@ -6234,7 +6237,7 @@ namespace Microsoft.Dafny {
                          Specification<Expression> decreases,
                          BlockStmt body,
                          Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, Usage.Ghost, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, signatureEllipsis) {
+      : base(tok, name, hasStaticKeyword, Usage.Ghost, false, typeArgs, ins, outs, req, mod, ens, decreases, body, attributes, signatureEllipsis) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(cce.NonNullElements(typeArgs));
@@ -7269,12 +7272,12 @@ namespace Microsoft.Dafny {
 
     public readonly List<Expression> Lhs;
     public readonly MemberSelectExpr MethodSelect;
-    public readonly List<Expression> Args;
+    public readonly List<ApplySuffixArg> Args;
 
     public Expression Receiver { get { return MethodSelect.Obj; } }
     public Method Method { get { return (Method)MethodSelect.Member; } }
 
-    public CallStmt(IToken tok, IToken endTok, List<Expression> lhs, MemberSelectExpr memSel, List<Expression> args)
+    public CallStmt(IToken tok, IToken endTok, List<Expression> lhs, MemberSelectExpr memSel, List<ApplySuffixArg> args)
       : base(tok, endTok) {
       Contract.Requires(tok != null);
       Contract.Requires(endTok != null);
@@ -7296,7 +7299,7 @@ namespace Microsoft.Dafny {
         }
         yield return MethodSelect;
         foreach (var ee in Args) {
-          yield return ee;
+          yield return ee.Expr;
         }
       }
     }

@@ -1746,7 +1746,7 @@ namespace Microsoft.Dafny
             new Specification<Expression>(new List<Expression>(), null),
             null, Predicate.BodyOriginKind.OriginalOrInherited, null, null);
           // --- here comes method MoveNext
-          var moveNext = new Method(iter.tok, "MoveNext", false, Usage.Ordinary, new List<TypeParameter>(),
+          var moveNext = new Method(iter.tok, "MoveNext", false, Usage.Ordinary, false, new List<TypeParameter>(),
             new List<Formal>(), new List<Formal>() { new Formal(iter.tok, "more", Type.Bool, false, Usage.Ordinary) },
             new List<MaybeFreeExpression>(),
             new Specification<FrameExpression>(new List<FrameExpression>(), null),
@@ -2591,7 +2591,7 @@ namespace Microsoft.Dafny
               methodSel.Member = prefixLemma;  // resolve here
               methodSel.TypeApplication = typeApplication;
               methodSel.Type = new InferredTypeProxy();
-              var recursiveCall = new CallStmt(com.tok, com.tok, new List<Expression>(), methodSel, recursiveCallArgs);
+              var recursiveCall = new CallStmt(com.tok, com.tok, new List<Expression>(), methodSel, recursiveCallArgs.ConvertAll(a => new ApplySuffixArg { Inout = false, Expr = a }));
               recursiveCall.IsGhost = prefixLemma.IsGhost;  // resolve here
 
               var range = smaller;  // The range will be strengthened later with the call's precondition, substituted
@@ -3067,12 +3067,28 @@ namespace Microsoft.Dafny
               usageContext = ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
               CheckExpression(m.Body, this, m);
               PopUsageContext(m.Body.EndTok, outer, usageContext);
-              if (!member.IsStatic && m.Usage == Usage.Linear && usageContext.available[usageContext.thisId.Var] != Available.Consumed) {
-                reporter.Error(MessageSource.Resolver, member.tok, "linear 'this' must be unavailable at method exit");
+              if (!member.IsStatic && m.Usage == Usage.Linear) {
+                if (m.HasInoutThis) {
+                  if (usageContext.available[usageContext.thisId.Var] != Available.Available) {
+                    reporter.Error(MessageSource.Resolver, member.tok, "linear inout 'this' must be assigned at method exit");
+                  }
+                } else {
+                  if (usageContext.available[usageContext.thisId.Var] != Available.Consumed) {
+                    reporter.Error(MessageSource.Resolver, member.tok, "linear 'this' must be unavailable at method exit");
+                  }
+                }
               }
               foreach (Formal x in m.Ins) {
-                if (x.IsLinear && usageContext.available[x] != Available.Consumed) {
-                  reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
+                if (x.IsLinear) {
+                  if (x.Inout) {
+                    if (usageContext.available[x] != Available.Available) {
+                      reporter.Error(MessageSource.Resolver, x, "linear inout variable must be assigned at method exit");
+                    }
+                  } else {
+                    if (usageContext.available[x] != Available.Consumed) {
+                      reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
+                    }
+                  }
                 }
               }
               foreach (Formal x in m.Outs) {
@@ -6851,7 +6867,7 @@ namespace Microsoft.Dafny
           i = 0;
           foreach (var ee in s.Args) {
             if (!s.Method.Ins[i].IsGhost) {
-              Visit(ee, st);
+              Visit(ee.Expr, st);
             }
             i++;
           }
@@ -7370,7 +7386,7 @@ namespace Microsoft.Dafny
               if (rhs.InitCall != null) {
                 foreach (var inArg in rhs.InitCall.Method.Ins.Zip(rhs.InitCall.Args)) {
                   if (!inArg.Item1.IsGhost) {
-                    resolver.CheckIsCompilable(inArg.Item2, usageContext, inArg.Item1.Usage);
+                    resolver.CheckIsCompilable(inArg.Item2.Expr, usageContext, inArg.Item1.Usage);
                   }
                 }
               }
@@ -7400,7 +7416,22 @@ namespace Microsoft.Dafny
               foreach (var e in s.Args) {
                 Contract.Assume(j < callee.Ins.Count);  // this should have already been checked by the resolver
                 if (!callee.Ins[j].IsGhost) {
-                  resolver.CheckIsCompilable(e, usageContext, callee.Ins[j].Usage);
+                  if (e.Inout) {
+                    if (!callee.Ins[j].Inout) {
+                      Error(e.Expr, "inout is only allowed for inout arguments");
+                    } else {
+                      // TODO(andrea) use Inout here to determine usage ?
+                      resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage, true);
+                    }
+                  } else { // !e.Inout
+                    if (callee.Ins[j].Inout) {
+                      Error(e.Expr, "inout is required for inout arguments");
+                    } else { // !callee.Ins[j].Inout
+                      resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage);
+                    }
+                  }
+                } else if (e.Inout) {
+                  Error(e.Expr, "inout is not allowed for ghost arguments");
                 }
                 j++;
               }
@@ -7670,7 +7701,7 @@ namespace Microsoft.Dafny
             var argsSubstMap = new Dictionary<IVariable, Expression>();  // maps formal arguments to actuals
             Contract.Assert(cs.Method.Ins.Count == cs.Args.Count);
             for (int i = 0; i < cs.Method.Ins.Count; i++) {
-              argsSubstMap.Add(cs.Method.Ins[i], cs.Args[i]);
+              argsSubstMap.Add(cs.Method.Ins[i], cs.Args[i].Expr);
             }
             var substituter = new Translator.AlphaConverting_Substituter(cs.Receiver, argsSubstMap, new Dictionary<TypeParameter, Type>());
             if (!Attributes.Contains(s.Attributes, "auto_generated")) {
@@ -9487,6 +9518,10 @@ namespace Microsoft.Dafny
               if (methodCallInfo == null) {
                 reporter.Error(MessageSource.Resolver, expr.tok, "expression has no reveal lemma");
               } else {
+                if (methodCallInfo.Args.Exists(a => a.Inout)) {
+                  // bug in inout
+                  throw new cce.UnreachableException();
+                }
                 var call = new CallStmt(methodCallInfo.Tok, s.EndTok, new List<Expression>(), methodCallInfo.Callee, methodCallInfo.Args);
                 s.ResolvedStatements.Add(call);
               }
@@ -11248,6 +11283,7 @@ namespace Microsoft.Dafny
             resolvedLhss.Add(ll.Resolved);
           }
           var a = new CallStmt(methodCallInfo.Tok, update.EndTok, resolvedLhss, methodCallInfo.Callee, methodCallInfo.Args);
+              // TODO(andrea) HERE? .ConvertAll(arg => new ApplySuffixArg { Inout = false, Expr = arg }));
           update.ResolvedStatements.Add(a);
         }
       }
@@ -11406,8 +11442,8 @@ namespace Microsoft.Dafny
       }
       // resolve arguments
       int j = 0;
-      foreach (Expression e in s.Args) {
-        ResolveExpression(e, new ResolveOpts(codeContext, true));
+      foreach (ApplySuffixArg e in s.Args) {
+        ResolveExpression(e.Expr, new ResolveOpts(codeContext, true));
         j++;
       }
 
@@ -11439,7 +11475,7 @@ namespace Microsoft.Dafny
         for (int i = 0; i < callee.Ins.Count; i++) {
           var it = callee.Ins[i].Type;
           Type st = SubstType(it, subst);
-          AddAssignableConstraint(s.Tok, st, s.Args[i].Type, "incorrect type of method in-parameter" + (callee.Ins.Count == 1 ? "" : " " + i) + " (expected {0}, got {1})");
+          AddAssignableConstraint(s.Tok, st, s.Args[i].Expr.Type, "incorrect type of method in-parameter" + (callee.Ins.Count == 1 ? "" : " " + i) + " (expected {0}, got {1})");
         }
         for (int i = 0; i < callee.Outs.Count; i++) {
           var it = callee.Outs[i].Type;
@@ -11944,7 +11980,8 @@ namespace Microsoft.Dafny
                 Contract.Assert(callLhs.ResolvedExpression is MemberSelectExpr);  // since ResolveApplySuffix succeeded and call.Lhs denotes an expression (not a module or a type)
                 var methodSel = (MemberSelectExpr)callLhs.ResolvedExpression;
                 if (methodSel.Member is Method) {
-                  rr.InitCall = new CallStmt(initCallTok, stmt.EndTok, new List<Expression>(), methodSel, rr.Arguments);
+                  rr.InitCall = new CallStmt(initCallTok, stmt.EndTok, new List<Expression>(), methodSel,
+                      rr.Arguments.ConvertAll(a => new ApplySuffixArg { Inout = false, Expr = a }));
                   ResolveCallStmt(rr.InitCall, codeContext, rr.EType);
                   if (rr.InitCall.Method is Constructor) {
                     callsConstructor = true;
@@ -14716,7 +14753,7 @@ namespace Microsoft.Dafny
     {
       public readonly IToken Tok;
       public readonly MemberSelectExpr Callee;
-      public readonly List<Expression> Args;
+      public readonly List<ApplySuffixArg> Args;
 
       [ContractInvariantMethod]
       void ObjectInvariant() {
@@ -14726,7 +14763,7 @@ namespace Microsoft.Dafny
         Contract.Invariant(cce.NonNullElements(Args));
       }
 
-      public MethodCallInformation(IToken tok, MemberSelectExpr callee, List<Expression> args) {
+      public MethodCallInformation(IToken tok, MemberSelectExpr callee, List<ApplySuffixArg> args) {
         Contract.Requires(tok != null);
         Contract.Requires(callee != null);
         Contract.Requires(callee.Member is Method);
@@ -14810,7 +14847,7 @@ namespace Microsoft.Dafny
                 foreach (var arg in e.Args) {
                   if (arg.Inout) {
                     if (arg.Expr.Resolved is MemberSelectExpr || arg.Expr.Resolved is IdentifierExpr) {
-                      // TODO(andrea) actually check it's a valid path
+                      // TODO(andrea) actually check it's a valid sequence of MemberSelectExpr
                       reporter.Warning(MessageSource.Resolver, arg.Expr.tok, "[oxide] maybe unsound: unchecked inout argument");
                     } else {
                       reporter.Error(MessageSource.Resolver, arg.Expr.tok, "invalid inout argument");
@@ -14818,7 +14855,7 @@ namespace Microsoft.Dafny
                     }
                   }
                 }
-                var cRhs = new MethodCallInformation(e.tok, mse, ApplySuffixArgListToExpressionList(e.Args));
+                var cRhs = new MethodCallInformation(e.tok, mse, e.Args);
                 return cRhs;
               } else {
                 reporter.Error(MessageSource.Resolver, e.tok, "method call is not allowed to be used in an expression context ({0})", mse.Member.Name);
@@ -15134,7 +15171,7 @@ namespace Microsoft.Dafny
         (u == Usage.Ghost) ? "ghost" :
         (u == Usage.Linear) ? "linear" :
         (u == Usage.Shared) ? "shared" :
-        (u == Usage.Inout) ? "inout" :
+        // TODO(andrea) ?? (u == Usage.Inout) ? "inout" :
         "ordinary";
     }
 
@@ -15143,7 +15180,7 @@ namespace Microsoft.Dafny
         (u == Usage.Ghost) ? "ghost" :
         (u == Usage.Linear) ? "linear" :
         (u == Usage.Shared) ? "shared" :
-        (u == Usage.Inout) ? "inout" :
+        // TODO(andrea) ?? (u == Usage.Inout) ? "inout" :
         "non-ghost";
     }
 
@@ -15152,7 +15189,7 @@ namespace Microsoft.Dafny
         (u == Usage.Ghost) ? "ghost " :
         (u == Usage.Linear) ? "linear " :
         (u == Usage.Shared) ? "shared " :
-        (u == Usage.Inout) ? "inout " :
+        // TODO(andrea) ?? (u == Usage.Inout) ? "inout " :
         "";
     }
 
@@ -15175,7 +15212,7 @@ namespace Microsoft.Dafny
       CheckIsCompilable(expr, null, Usage.Ordinary);
     }
 
-    void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage) {
+    void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage, bool inoutUsage = false) {
       IdentifierExpr x = ExprAsIdentifier(usageContext, expr);
       if (usageContext != null && expectedUsage == Usage.Shared && x != null && x.Var.Usage == Usage.Linear) {
         // Try to borrow x
@@ -15184,7 +15221,7 @@ namespace Microsoft.Dafny
         }
         usageContext.available[x.Var] = Available.Borrowed;
       } else {
-        Usage usage = CheckIsCompilable(expr, usageContext);
+        Usage usage = CheckIsCompilable(expr, usageContext, inoutUsage);
         if (expectedUsage != Usage.Ghost && usage != expectedUsage) {
           reporter.Error(MessageSource.Resolver, expr, "expected {0} expression, found {1} expression",
             UsageName(expectedUsage), UsageName(usage));
@@ -15192,7 +15229,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    Usage CheckIsCompilable(Expression expr, UsageContext usageContext) {
+    Usage CheckIsCompilable(Expression expr, UsageContext usageContext, bool inoutUsage = false) {
       Contract.Requires(expr != null);
       Contract.Requires(expr.WasResolved());  // this check approximates the requirement that "expr" be resolved
 
@@ -15205,7 +15242,10 @@ namespace Microsoft.Dafny
             if (available.ContainsKey(e.Var)) {
               if (available[e.Var] == Available.Available) {
                 ok = true;
-                available[e.Var] = Available.Consumed;
+                // TODO(andrea) only consume when not mutably borrowing
+                if (!inoutUsage) {
+                  available[e.Var] = Available.Consumed;
+                }
               }
             }
           }
@@ -15417,7 +15457,7 @@ namespace Microsoft.Dafny
         e.Operands.ForEach(ee => CheckIsCompilable(ee, usageContext, Usage.Ordinary));
         return Usage.Ordinary;
       } else if (expr is ConcreteSyntaxExpression) {
-        return CheckIsCompilable(((ConcreteSyntaxExpression)expr).ResolvedExpression, usageContext);
+        return CheckIsCompilable(((ConcreteSyntaxExpression)expr).ResolvedExpression, usageContext, inoutUsage);
       } else if (expr is ITEExpr) {
         ITEExpr e = (ITEExpr)expr;
         var uc0 = UsageContext.Copy(usageContext);

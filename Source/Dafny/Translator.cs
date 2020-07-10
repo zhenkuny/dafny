@@ -4310,7 +4310,7 @@ namespace Microsoft.Dafny {
           methodSel.Member = m;  // resolve here
           methodSel.TypeApplication = typeApplication;
           methodSel.Type = new InferredTypeProxy();
-          var recursiveCall = new CallStmt(m.tok, m.tok, new List<Expression>(), methodSel, recursiveCallArgs);
+          var recursiveCall = new CallStmt(m.tok, m.tok, new List<Expression>(), methodSel, recursiveCallArgs.ConvertAll(a => new ApplySuffixArg { Inout = false, Expr = a }));
           recursiveCall.IsGhost = m.IsGhost;  // resolve here
 
           Expression parRange = new LiteralExpr(m.tok, true);
@@ -11237,8 +11237,8 @@ namespace Microsoft.Dafny {
         } else {
           ante = initEtran.TrBoundVariablesRename(boundVars, bvars, out substMap, out antitriggerBoundVarTypes);
           for (int i = 0; i < s0.Method.Ins.Count; i++) {
-            var arg = Substitute(s0.Args[i], null, substMap, s0.MethodSelect.TypeArgumentSubstitutions());  // substitute the renamed bound variables for the declared ones
-            argsSubstMap.Add(s0.Method.Ins[i], new BoogieWrapper(initEtran.TrExpr(arg), s0.Args[i].Type));
+            var arg = Substitute(s0.Args[i].Expr, null, substMap, s0.MethodSelect.TypeArgumentSubstitutions());  // substitute the renamed bound variables for the declared ones
+            argsSubstMap.Add(s0.Method.Ins[i], new BoogieWrapper(initEtran.TrExpr(arg), s0.Args[i].Expr.Type));
           }
           ante = BplAnd(ante, initEtran.TrExpr(Substitute(range, null, substMap)));
           if (additionalRange != null) {
@@ -11688,7 +11688,7 @@ namespace Microsoft.Dafny {
         builder.Add(Bpl.Cmd.SimpleAssign(s.Tok, initHeap, etran.HeapExpr));
       }
       builder.Add(new CommentCmd("TrCallStmt: Before ProcessCallStmt"));
-      ProcessCallStmt(s.Tok, tySubst, GetTypeParams(s.Method), s.Receiver, actualReceiver, s.Method, s.Args, bLhss, lhsTypes, builder, locals, etran);
+      ProcessCallStmt(s.Tok, tySubst, GetTypeParams(s.Method), s.Receiver, actualReceiver, s.Method, s.Args.ConvertAll(a => a.Expr), bLhss, lhsTypes, builder, locals, etran);
       builder.Add(new CommentCmd("TrCallStmt: After ProcessCallStmt"));
       for (int i = 0; i < lhsBuilders.Count; i++) {
         var lhs = s.Lhs[i];
@@ -18269,7 +18269,8 @@ namespace Microsoft.Dafny {
           r = new AssignStmt(s.Tok, s.EndTok, Substitute(s.Lhs), SubstRHS(s.Rhs));
         } else if (stmt is CallStmt) {
           var s = (CallStmt)stmt;
-          var rr = new CallStmt(s.Tok, s.EndTok, s.Lhs.ConvertAll(Substitute), (MemberSelectExpr)Substitute(s.MethodSelect), s.Args.ConvertAll(Substitute));
+          var rr = new CallStmt(s.Tok, s.EndTok, s.Lhs.ConvertAll(Substitute), (MemberSelectExpr)Substitute(s.MethodSelect),
+          s.Args.ConvertAll(a => new ApplySuffixArg { Inout = a.Inout, Expr = Substitute(a.Expr) }));
           r = rr;
         } else if (stmt is DividedBlockStmt) {
           r = SubstDividedBlockStmt((DividedBlockStmt)stmt);

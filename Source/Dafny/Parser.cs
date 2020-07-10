@@ -2109,7 +2109,7 @@ int StringToInt(string s, int defaultValue, string errString) {
 		                       req, new Specification<FrameExpression>(mod, modAttrs),
 		                       ens, new Specification<Expression>(dec, decAttrs), body, attrs, signatureEllipsis);
 		} else {
-		 m = new Method(tok, id.val, dmod.IsStatic, dmod.Usage, typeArgs, ins, outs,
+		 m = new Method(tok, id.val, dmod.IsStatic, dmod.Usage, dmod.Inout, typeArgs, ins, outs,
 		                req, new Specification<FrameExpression>(mod, modAttrs), ens, new Specification<Expression>(dec, decAttrs), body, attrs, signatureEllipsis);
 		}
 		m.BodyStartTok = bodyStart;
