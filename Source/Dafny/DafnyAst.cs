@@ -5499,7 +5499,9 @@ namespace Microsoft.Dafny {
     }
     public readonly bool IsOld;
 
-    public Formal(IToken tok, string name, Type type, bool inParam, Usage usage, bool isOld = false)
+    public readonly bool inout;
+
+    public Formal(IToken tok, string name, Type type, bool inParam, Usage usage, bool isOld = false, bool inout = false)
       : base(tok, name, type, usage) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
@@ -8240,6 +8242,8 @@ namespace Microsoft.Dafny {
     {
       return Type != null;
     }
+
+    public bool Inout = false;
 
     public Expression Resolved {
       get {
@@ -11675,25 +11679,34 @@ namespace Microsoft.Dafny {
     }
   }
 
+  public class ApplySuffixArg {
+    public bool Inout;
+    public Expression Expr;
+  }
+
   /// <summary>
   /// An ApplySuffix desugars into either an ApplyExpr or a FunctionCallExpr
   /// </summary>
   public class ApplySuffix : SuffixExpr
   {
-    public readonly List<Expression> Args;
+    public readonly List<ApplySuffixArg> Args;
 
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(Args != null);
     }
 
-    public ApplySuffix(IToken tok, Expression lhs, List<Expression> args)
+    public ApplySuffix(IToken tok, Expression lhs, List<ApplySuffixArg> args)
       : base(tok, lhs) {
       Contract.Requires(tok != null);
       Contract.Requires(lhs != null);
       Contract.Requires(cce.NonNullElements(args));
       Args = args;
     }
+
+    public ApplySuffix(IToken tok, Expression lhs, List<Expression> args)
+      : this(tok, lhs, args.ConvertAll(e => new ApplySuffixArg { Inout = false, Expr = e }))
+    {}
   }
 
   public class Specification<T> where T : class

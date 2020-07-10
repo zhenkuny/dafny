@@ -486,7 +486,8 @@ namespace Microsoft.Dafny
     }
 
     public virtual Expression CloneApplySuffix(ApplySuffix e) {
-        return new ApplySuffix(Tok(e.tok), CloneExpr(e.Lhs), e.Args.ConvertAll(CloneExpr));
+        return new ApplySuffix(Tok(e.tok), CloneExpr(e.Lhs), e.Args.ConvertAll(
+          x => new ApplySuffixArg { Inout = x.Inout, Expr = CloneExpr(x.Expr) }));
     }
 
     public virtual CasePattern<VT> CloneCasePattern<VT>(CasePattern<VT> pat) where VT: IVariable {
@@ -1131,10 +1132,10 @@ namespace Microsoft.Dafny
         name = edn.SuffixName;
         lhs = new ExprDotName(Tok(edn.tok), CloneExpr(edn.Lhs), name + "#", edn.OptTypeArguments == null ? null : edn.OptTypeArguments.ConvertAll(CloneType));
       }
-      var args = new List<Expression>();
-      args.Add(k);
+      var args = new List<ApplySuffixArg>();
+      args.Add(new ApplySuffixArg { Inout = false, Expr = k });
       foreach (var arg in e.Args) {
-        args.Add(CloneExpr(arg));
+        args.Add(new ApplySuffixArg { Inout = arg.Inout, Expr = CloneExpr(arg.Expr) });
       }
       var apply = new ApplySuffix(Tok(e.tok), lhs, args);
       reporter.Info(MessageSource.Cloner, e.tok, name + suffix);
@@ -1336,9 +1337,9 @@ namespace Microsoft.Dafny
             var lhs = (ExprDotName)apply.Lhs;
             lhsClone = new ExprDotName(Tok(lhs.tok), CloneExpr(lhs.Lhs), lhs.SuffixName + "#", lhs.OptTypeArguments == null ? null : lhs.OptTypeArguments.ConvertAll(CloneType));
           }
-          var args = new List<Expression>();
-          args.Add(k);
-          apply.Args.ForEach(arg => args.Add(CloneExpr(arg)));
+          var args = new List<ApplySuffixArg>();
+          args.Add(new ApplySuffixArg { Inout = false, Expr = k });
+          apply.Args.ForEach(arg => args.Add(new ApplySuffixArg { Inout = arg.Inout, Expr = CloneExpr(arg.Expr) }));
           var applyClone = new ApplySuffix(Tok(apply.tok), lhsClone, args);
           var c = new ExprRhs(applyClone);
           reporter.Info(MessageSource.Cloner, apply.Lhs.tok, mse.Member.Name + suffix);

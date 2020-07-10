@@ -2766,6 +2766,22 @@ namespace Microsoft.Dafny {
       wr.Write(")");
     }
 
+    void PrintActualArguments(List<ApplySuffixArg> args, string name) {
+      Contract.Requires(args != null);
+      if (name != null && name.EndsWith("#")) {
+        wr.Write("[");
+        if (args[0].Inout) {
+          wr.Write("inout ");
+        }
+        PrintExpression(args[0].Expr, false);
+        wr.Write("]");
+        args = new List<ApplySuffixArg>(args.Skip(1));
+      }
+      wr.Write("(");
+      PrintExpressionList(args, false);
+      wr.Write(")");
+    }
+
     void PrintExpressionList(List<Expression> exprs, bool isFollowedBySemicolon) {
       Contract.Requires(exprs != null);
       string sep = "";
@@ -2776,6 +2792,21 @@ namespace Microsoft.Dafny {
         PrintExpression(e, isFollowedBySemicolon);
       }
     }
+
+    void PrintExpressionList(List<ApplySuffixArg> exprs, bool isFollowedBySemicolon) {
+      Contract.Requires(exprs != null);
+      string sep = "";
+      foreach (ApplySuffixArg e in exprs) {
+        Contract.Assert(e != null);
+        wr.Write(sep);
+        sep = ", ";
+        if (e.Inout) {
+          wr.Write("inout ");
+        }
+        PrintExpression(e.Expr, isFollowedBySemicolon);
+      }
+    }
+
     void PrintExpressionPairList(List<ExpressionPair> exprs) {
       Contract.Requires(exprs != null);
       string sep = "";

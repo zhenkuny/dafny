@@ -14737,24 +14737,35 @@ namespace Microsoft.Dafny
       }
     }
 
+    List<Expression> ApplySuffixArgListToExpressionList(List<ApplySuffixArg> args) {
+      return args.ConvertAll(a => a.Expr);
+    }
+
     MethodCallInformation ResolveApplySuffix(ApplySuffix e, ResolveOpts opts, bool allowMethodCall) {
       Contract.Requires(e != null);
       Contract.Requires(opts != null);
       Contract.Ensures(Contract.Result<MethodCallInformation>() == null || allowMethodCall);
       Expression r = null;  // upon success, the expression to which the ApplySuffix resolves
       var errorCount = reporter.Count(ErrorLevel.Error);
+      bool hasInOutArg = e.Args.Exists(x => x.Inout);
+      // TODO(andrea) remove // if (hasInOutArg) {
+      // TODO(andrea) remove //   reporter.Warning(MessageSource.Resolver, e.tok, "has inout arguments");
+      // TODO(andrea) remove // }
       if (e.Lhs is NameSegment) {
-        r = ResolveNameSegment((NameSegment)e.Lhs, true, e.Args, opts, allowMethodCall);
+        r = ResolveNameSegment((NameSegment)e.Lhs, true, ApplySuffixArgListToExpressionList(e.Args), opts, allowMethodCall);
         // note, if r is non-null, then e.Args have been resolved and r is a resolved expression that incorporates e.Args
       } else if (e.Lhs is ExprDotName) {
-        r = ResolveDotSuffix((ExprDotName)e.Lhs, true, e.Args, opts, allowMethodCall);
+        r = ResolveDotSuffix((ExprDotName)e.Lhs, true, ApplySuffixArgListToExpressionList(e.Args), opts, allowMethodCall);
         // note, if r is non-null, then e.Args have been resolved and r is a resolved expression that incorporates e.Args
       } else {
         ResolveExpression(e.Lhs, opts);
       }
+      if (r != null && hasInOutArg) {
+        reporter.Error(MessageSource.Resolver, e.tok, "inout arguments are not allowed in this context");
+      }
       if (r == null) {
         foreach (var arg in e.Args) {
-          ResolveExpression(arg, opts);
+          ResolveExpression(arg.Expr, opts);
         }
         var improvedType = PartiallyResolveTypeForMemberSelection(e.Lhs.tok, e.Lhs.Type, "_#apply");
         var fnType = improvedType.AsArrowType;
@@ -14768,31 +14779,46 @@ namespace Microsoft.Dafny
             if (ri.TypeParamDecl != null) {
               reporter.Error(MessageSource.Resolver, e.tok, "name of type parameter ({0}) is used as a function", ri.TypeParamDecl.Name);
             } else {
-              var decl = ri.Decl;
-              var ty = new UserDefinedType(e.tok, decl.Name, decl, ri.TypeArgs);
-              if (ty.AsNewtype != null) {
-                reporter.Deprecated(MessageSource.Resolver, e.tok, "the syntax \"{0}(expr)\" for type conversions has been deprecated; the new syntax is \"expr as {0}\"", decl.Name);
-                if (e.Args.Count != 1) {
-                  reporter.Error(MessageSource.Resolver, e.tok, "conversion operation to {0} got wrong number of arguments (expected 1, got {1})", decl.Name, e.Args.Count);
-                }
-                var conversionArg = 1 <= e.Args.Count ? e.Args[0] :
-                  ty.IsNumericBased(Type.NumericPersuation.Int) ? LiteralExpr.CreateIntLiteral(e.tok, 0) :
-                  LiteralExpr.CreateRealLiteral(e.tok, Basetypes.BigDec.ZERO);
-                r = new ConversionExpr(e.tok, conversionArg, ty);
-                ResolveExpression(r, opts);
-                // resolve the rest of the arguments, if any
-                for (int i = 1; i < e.Args.Count; i++) {
-                  ResolveExpression(e.Args[i], opts);
-                }
+              if (hasInOutArg) {
+                reporter.Error(MessageSource.Resolver, e.tok, "inout arguments are not allowed in this context");
               } else {
-                reporter.Error(MessageSource.Resolver, e.tok, "name of type ({0}) is used as a function", decl.Name);
+                var decl = ri.Decl;
+                var ty = new UserDefinedType(e.tok, decl.Name, decl, ri.TypeArgs);
+                if (ty.AsNewtype != null) {
+                  reporter.Deprecated(MessageSource.Resolver, e.tok, "the syntax \"{0}(expr)\" for type conversions has been deprecated; the new syntax is \"expr as {0}\"", decl.Name);
+                  if (e.Args.Count != 1) {
+                    reporter.Error(MessageSource.Resolver, e.tok, "conversion operation to {0} got wrong number of arguments (expected 1, got {1})", decl.Name, e.Args.Count);
+                  }
+                  var conversionArg = 1 <= e.Args.Count ? e.Args[0].Expr :
+                    ty.IsNumericBased(Type.NumericPersuation.Int) ? LiteralExpr.CreateIntLiteral(e.tok, 0) :
+                    LiteralExpr.CreateRealLiteral(e.tok, Basetypes.BigDec.ZERO);
+                  r = new ConversionExpr(e.tok, conversionArg, ty);
+                  ResolveExpression(r, opts);
+                  // resolve the rest of the arguments, if any
+                  for (int i = 1; i < e.Args.Count; i++) {
+                    ResolveExpression(e.Args[i].Expr, opts);
+                  }
+                } else {
+                  reporter.Error(MessageSource.Resolver, e.tok, "name of type ({0}) is used as a function", decl.Name);
+                }
               }
             }
           } else {
             if (lhs is MemberSelectExpr && ((MemberSelectExpr)lhs).Member is Method) {
               var mse = (MemberSelectExpr)lhs;
               if (allowMethodCall) {
-                var cRhs = new MethodCallInformation(e.tok, mse, e.Args);
+                foreach (var arg in e.Args) {
+                  if (arg.Inout) {
+                    if (arg.Expr.Resolved is MemberSelectExpr || arg.Expr.Resolved is IdentifierExpr) {
+                      // TODO(andrea) actually check it's a valid path
+                      reporter.Warning(MessageSource.Resolver, arg.Expr.tok, "[oxide] maybe unsound: unchecked inout argument");
+                    } else {
+                      reporter.Error(MessageSource.Resolver, arg.Expr.tok, "invalid inout argument");
+                      return null;
+                    }
+                  }
+                }
+                var cRhs = new MethodCallInformation(e.tok, mse, ApplySuffixArgListToExpressionList(e.Args));
                 return cRhs;
               } else {
                 reporter.Error(MessageSource.Resolver, e.tok, "method call is not allowed to be used in an expression context ({0})", mse.Member.Name);
@@ -14802,59 +14828,63 @@ namespace Microsoft.Dafny
             }
           }
         } else {
-          var mse = e.Lhs is NameSegment || e.Lhs is ExprDotName ? e.Lhs.Resolved as MemberSelectExpr : null;
-          var callee = mse == null ? null : mse.Member as Function;
-          if (fnType.Arity != e.Args.Count) {
-            var what = callee != null ? string.Format("function '{0}'", callee.Name) : string.Format("function type '{0}'", fnType);
-            reporter.Error(MessageSource.Resolver, e.tok, "wrong number of arguments to function application ({0} expects {1}, got {2})", what, fnType.Arity, e.Args.Count);
+          if (hasInOutArg) {
+            reporter.Error(MessageSource.Resolver, e.tok, "inout arguments are not allowed in this context");
           } else {
-            for (var i = 0; i < fnType.Arity; i++) {
-              AddAssignableConstraint(e.Args[i].tok, fnType.Args[i], e.Args[i].Type, "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects {0}, got {1})");
-            }
-            if (errorCount != reporter.Count(ErrorLevel.Error)) {
-              // do nothing else; error has been reported
-            } else if (callee != null) {
-              // produce a FunctionCallExpr instead of an ApplyExpr(MemberSelectExpr)
-              var rr = new FunctionCallExpr(e.Lhs.tok, callee.Name, mse.Obj, e.tok, e.Args);
-              // resolve it here:
-              rr.Function = callee;
-              Contract.Assert(!(mse.Obj is StaticReceiverExpr) || callee.IsStatic);  // this should have been checked already
-              Contract.Assert(callee.Formals.Count == rr.Args.Count);  // this should have been checked already
-              // build the type substitution map
-              rr.TypeArgumentSubstitutions = new Dictionary<TypeParameter, Type>();
-              int enclosingTypeArgsCount = callee.EnclosingClass == null ? 0 : callee.EnclosingClass.TypeArgs.Count;
-              Contract.Assert(mse.TypeApplication.Count == enclosingTypeArgsCount + callee.TypeArgs.Count);
-              for (int i = 0; i < enclosingTypeArgsCount; i++) {
-                rr.TypeArgumentSubstitutions.Add(callee.EnclosingClass.TypeArgs[i], mse.TypeApplication[i]);
-              }
-
-              for (int i = 0; i < callee.TypeArgs.Count; i++) {
-                rr.TypeArgumentSubstitutions.Add(callee.TypeArgs[i], mse.TypeApplication[enclosingTypeArgsCount + i]);
-              }
-              Dictionary<TypeParameter, Type> subst = BuildTypeArgumentSubstitute(rr.TypeArgumentSubstitutions);
-
-              // type check the arguments
-#if DEBUG
-              Contract.Assert(callee.Formals.Count == fnType.Arity);
-              for (int i = 0; i < callee.Formals.Count; i++) {
-                Expression farg = rr.Args[i];
-                Contract.Assert(farg.WasResolved());
-                Contract.Assert(farg.Type != null);
-                Type s = SubstType(callee.Formals[i].Type, subst);
-                Contract.Assert(s.Equals(fnType.Args[i]));
-                Contract.Assert(farg.Type.Equals(e.Args[i].Type));
-              }
-#endif
-              rr.Type = SubstType(callee.ResultType, subst);
-              // further bookkeeping
-              if (callee is FixpointPredicate) {
-                ((FixpointPredicate)callee).Uses.Add(rr);
-              }
-              AddCallGraphEdge(opts.codeContext, callee, rr, IsFunctionReturnValue(callee, e.Args, opts));
-              r = rr;
+            var mse = e.Lhs is NameSegment || e.Lhs is ExprDotName ? e.Lhs.Resolved as MemberSelectExpr : null;
+            var callee = mse == null ? null : mse.Member as Function;
+            if (fnType.Arity != e.Args.Count) {
+              var what = callee != null ? string.Format("function '{0}'", callee.Name) : string.Format("function type '{0}'", fnType);
+              reporter.Error(MessageSource.Resolver, e.tok, "wrong number of arguments to function application ({0} expects {1}, got {2})", what, fnType.Arity, e.Args.Count);
             } else {
-              r = new ApplyExpr(e.Lhs.tok, e.Lhs, e.Args);
-              r.Type = fnType.Result;
+              for (var i = 0; i < fnType.Arity; i++) {
+                AddAssignableConstraint(e.Args[i].Expr.tok, fnType.Args[i], e.Args[i].Expr.Type, "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects {0}, got {1})");
+              }
+              if (errorCount != reporter.Count(ErrorLevel.Error)) {
+                // do nothing else; error has been reported
+              } else if (callee != null) {
+                // produce a FunctionCallExpr instead of an ApplyExpr(MemberSelectExpr)
+                var rr = new FunctionCallExpr(e.Lhs.tok, callee.Name, mse.Obj, e.tok, ApplySuffixArgListToExpressionList(e.Args));
+                // resolve it here:
+                rr.Function = callee;
+                Contract.Assert(!(mse.Obj is StaticReceiverExpr) || callee.IsStatic);  // this should have been checked already
+                Contract.Assert(callee.Formals.Count == rr.Args.Count);  // this should have been checked already
+                // build the type substitution map
+                rr.TypeArgumentSubstitutions = new Dictionary<TypeParameter, Type>();
+                int enclosingTypeArgsCount = callee.EnclosingClass == null ? 0 : callee.EnclosingClass.TypeArgs.Count;
+                Contract.Assert(mse.TypeApplication.Count == enclosingTypeArgsCount + callee.TypeArgs.Count);
+                for (int i = 0; i < enclosingTypeArgsCount; i++) {
+                  rr.TypeArgumentSubstitutions.Add(callee.EnclosingClass.TypeArgs[i], mse.TypeApplication[i]);
+                }
+
+                for (int i = 0; i < callee.TypeArgs.Count; i++) {
+                  rr.TypeArgumentSubstitutions.Add(callee.TypeArgs[i], mse.TypeApplication[enclosingTypeArgsCount + i]);
+                }
+                Dictionary<TypeParameter, Type> subst = BuildTypeArgumentSubstitute(rr.TypeArgumentSubstitutions);
+
+                // type check the arguments
+#if DEBUG
+                Contract.Assert(callee.Formals.Count == fnType.Arity);
+                for (int i = 0; i < callee.Formals.Count; i++) {
+                  Expression farg = rr.Args[i];
+                  Contract.Assert(farg.WasResolved());
+                  Contract.Assert(farg.Type != null);
+                  Type s = SubstType(callee.Formals[i].Type, subst);
+                  Contract.Assert(s.Equals(fnType.Args[i]));
+                  Contract.Assert(farg.Type.Equals(e.Args[i].Expr.Type));
+                }
+#endif
+                rr.Type = SubstType(callee.ResultType, subst);
+                // further bookkeeping
+                if (callee is FixpointPredicate) {
+                  ((FixpointPredicate)callee).Uses.Add(rr);
+                }
+                AddCallGraphEdge(opts.codeContext, callee, rr, IsFunctionReturnValue(callee, ApplySuffixArgListToExpressionList(e.Args), opts));
+                r = rr;
+              } else {
+                r = new ApplyExpr(e.Lhs.tok, e.Lhs, ApplySuffixArgListToExpressionList(e.Args));
+                r.Type = fnType.Result;
+              }
             }
           }
         }
