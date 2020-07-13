@@ -7165,6 +7165,38 @@ namespace Microsoft.Dafny
         Contract.Requires(msgArgs != null);
         resolver.reporter.Error(MessageSource.Resolver, tok, msg, msgArgs);
       }
+
+      bool CheckValidInoutArg(UsageContext usageContext, Expression expr, bool last) {
+        IdentifierExpr x = ExprAsIdentifier(usageContext, expr);
+        if (expr is NameSegment && x != null) {
+          if (!x.Var.IsLinear) {
+            Error(expr, "only linear member selection is allowed in inout args");
+            return false;
+          } else {
+            return true;
+          }
+        } else if (expr is ConcreteSyntaxExpression) {
+          var mse = (((ConcreteSyntaxExpression) expr).ResolvedExpression as MemberSelectExpr);
+          if (mse == null) {
+            Error(expr, "only linear member selection is allowed in inout args");
+            return false;
+          } else if (!last) {
+            var d = mse.Member as DatatypeDestructor;
+            if (d == null || !d.CorrespondingFormals.All(f => f.IsLinear)) {
+              Error(expr, "only linear member selection is allowed in inout args: \"{0}\" is not linear", mse.Member.Name);
+              return false;
+            } else {
+              return true;
+            }
+          } else {
+            CheckValidInoutArg(usageContext, mse.Obj, false);
+            return true;
+          }
+        } else {
+          return false;
+        }
+      }
+
       /// <summary>
       /// This method does three things, in order:
       /// 0. Sets .IsGhost to "true" if the statement is ghost.  This often depends on some guard of the statement
@@ -7419,8 +7451,9 @@ namespace Microsoft.Dafny
                   if (e.Inout) {
                     if (!callee.Ins[j].Inout) {
                       Error(e.Expr, "inout is only allowed for inout arguments");
+                    } else if (!CheckValidInoutArg(usageContext, e.Expr, true)) {
+                      Error(e.Expr, "invalid expression for inout argument");
                     } else {
-                      // TODO(andrea) use Inout here to determine usage ?
                       resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage, true);
                     }
                   } else { // !e.Inout
@@ -11283,7 +11316,6 @@ namespace Microsoft.Dafny
             resolvedLhss.Add(ll.Resolved);
           }
           var a = new CallStmt(methodCallInfo.Tok, update.EndTok, resolvedLhss, methodCallInfo.Callee, methodCallInfo.Args);
-              // TODO(andrea) HERE? .ConvertAll(arg => new ApplySuffixArg { Inout = false, Expr = arg }));
           update.ResolvedStatements.Add(a);
         }
       }
@@ -14785,9 +14817,6 @@ namespace Microsoft.Dafny
       Expression r = null;  // upon success, the expression to which the ApplySuffix resolves
       var errorCount = reporter.Count(ErrorLevel.Error);
       bool hasInOutArg = e.Args.Exists(x => x.Inout);
-      // TODO(andrea) remove // if (hasInOutArg) {
-      // TODO(andrea) remove //   reporter.Warning(MessageSource.Resolver, e.tok, "has inout arguments");
-      // TODO(andrea) remove // }
       if (e.Lhs is NameSegment) {
         r = ResolveNameSegment((NameSegment)e.Lhs, true, ApplySuffixArgListToExpressionList(e.Args), opts, allowMethodCall);
         // note, if r is non-null, then e.Args have been resolved and r is a resolved expression that incorporates e.Args
@@ -14847,8 +14876,7 @@ namespace Microsoft.Dafny
                 foreach (var arg in e.Args) {
                   if (arg.Inout) {
                     if (arg.Expr.Resolved is MemberSelectExpr || arg.Expr.Resolved is IdentifierExpr) {
-                      // TODO(andrea) actually check it's a valid sequence of MemberSelectExpr
-                      reporter.Warning(MessageSource.Resolver, arg.Expr.tok, "[oxide] maybe unsound: unchecked inout argument");
+                      // TODO(andrea) shall we check the "path" (member select expressions) here?
                     } else {
                       reporter.Error(MessageSource.Resolver, arg.Expr.tok, "invalid inout argument");
                       return null;
@@ -15172,7 +15200,6 @@ namespace Microsoft.Dafny
         (u == Usage.Ghost) ? "ghost" :
         (u == Usage.Linear) ? "linear" :
         (u == Usage.Shared) ? "shared" :
-        // TODO(andrea) ?? (u == Usage.Inout) ? "inout" :
         "ordinary";
     }
 
@@ -15181,7 +15208,6 @@ namespace Microsoft.Dafny
         (u == Usage.Ghost) ? "ghost" :
         (u == Usage.Linear) ? "linear" :
         (u == Usage.Shared) ? "shared" :
-        // TODO(andrea) ?? (u == Usage.Inout) ? "inout" :
         "non-ghost";
     }
 
@@ -15190,7 +15216,6 @@ namespace Microsoft.Dafny
         (u == Usage.Ghost) ? "ghost " :
         (u == Usage.Linear) ? "linear " :
         (u == Usage.Shared) ? "shared " :
-        // TODO(andrea) ?? (u == Usage.Inout) ? "inout " :
         "";
     }
 
