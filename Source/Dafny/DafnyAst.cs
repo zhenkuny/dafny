@@ -4535,6 +4535,7 @@ namespace Microsoft.Dafny {
     Shared,
     Linear,
     Ghost,
+    Ignore,
   }
 
   public abstract class MemberDecl : Declaration {
@@ -5493,7 +5494,7 @@ namespace Microsoft.Dafny {
     public readonly bool InParam;  // true to in-parameter, false for out-parameter
     public override bool IsMutable {
       get {
-        return !InParam;
+        return !InParam || Inout;
       }
     }
     public readonly bool IsOld;
@@ -5970,6 +5971,9 @@ namespace Microsoft.Dafny {
     public Method OverriddenMethod;
     private static BlockStmt emptyBody = new BlockStmt(Token.NoToken, Token.NoToken, new List<Statement>());
     public readonly bool HasInoutThis;
+
+    // TODO(andrea) public List<Formal> CompileIns;
+    // TODO(andrea) public List<Formal> CompileOuts;
 
     public override IEnumerable<Expression> SubExpressions {
       get {
@@ -6983,6 +6987,8 @@ namespace Microsoft.Dafny {
   {
     public readonly List<AssignmentRhs> Rhss;
     public readonly bool CanMutateKnownState;
+
+    public bool InoutGenerated = false;
 
     public readonly List<Statement> ResolvedStatements = new List<Statement>();  // contents filled in during resolution
     public override IEnumerable<Statement> SubStatements {

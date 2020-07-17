@@ -173,6 +173,7 @@
     <Compile Include="SccGraph.cs" />
     <Compile Include="Translator.cs" />
     <Compile Include="..\version.cs" />
+    <Compile Include="Linear.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="cce.cs" />

@@ -361,6 +361,8 @@ namespace Microsoft.Dafny
       }
 
       rewriters = new List<IRewriter>();
+      rewriters.Add(new Linear.InoutTranslateRewriter(reporter, this.FreshTempVarName));
+
       refinementTransformer = new RefinementTransformer(prog);
       rewriters.Add(refinementTransformer);
       rewriters.Add(new AutoContractsRewriter(reporter, builtIns));
@@ -3080,14 +3082,11 @@ namespace Microsoft.Dafny
               }
               foreach (Formal x in m.Ins) {
                 if (x.IsLinear) {
-                  if (x.Inout) {
-                    if (usageContext.available[x] != Available.Available) {
-                      reporter.Error(MessageSource.Resolver, x, "linear inout variable must be assigned at method exit");
+                  if (usageContext.available[x] != Available.Consumed) {
+                    if (x.Inout) {
+                      Contract.Assert(false);
                     }
-                  } else {
-                    if (usageContext.available[x] != Available.Consumed) {
-                      reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
-                    }
+                    reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
                   }
                 }
               }
@@ -7216,7 +7215,7 @@ namespace Microsoft.Dafny
       ///   this reason, it is not necessary to visit all subexpressions, unless the subexpression
       ///   matter for the ghost checking/recording of "stmt".
       /// </summary>
-      public void Visit(Statement stmt, bool mustBeErasable) {
+      public void Visit(Statement stmt, bool mustBeErasable, bool inoutGenerated = false) {
         Contract.Requires(stmt != null);
         Contract.Assume(!codeContext.IsGhost || mustBeErasable);  // (this is really a precondition) codeContext.IsGhost ==> mustBeErasable
         if (usageContext != null) usageContext.AssertNoBorrowed();
@@ -7317,7 +7316,8 @@ namespace Microsoft.Dafny
 
         } else if (stmt is UpdateStmt) {
           var s = (UpdateStmt)stmt;
-          s.ResolvedStatements.Iter(ss => Visit(ss, mustBeErasable));
+          Contract.Assert(!inoutGenerated);
+          s.ResolvedStatements.Iter(ss => Visit(ss, mustBeErasable, s.InoutGenerated));
           s.IsGhost = s.ResolvedStatements.All(ss => ss.IsGhost);
 
         } else if (stmt is AssignOrReturnStmt) {
@@ -7393,7 +7393,9 @@ namespace Microsoft.Dafny
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
               Usage expectedUsage = x != null ? x.Var.Usage : Usage.Ordinary;
-              resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
+              if (!inoutGenerated) {
+                resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
+              }
               if (x != null && x.Var.IsLinear) {
                 if (usageContext.available[x.Var] != Available.Consumed) {
                   Error(x, "variable must be unavailable before assignment");
@@ -7503,12 +7505,18 @@ namespace Microsoft.Dafny
                   Error(s, "actual out-parameter{0} is required to be a ghost variable", s.Lhs.Count == 1 ? "" : " " + j);
                 }
               } else if (jUsage == Usage.Linear) {
-                if (xUsage != Usage.Linear) {
+                if (xUsage == Usage.Ignore) {
+                  // ok
+                } else if (xUsage != Usage.Linear) {
                   Error(x, "variable must be linear");
-                } else if (usageContext.available[x.Var] != Available.Consumed) {
+                } else if (usageContext.available[x.Var] != Available.Consumed && usageContext.available[x.Var] != Available.MutablyBorrowed) {
+                  // TODO(andrea) is this check sufficient?
                   Error(x, "variable must be unavailable before assignment");
                 }
-                usageContext.available[x.Var] = Available.Available;
+                if (xUsage != Usage.Ignore)
+                {
+                  usageContext.available[x.Var] = Available.Available;
+                }
               } else if (xUsage != jUsage) {
                 Error(x, "expected {0} variable, found {1} variable", UsageName(jUsage), UsageName(xUsage));
               }
@@ -15077,7 +15085,7 @@ namespace Microsoft.Dafny
       }
 
       internal bool Borrows() {
-        return available.Values.Contains(Available.Borrowed);
+        return available.Values.Contains(Available.Borrowed) || available.Values.Contains(Available.MutablyBorrowed);
       }
 
       // Assert that there are no borrowed variables (before each statement)
@@ -15245,6 +15253,9 @@ namespace Microsoft.Dafny
         if (usageContext.available[x.Var] == Available.Consumed) {
           reporter.Error(MessageSource.Resolver, expr, "tried to borrow variable, but it was already unavailable");
         }
+        if (usageContext.available[x.Var] == Available.MutablyBorrowed) {
+          reporter.Error(MessageSource.Resolver, expr, "tried to borrow variable, but it was already mutably borrowed");
+        }
         usageContext.available[x.Var] = Available.Borrowed;
       } else {
         Usage usage = CheckIsCompilable(expr, usageContext, inoutUsage);
@@ -15300,9 +15311,14 @@ namespace Microsoft.Dafny
           bool linearDestructor = (d == null) ? false : d.CorrespondingFormals.Exists(x => x.IsLinear);
           var id = ExprAsIdentifier(usageContext, e.Obj);
           if (id != null && (id.Var.IsLinear || id.Var.IsShared)) {
-            // Try to share id
-            CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
-            return linearDestructor ? Usage.Shared : Usage.Ordinary;
+            if (inoutUsage) {
+              CheckIsCompilable(e.Obj, usageContext, Usage.Linear);
+              return linearDestructor ? Usage.Linear : Usage.Ordinary;
+            } else {
+              // Try to share id
+              CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
+              return linearDestructor ? Usage.Shared : Usage.Ordinary;
+            }
           } else if (linearDestructor) {
             CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
             return Usage.Shared;

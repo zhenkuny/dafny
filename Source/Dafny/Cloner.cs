@@ -645,7 +645,9 @@ namespace Microsoft.Dafny
 
       } else if (stmt is UpdateStmt) {
         var s = (UpdateStmt)stmt;
-        r = new UpdateStmt(Tok(s.Tok), Tok(s.EndTok), s.Lhss.ConvertAll(CloneExpr), s.Rhss.ConvertAll(CloneRHS), s.CanMutateKnownState);
+        var clonedUpdateStmt = new UpdateStmt(Tok(s.Tok), Tok(s.EndTok), s.Lhss.ConvertAll(CloneExpr), s.Rhss.ConvertAll(CloneRHS), s.CanMutateKnownState);
+        clonedUpdateStmt.InoutGenerated = s.InoutGenerated;
+        r = clonedUpdateStmt;
 
       } else if (stmt is AssignOrReturnStmt) {
         var s = (AssignOrReturnStmt)stmt;
@@ -1098,6 +1100,10 @@ namespace Microsoft.Dafny
       }
       return sig;
     }
+
+    // TODO(andrea) undo the inout transformation for compilation
+    // public override Method CloneMethod(Method m) {
+    // public override BlockStmt CloneMethodBody(Method m) {
   }
 
   /// <summary>
