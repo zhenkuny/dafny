@@ -9,6 +9,15 @@ namespace Microsoft.Dafny.Linear {
 
   // TODO(andrea) move/remove
   static class Util {
+
+    internal static void OxideDebug(IToken token, String msg, params object[] args) {
+      if (DafnyOptions.O.OxideDebug) {
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.Error.WriteLine("[oxide] " + ErrorReporter.TokenToString(token).PadRight(20) + " " + String.Format(msg, args));
+        Console.ResetColor();
+      }
+    }
+
     static public void PrintObject(Object obj) {
         System.Type t = obj.GetType();
         foreach(var fieldInfo in t.GetFields()) {
@@ -102,7 +111,7 @@ namespace Microsoft.Dafny.Linear {
     }
 
     void PreRewriteMethod(Method m, TopLevelDecl enclosingDecl) {
-      Console.WriteLine("OXIDE DEBUG Rewriting method " + m.Name + " " + ErrorReporter.TokenToString(m.tok));
+      Util.OxideDebug(m.tok, "Rewriting method {0}", m.Name);
       Contract.Requires(m != null);
       // TODO(andrea) m.CompileOuts = m.Outs.ToList();
       // TODO(andrea) m.CompileIns = m.Ins.ToList();
@@ -161,9 +170,9 @@ namespace Microsoft.Dafny.Linear {
 
             // TODO(andrea)
             if (firstExprRhs.InoutThis) {
-              Console.WriteLine("OXIDE DEBUG   rewriting " + Printer.StatementToString(stmt) + " (inout this)");
+              Util.OxideDebug(stmt.Tok, "  rewriting " + Printer.StatementToString(stmt) + " (inout this)");
             } else {
-              Console.WriteLine("OXIDE DEBUG   rewriting " + Printer.StatementToString(stmt));
+              Util.OxideDebug(stmt.Tok, "  rewriting " + Printer.StatementToString(stmt));
             }
 
             if (firstExprRhs.InoutThis) {
@@ -190,7 +199,7 @@ namespace Microsoft.Dafny.Linear {
                   new List<Expression> { updateLhs },
                   new List<AssignmentRhs> { new ExprRhs(updateExpr) });
                 updateStmt.InoutGenerated = true;
-                Console.WriteLine("OXIDE DEBUG     varName: " + varName + ", " + Printer.ExprToString(a.Expr) + ", " + Printer.ExprToString(updateExpr));
+                Util.OxideDebug(a.Expr.tok, "    varName: " + varName + ", " + Printer.ExprToString(a.Expr) + ", " + Printer.ExprToString(updateExpr));
               }
               return (
                 new LocalVariable(aTok, aTok, varName, new InferredTypeProxy(), Usage.Ignore),
@@ -205,19 +214,19 @@ namespace Microsoft.Dafny.Linear {
               varDeclStmt = new VarDeclStmt(asTok, asTok, tempLocalVars, null);
               body.Insert(s, varDeclStmt);
               // TODO(andrea)
-              Console.WriteLine("OXIDE DEBUG     " + Printer.StatementToString(body[s]));
+              Util.OxideDebug(body[s].Tok, "    " + Printer.StatementToString(body[s]));
               s++;
             } else {
               varDeclStmt.Locals.AddRange(tempLocalVars);
               // TODO(andrea)
-              Console.WriteLine("OXIDE DEBUG     " + Printer.StatementToString(body[s]));
+              Util.OxideDebug(body[s].Tok, "    " + Printer.StatementToString(body[s]));
             }
-            Console.WriteLine("OXIDE DEBUG     " + Printer.StatementToString(stmt));
+            Util.OxideDebug(stmt.Tok, "    " + Printer.StatementToString(stmt));
             foreach (var newUpdStmt in updatedFields.Select(x => x.Item2)) {
               if (newUpdStmt != null) {
                 s++;
                 body.Insert(s, newUpdStmt);
-                Console.WriteLine("OXIDE DEBUG     " + Printer.StatementToString(body[s]));
+                Util.OxideDebug(body[s].Tok, "    " + Printer.StatementToString(body[s]));
               }
             }
           } else if (firstExprRhs?.InoutThis ?? false) {

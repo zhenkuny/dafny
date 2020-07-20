@@ -106,6 +106,7 @@ namespace Microsoft.Dafny
       false
 #endif
     ;
+    public bool OxideDebug = false;
 
     protected override bool ParseOption(string name, Bpl.CommandLineOptionEngine.CommandLineParseState ps) {
       var args = ps.args;  // convenient synonym
@@ -406,6 +407,11 @@ namespace Microsoft.Dafny
             }
           }
           return true;
+
+        case "oxideDebug": {
+            OxideDebug = true;
+            return true;
+          }
 
         default:
           break;
