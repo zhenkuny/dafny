@@ -28,6 +28,12 @@ def color(s, color):
                "reset"   :  0}
     return u"\u001b[%sm%s\u001b[%sm" % (colors[color], s, colors["reset"])
 
+#############################################
+#
+#   Interacting with the Dafny Server
+#
+#############################################
+
 class Task:
     def __init__(self, args, file_label, sourceIsFile, file_name):
         self.args = args
@@ -278,7 +284,11 @@ def event_loop(server):
         else:
             pass
 
-
+#############################################
+#
+#   Main
+#
+#############################################
 
 def main():
     default_arg_file_name = 'dfy.args'
@@ -310,20 +320,6 @@ def main():
 
     event_loop(server)
 
-#    label = args.dfy
-#    task = Task(dfy_args, label, True, args.dfy)
-    #print(server.get_version())
-    #print(server.get_functions_methods(task))
-    #print(server.do_verification(task))
-    #sys.stdin.readline()
-    #server.send_version_query()
-    #server.send_verification_query(task)
-#    server.send_symbol_query(task)
-#    response = server.recv_response()
-#    symbols = server.parse_symbols(response)
-#    print(find_functions_methods(symbols))
-
-    #event_loop()
 
 if (__name__=="__main__"):
   main()
