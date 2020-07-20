@@ -7517,6 +7517,8 @@ namespace Microsoft.Dafny
                 {
                   usageContext.available[x.Var] = Available.Available;
                 }
+              } else if (jUsage == Usage.Ordinary && xUsage == Usage.Ignore) {
+                // ok
               } else if (xUsage != jUsage) {
                 Error(x, "expected {0} variable, found {1} variable", UsageName(jUsage), UsageName(xUsage));
               }
@@ -15098,8 +15100,11 @@ namespace Microsoft.Dafny
       // Replace Borrowed with Available (after each statement)
       internal void Unborrow() {
         foreach (var k in available.Keys.ToList()) {
-          if (available[k] == Available.Borrowed || available[k] == Available.MutablyBorrowed) {
+          if (available[k] == Available.Borrowed) {
             available[k] = Available.Available;
+          }
+          if (available[k] == Available.MutablyBorrowed) {
+            available[k] = Available.Consumed;
           }
         }
       }
