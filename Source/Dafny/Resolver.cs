@@ -7442,7 +7442,9 @@ namespace Microsoft.Dafny
             bool returnsShared = callee.Outs.Exists(o => o.IsShared);
             bool isPureCall = callee.Mod.Expressions.Count == 0 && callee.Outs.TrueForAll(x => x.Usage != Usage.Shared);
             if (!callee.IsGhost) {
-              resolver.CheckIsCompilable(s.Receiver, usageContext, callee.Usage);
+              if (!callee.HasInoutThis) { // TODO(andrea) is it safe to entirely skip this check?
+                resolver.CheckIsCompilable(s.Receiver, usageContext, callee.Usage);
+              }
               j = 0;
               if (usageContext != null) {
                 usageContext.insidePureCall = isPureCall;

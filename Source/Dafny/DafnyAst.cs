@@ -6696,6 +6696,9 @@ namespace Microsoft.Dafny {
   public class ExprRhs : AssignmentRhs
   {
     public readonly Expression Expr;
+
+    public bool InoutThis = false;
+
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(Expr != null);

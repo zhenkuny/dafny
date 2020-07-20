@@ -2271,11 +2271,13 @@ UpdateStmt<out Statement/*!*/ s>
      Expression suchThat = null;
      IToken exceptionExpect = null;
      Expression exceptionExpr = null;
+     bool inoutThis = false;
+     IToken inoutTok = null;
   .)
-( Lhs<out e>                       (. x = e.tok; .)
+( ["inout" (. inoutThis = true; inoutTok = t; .) ] Lhs<out e>                       (. x = e.tok; .)
   ( { Attribute<ref attrs> }
-    ";"                            (. endTok = t; rhss.Add(new ExprRhs(e, attrs)); .)
-  |                                (. lhss.Add(e); .)
+    ";"                            (. endTok = t; ExprRhs exprRhs = new ExprRhs(e, attrs); exprRhs.InoutThis = inoutThis; rhss.Add(exprRhs); .)
+  |                                (. lhss.Add(e); if (inoutThis) { SemErr(inoutTok, "inout not allowed here"); } .)
     { "," Lhs<out e>               (. lhss.Add(e); .)
     }
     ( ":="                         (. x = t; .)
@@ -2330,6 +2332,7 @@ Rhs<out AssignmentRhs r>
      List<Expression> display = null;
      r = dummyRhs;  // to please compiler
      Attributes attrs = null;
+     bool inoutThis = false;
   .)
   ( "new"                              (. newToken = t; .)
     ( NewArray<out ee, out arrayElementInit, out display>  // "ty" is set to InferredTypeProxy above
@@ -2354,7 +2357,7 @@ Rhs<out AssignmentRhs r>
        }
     .)
   | "*"                                (. r = new HavocRhs(t); .)
-  | Expression<out e, false, true>     (. r = new ExprRhs(e); .)
+  | ["inout" (. inoutThis = true; .) ] Expression<out e, false, true>     (. ExprRhs exprRhs = new ExprRhs(e); exprRhs.InoutThis = inoutThis; r = exprRhs; .)
   )
   { Attribute<ref attrs> }             (. r.Attributes = attrs; .)
   .
