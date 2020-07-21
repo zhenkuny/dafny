@@ -11693,6 +11693,7 @@ namespace Microsoft.Dafny {
 
   public class ApplySuffixArg {
     public bool Inout;
+    public bool Ghost = false;
     public Expression Expr;
   }
 

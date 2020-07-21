@@ -236,7 +236,7 @@ namespace Microsoft.Dafny.Linear {
                   Util.OxideDebug(a.Expr.tok, "    varName: " + varName + ", " + Printer.ExprToString(a.Expr) + ", " + Printer.ExprToString(updateExpr));
                 }
                 return (
-                  new LocalVariable(aTok, aTok, varName, new InferredTypeProxy(), Usage.Ignore),
+                  new LocalVariable(aTok, aTok, varName, new InferredTypeProxy(), a.Ghost ? Usage.Ghost : Usage.Ignore),
                   updateStmt);
               });
               var tempLocalVars = updatedFields.Select(x => x.Item1).ToList();

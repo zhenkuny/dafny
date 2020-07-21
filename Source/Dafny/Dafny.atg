@@ -3929,9 +3929,10 @@ HashCall<.IToken id, out IToken openParen, out List<Type> typeArgs, out List<Exp
   .
 
 SuffixExpression<out ApplySuffixArg arg>
-= (. Expression expr; bool inout = false; .)
-  ["inout" (. inout = true; .)] Expression<out expr, true, true>
-  (. arg = new ApplySuffixArg { Inout = inout, Expr = expr }; .)
+= (. Expression expr; bool inout = false; bool ghost = false; .)
+  // TODO(andrea) allow reordering
+  ["ghost" (. ghost = true; .)] ["inout" (. inout = true; .)] Expression<out expr, true, true>
+  (. arg = new ApplySuffixArg { Inout = inout, Ghost = ghost, Expr = expr }; .)
   .
 SuffixArgumentExpressions<.List<ApplySuffixArg> args.>
 = (. ApplySuffixArg a; .)

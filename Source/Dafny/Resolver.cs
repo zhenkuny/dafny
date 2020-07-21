@@ -7397,7 +7397,8 @@ namespace Microsoft.Dafny
                 resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
               }
               if (x != null && x.Var.IsLinear) {
-                if (usageContext.available[x.Var] != Available.Consumed) {
+                // TODO(andrea) with new assignment syntax, use this again to check correct rewriting for inout?
+                if (usageContext.available[x.Var] != Available.Consumed && !inoutGenerated) {
                   Error(x, "variable must be unavailable before assignment");
                 }
                 usageContext.available[x.Var] = Available.Available;
