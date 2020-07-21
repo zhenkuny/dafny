@@ -15319,7 +15319,7 @@ namespace Microsoft.Dafny
           var id = ExprAsIdentifier(usageContext, e.Obj);
           if (id != null && (id.Var.IsLinear || id.Var.IsShared)) {
             if (inoutUsage) {
-              CheckIsCompilable(e.Obj, usageContext, Usage.Linear);
+              CheckIsCompilable(e.Obj, usageContext, Usage.Linear, true);
               return linearDestructor ? Usage.Linear : Usage.Ordinary;
             } else {
               // Try to share id
@@ -15330,8 +15330,8 @@ namespace Microsoft.Dafny
             CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
             return Usage.Shared;
           } else {
-            var u = CheckIsCompilable(e.Obj, usageContext);
-            if (u != Usage.Shared && u != Usage.Ordinary) {
+            var u = CheckIsCompilable(e.Obj, usageContext, inoutUsage);
+            if (u != Usage.Shared && u != Usage.Ordinary && !inoutUsage) {
               reporter.Error(MessageSource.Resolver, expr, "cannot select from linear expression");
             }
             return Usage.Ordinary;

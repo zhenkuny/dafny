@@ -104,6 +104,9 @@ namespace Microsoft.Dafny.Linear {
               foreach (var ls in AllStatementLists(mc.Body)) { yield return ls; }
             }
             break;
+          case WhileStmt ws:
+            foreach (var ls in AllStatementLists(ws.Body.Body)) { yield return ls; }
+            break;
         }
       }
       yield return stmts;
