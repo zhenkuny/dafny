@@ -11494,6 +11494,15 @@ namespace Microsoft.Dafny
 
       if (callee.Ins.Count != s.Args.Count) {
         reporter.Error(MessageSource.Resolver, s, "wrong number of method arguments (got {0}, expected {1})", s.Args.Count, callee.Ins.Count);
+      } else if (callee.Ins.Zip(s.Args).Any(z => z.Item1.Inout != z.Item2.Inout)) {
+        foreach (var (fInout, aInout, idx) in callee.Ins.Zip(s.Args).Select((z, index) => (z.Item1.Inout, z.Item2.Inout, index))) {
+          if (fInout) {
+            reporter.Error(MessageSource.Resolver, s, "method in-parameter {0} should be inout", idx);
+          } else {
+            Contract.Assert(aInout);
+            reporter.Error(MessageSource.Resolver, s, "method in-parameter {0} should not be inout", idx);
+          }
+        }
       } else if (callee.Outs.Count != s.Lhs.Count) {
         if (isInitCall) {
           reporter.Error(MessageSource.Resolver, s, "a method called as an initialization method must not have any result arguments");
