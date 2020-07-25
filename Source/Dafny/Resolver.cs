@@ -7165,11 +7165,11 @@ namespace Microsoft.Dafny
         resolver.reporter.Error(MessageSource.Resolver, tok, msg, msgArgs);
       }
 
-      bool CheckValidInoutArg(UsageContext usageContext, Expression expr, bool last) {
+      bool CheckValidInoutArg(String contextDesc, UsageContext usageContext, Expression expr, bool last) {
         IdentifierExpr x = ExprAsIdentifier(usageContext, expr);
         if (expr is NameSegment && x != null) {
           if (!x.Var.IsLinear) {
-            Error(expr, "only linear member selection is allowed in inout args");
+            Error(expr, String.Format("only linear member selection is allowed in inout {0}", contextDesc));
             return false;
           } else {
             return true;
@@ -7177,18 +7177,18 @@ namespace Microsoft.Dafny
         } else if (expr is ConcreteSyntaxExpression) {
           var mse = (((ConcreteSyntaxExpression) expr).ResolvedExpression as MemberSelectExpr);
           if (mse == null) {
-            Error(expr, "only linear member selection is allowed in inout args");
+            Error(expr, String.Format("only linear member selection is allowed in inout {0}", contextDesc));
             return false;
           } else if (!last) {
             var d = mse.Member as DatatypeDestructor;
             if (d == null || !d.CorrespondingFormals.All(f => f.IsLinear)) {
-              Error(expr, "only linear member selection is allowed in inout args: \"{0}\" is not linear", mse.Member.Name);
+              Error(expr, "only linear member selection is allowed in inout {0}: \"{1}\" is not linear", contextDesc, mse.Member.Name);
               return false;
             } else {
               return true;
             }
           } else {
-            CheckValidInoutArg(usageContext, mse.Obj, false);
+            CheckValidInoutArg(contextDesc, usageContext, mse.Obj, false);
             return true;
           }
         } else {
@@ -7390,6 +7390,19 @@ namespace Microsoft.Dafny
             if (x != null && HasLinearity(x.Var.Usage) && !(s.Rhs is ExprRhs)) {
               Error(s, "only expressions can be assigned to linear or shared variables");
             }
+            if (s.InoutAssignTarget.HasValue) {
+              var (inoutAssignTargetUsage, inoutAssignTargetExpr) = s.InoutAssignTarget.Value;
+              var mse = inoutAssignTargetExpr.Resolved as MemberSelectExpr;
+              if (mse != null) {
+                if (mse.Member.Usage != inoutAssignTargetUsage) {
+                  Error(mse, "expected {0} lhs, found {1} lhs", UsageName(inoutAssignTargetUsage), UsageName(mse.Member.Usage));
+                } else if (!CheckValidInoutArg("lhs", usageContext, inoutAssignTargetExpr, true)) {
+                  // errors emitted by check
+                }
+              } else {
+                Error(s, "invalid inout update lhs");
+              }
+            }
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
               Usage expectedUsage = x != null ? x.Var.Usage : Usage.Ordinary;
@@ -7456,7 +7469,7 @@ namespace Microsoft.Dafny
                   if (e.Inout) {
                     if (!callee.Ins[j].Inout) {
                       Error(e.Expr, "inout is only allowed for inout arguments");
-                    } else if (!CheckValidInoutArg(usageContext, e.Expr, true)) {
+                    } else if (!CheckValidInoutArg("args", usageContext, e.Expr, true)) {
                       Error(e.Expr, "invalid expression for inout argument");
                     } else {
                       resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage, true);
@@ -11284,6 +11297,11 @@ namespace Microsoft.Dafny
           // add the statements here in a sequence, but don't use that sequence later for translation (instead, should translate properly as multi-assignment)
           for (int i = 0; i < update.Lhss.Count; i++) {
             var a = new AssignStmt(update.Tok, update.EndTok, update.Lhss[i].Resolved, update.Rhss[i]);
+            if (i == 0 && update.InoutAssignTarget.HasValue) {
+              var (_, inoutAssignTargetExpr) = update.InoutAssignTarget.Value;
+              ResolveExpression(inoutAssignTargetExpr, new ResolveOpts(codeContext, true));
+              a.InoutAssignTarget = update.InoutAssignTarget;
+            }
             update.ResolvedStatements.Add(a);
           }
         }

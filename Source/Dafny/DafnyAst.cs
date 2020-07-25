@@ -6986,12 +6986,24 @@ namespace Microsoft.Dafny {
     }
   }
 
+  public enum InoutAssign { No, Ordinary, Ghost, }
+
   public class UpdateStmt : ConcreteUpdateStatement
   {
     public readonly List<AssignmentRhs> Rhss;
     public readonly bool CanMutateKnownState;
 
+    public InoutAssign InoutAssign = InoutAssign.No;
+
+    public bool IsInoutAssign {
+      get {
+        return this.InoutAssign == InoutAssign.Ordinary || this.InoutAssign == InoutAssign.Ghost;
+      }
+    }
+
     public bool InoutGenerated = false;
+
+    public (Usage, Expression)? InoutAssignTarget = null;
 
     public readonly List<Statement> ResolvedStatements = new List<Statement>();  // contents filled in during resolution
     public override IEnumerable<Statement> SubStatements {
@@ -7062,6 +7074,8 @@ namespace Microsoft.Dafny {
   public class AssignStmt : Statement {
     public readonly Expression Lhs;
     public readonly AssignmentRhs Rhs;
+    internal (Usage, Expression)? InoutAssignTarget = null;
+
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(Lhs != null);
@@ -11693,7 +11707,6 @@ namespace Microsoft.Dafny {
 
   public class ApplySuffixArg {
     public bool Inout;
-    public bool Ghost = false;
     public Expression Expr;
   }
 
