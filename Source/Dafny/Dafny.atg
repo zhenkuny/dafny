@@ -2274,12 +2274,13 @@ UpdateStmt<out Statement/*!*/ s>
      bool inoutUpdate = false;
      IToken inoutTok = null;
      bool ghostInoutUpdate = false;
+     bool inoutThis = false;
   .)
 ( [ "inout" (. inoutUpdate = true; inoutTok = t; .)
     ["ghost" (. ghostInoutUpdate = true; .) ] ]
   Lhs<out e>                       (. x = e.tok; .)
   ( { Attribute<ref attrs> }
-    ";"                            (. endTok = t; ExprRhs exprRhs = new ExprRhs(e, attrs); exprRhs.InoutThis = inoutUpdate; rhss.Add(exprRhs); .)
+    ";"                            (. endTok = t; ExprRhs exprRhs = new ExprRhs(e, attrs); exprRhs.InoutThis = inoutUpdate; rhss.Add(exprRhs); inoutThis = inoutUpdate; .)
   |                                (. lhss.Add(e); .)
     { "," Lhs<out e>               (. lhss.Add(e); if (inoutUpdate) { SemErr(inoutTok, "inout not allowed here"); } .)
     }
@@ -2322,9 +2323,11 @@ UpdateStmt<out Statement/*!*/ s>
          s = new BlockStmt(x, endTok, new List<Statement>()); // error, give empty statement
        } else {
          UpdateStmt updateStmt = new UpdateStmt(x, endTok, lhss, rhss);
-         updateStmt.InoutAssign = inoutUpdate ? (
-            ghostInoutUpdate ? InoutAssign.Ghost : InoutAssign.Ordinary) :
-            InoutAssign.No;
+         if (!inoutThis) {
+           updateStmt.InoutAssign = inoutUpdate ? (
+              ghostInoutUpdate ? InoutAssign.Ghost : InoutAssign.Ordinary) :
+              InoutAssign.No;
+         }
          s = updateStmt;
        }
      }

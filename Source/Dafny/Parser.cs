@@ -3210,6 +3210,7 @@ List<Expression> decreases, ref Attributes decAttrs, ref Attributes modAttrs, st
 		bool inoutUpdate = false;
 		IToken inoutTok = null;
 		bool ghostInoutUpdate = false;
+		bool inoutThis = false;
 		
 		if (StartOf(28)) {
 			if (la.kind == 77) {
@@ -3227,7 +3228,7 @@ List<Expression> decreases, ref Attributes decAttrs, ref Attributes modAttrs, st
 					Attribute(ref attrs);
 				}
 				Expect(35);
-				endTok = t; ExprRhs exprRhs = new ExprRhs(e, attrs); exprRhs.InoutThis = inoutUpdate; rhss.Add(exprRhs); 
+				endTok = t; ExprRhs exprRhs = new ExprRhs(e, attrs); exprRhs.InoutThis = inoutUpdate; rhss.Add(exprRhs); inoutThis = inoutUpdate; 
 			} else if (StartOf(29)) {
 				lhss.Add(e); 
 				while (la.kind == 27) {
@@ -3293,9 +3294,11 @@ List<Expression> decreases, ref Attributes decAttrs, ref Attributes modAttrs, st
 		   s = new BlockStmt(x, endTok, new List<Statement>()); // error, give empty statement
 		 } else {
 		   UpdateStmt updateStmt = new UpdateStmt(x, endTok, lhss, rhss);
-		   updateStmt.InoutAssign = inoutUpdate ? (
-		      ghostInoutUpdate ? InoutAssign.Ghost : InoutAssign.Ordinary) :
-		      InoutAssign.No;
+		   if (!inoutThis) {
+		     updateStmt.InoutAssign = inoutUpdate ? (
+		        ghostInoutUpdate ? InoutAssign.Ghost : InoutAssign.Ordinary) :
+		        InoutAssign.No;
+		   }
 		   s = updateStmt;
 		 }
 		}
