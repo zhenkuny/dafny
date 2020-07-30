@@ -7472,7 +7472,8 @@ namespace Microsoft.Dafny
                     } else if (!CheckValidInoutArg("args", usageContext, e.Expr, true)) {
                       Error(e.Expr, "invalid expression for inout argument");
                     } else {
-                      resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage, true);
+                      // TODO(andrea) this is too strict, do we need a different check?
+                      // resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage, true);
                     }
                   } else { // !e.Inout
                     if (callee.Ins[j].Inout) {
