@@ -7472,8 +7472,8 @@ namespace Microsoft.Dafny
                     } else if (!CheckValidInoutArg("args", usageContext, e.Expr, true)) {
                       Error(e.Expr, "invalid expression for inout argument");
                     } else {
-                      // TODO(andrea) this is too strict, do we need a different check?
-                      // resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage, true);
+                      // TODO(andrea) is this sufficient?
+                      resolver.CheckIsCompilable(e.Expr, usageContext, callee.Ins[j].Usage, true);
                     }
                   } else { // !e.Inout
                     if (callee.Ins[j].Inout) {
@@ -15322,7 +15322,11 @@ namespace Microsoft.Dafny
             }
           }
           if (!ok) {
-            reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here");
+            if (usageContext.available.ContainsKey(e.Var) && usageContext.available[e.Var] == Available.MutablyBorrowed) {
+              reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here (it's already mutably borrowed)");
+            } else {
+              reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here");
+            }
           }
         }
         if (e.Var != null && e.Var.IsShared && usageContext == null) {
@@ -15358,8 +15362,9 @@ namespace Microsoft.Dafny
               return linearDestructor ? Usage.Shared : Usage.Ordinary;
             }
           } else if (linearDestructor) {
-            CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
-            return Usage.Shared;
+            var expectedUsage = inoutUsage ? Usage.Linear : Usage.Shared;
+            CheckIsCompilable(e.Obj, usageContext, expectedUsage, inoutUsage);
+            return expectedUsage;
           } else {
             var u = CheckIsCompilable(e.Obj, usageContext, inoutUsage);
             if (u != Usage.Shared && u != Usage.Ordinary && !inoutUsage) {
