@@ -7568,6 +7568,7 @@ namespace Microsoft.Dafny
           if (s.Els != null) {
             Visit(s.Els, s.IsGhost);
           }
+          uc2 = usageContext;
           // if both branches were all ghost, then we can mark the enclosing statement as ghost as well
           s.IsGhost = s.IsGhost || (s.Thn.IsGhost && (s.Els == null || s.Els.IsGhost));
           resolver.MergeUsageContexts(s.Tok, uc1, uc2);
