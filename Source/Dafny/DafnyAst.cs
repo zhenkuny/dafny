@@ -6870,6 +6870,8 @@ namespace Microsoft.Dafny {
       Contract.Invariant(Locals.Count != 0);
     }
 
+    public int? InoutRewrittenArgs = null;
+
     public VarDeclStmt(IToken tok, IToken endTok, List<LocalVariable> locals, ConcreteUpdateStatement update)
       : base(tok, endTok)
     {

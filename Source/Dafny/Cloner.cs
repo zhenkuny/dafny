@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Diagnostics.Contracts;
+using System.Linq;
 using IToken = Microsoft.Boogie.IToken;
 
 namespace Microsoft.Dafny
@@ -647,6 +648,7 @@ namespace Microsoft.Dafny
         var s = (UpdateStmt)stmt;
         var clonedUpdateStmt = new UpdateStmt(Tok(s.Tok), Tok(s.EndTok), s.Lhss.ConvertAll(CloneExpr), s.Rhss.ConvertAll(CloneRHS), s.CanMutateKnownState);
         clonedUpdateStmt.InoutGenerated = s.InoutGenerated;
+        clonedUpdateStmt.InoutAssignTarget = s.InoutAssignTarget;
         r = clonedUpdateStmt;
 
       } else if (stmt is AssignOrReturnStmt) {
@@ -656,7 +658,9 @@ namespace Microsoft.Dafny
       } else if (stmt is VarDeclStmt) {
         var s = (VarDeclStmt)stmt;
         var lhss = s.Locals.ConvertAll(c => new LocalVariable(Tok(c.Tok), Tok(c.EndTok), c.Name, CloneType(c.OptionalType), c.Usage));
-        r = new VarDeclStmt(Tok(s.Tok), Tok(s.EndTok), lhss, (ConcreteUpdateStatement)CloneStmt(s.Update));
+        var clonedVarDeclStmt = new VarDeclStmt(Tok(s.Tok), Tok(s.EndTok), lhss, (ConcreteUpdateStatement)CloneStmt(s.Update));
+        clonedVarDeclStmt.InoutRewrittenArgs = s.InoutRewrittenArgs;
+        r = clonedVarDeclStmt;
 
       } else if (stmt is LetStmt) {
         var s = (LetStmt) stmt;
@@ -1100,10 +1104,6 @@ namespace Microsoft.Dafny
       }
       return sig;
     }
-
-    // TODO(andrea) undo the inout transformation for compilation
-    // public override Method CloneMethod(Method m) {
-    // public override BlockStmt CloneMethodBody(Method m) {
   }
 
   /// <summary>

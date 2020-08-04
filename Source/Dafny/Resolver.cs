@@ -467,6 +467,7 @@ namespace Microsoft.Dafny
             // Now we're ready to resolve the cloned module definition, using the compile signature
 
             ResolveModuleDefinition(nw, compileSig);
+            Linear.OxideCompilationRewriter.Rewrite(nw);
             prog.CompileModules.Add(nw);
             useCompileSignatures = false;  // reset the flag
             Type.EnableScopes();
