@@ -467,7 +467,6 @@ namespace Microsoft.Dafny
             // Now we're ready to resolve the cloned module definition, using the compile signature
 
             ResolveModuleDefinition(nw, compileSig);
-            Linear.OxideCompilationRewriter.Rewrite(nw);
             prog.CompileModules.Add(nw);
             useCompileSignatures = false;  // reset the flag
             Type.EnableScopes();
@@ -502,6 +501,12 @@ namespace Microsoft.Dafny
         } else { Contract.Assert(false); }
         Contract.Assert(decl.Signature != null);
       }
+
+      // oxide
+      foreach (var nw in prog.CompileModules) {
+        Linear.OxideCompilationRewriter.Rewrite(nw);
+      }
+
       if (reporter.Count(ErrorLevel.Error) != origErrorCount) {
         // do nothing else
         return;
