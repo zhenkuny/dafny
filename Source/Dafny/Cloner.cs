@@ -647,7 +647,7 @@ namespace Microsoft.Dafny
       } else if (stmt is UpdateStmt) {
         var s = (UpdateStmt)stmt;
         var clonedUpdateStmt = new UpdateStmt(Tok(s.Tok), Tok(s.EndTok), s.Lhss.ConvertAll(CloneExpr), s.Rhss.ConvertAll(CloneRHS), s.CanMutateKnownState);
-        clonedUpdateStmt.InoutGenerated = s.InoutGenerated;
+        clonedUpdateStmt.AssumeRhsCompilable = s.AssumeRhsCompilable;
         clonedUpdateStmt.InoutAssignTarget = s.InoutAssignTarget;
         r = clonedUpdateStmt;
 

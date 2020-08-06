@@ -7003,7 +7003,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public bool InoutGenerated = false;
+    public bool AssumeRhsCompilable = false;
 
     public (Usage, Expression)? InoutAssignTarget = null;
 

@@ -188,8 +188,9 @@ namespace Microsoft.Dafny.Linear {
           var updateStmt = new UpdateStmt(mTok, mTok,
             new List<Expression> { lhs },
             new List<AssignmentRhs> { rhs });
-          updateStmt.InoutGenerated = false;
+          updateStmt.AssumeRhsCompilable = false;
           body.Insert(0, updateStmt);
+          Util.OxideDebug(updateStmt.Tok, "    {0}", Printer.StatementToString(updateStmt));
         }
       }
 
@@ -260,7 +261,7 @@ namespace Microsoft.Dafny.Linear {
                   var newUpdStmt = new UpdateStmt(aTok, aTok,
                     new List<Expression> { updateLhs },
                     new List<AssignmentRhs> { newExprRhs });
-                  newUpdStmt.InoutGenerated = true;
+                  newUpdStmt.AssumeRhsCompilable = true;
                   newUpdStmt.InoutAssignTarget =
                     (updStmt.InoutAssign == InoutAssign.Ghost ? Usage.Ghost : (
                       (updStmt.InoutAssign == InoutAssign.Ordinary ? Usage.Ordinary :
@@ -306,7 +307,7 @@ namespace Microsoft.Dafny.Linear {
                   updateStmt = new UpdateStmt(aTok, aTok,
                     new List<Expression> { updateLhs },
                     new List<AssignmentRhs> { new ExprRhs(updateExpr) });
-                  updateStmt.InoutGenerated = true;
+                  updateStmt.AssumeRhsCompilable = true;
                   Util.OxideDebug(a.Expr.tok, "    varName: " + varName + ", " + Printer.ExprToString(a.Expr) + ", " + Printer.ExprToString(updateExpr));
                 }
                 return (
@@ -359,14 +360,37 @@ namespace Microsoft.Dafny.Linear {
       foreach (var (tld, method) in Visit.AllMethodMembers(module)) {
         Util.OxideDebug(method.tok, "Rewriting method for compilation {0}", method.Name);
 
+        var inoutInArgs = method.Ins.Where(x => x.Inout).Select((_, i) => i).ToList();
+        var inoutArgCount = inoutInArgs.Count;
+        method.Outs.RemoveRange(method.Outs.Count - inoutArgCount, inoutArgCount);
+        const String oldPrefix = "old_";
+        foreach (var i in inoutInArgs) {
+          var arg = method.Ins[i];
+          Contract.Assert(arg.Name.StartsWith(oldPrefix));
+          var rewrittenArg = new Formal(
+            arg.Tok, arg.Name.Substring(oldPrefix.Length), arg.Type, arg.InParam,
+            arg.Usage, arg.IsOld, arg.Inout);
+          method.Ins[i] = rewrittenArg;
+        }
+        if (inoutArgCount > 0) {
+          method.Req.Clear();
+          method.Ens.Clear();
+        }
+        Util.OxideDebug(method.tok, "  {0}", Printer.MethodSignatureToString(method));
+
         var body = method.Body?.Body;
         if (body != null) {
+          for (int i = 0; i < inoutArgCount; i++) {
+            Util.OxideDebug(body[i].Tok, "  removing {0}", Printer.StatementToString(body[i]));
+          }
+          body.RemoveRange(0, inoutArgCount);
+
           foreach (var stmtList in Visit.AllStatementLists(body)) {
             for (int s = 0; s < stmtList.Count; s++) {
               var stmt = stmtList[s];
               var updStmt = stmt as UpdateStmt;
               var varDeclStmt = stmt as VarDeclStmt;
-              if (updStmt != null && updStmt.InoutGenerated && updStmt.InoutAssignTarget.HasValue) {
+              if (updStmt != null && updStmt.AssumeRhsCompilable && updStmt.InoutAssignTarget.HasValue) {
                 var (usage, targetExpr) = updStmt.InoutAssignTarget.Value;
                 Util.OxideDebug(stmtList[s - 1].Tok, "  (assign) removing {0}", Printer.StatementToString(stmtList[s - 1]));
                 var rhs = (ExprRhs) ((UpdateStmt) ((VarDeclStmt) stmtList[s - 1]).Update).Rhss[0];
