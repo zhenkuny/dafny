@@ -973,6 +973,9 @@ namespace Microsoft.Dafny {
       if (showNewKeyword && !f.IsOld) {
         wr.Write("new ");
       }
+      if (f.Inout) {
+        wr.Write("inout ");
+      }
       if (f.IsGhost) {
         wr.Write("ghost ");
       }
