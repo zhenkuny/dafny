@@ -68,6 +68,9 @@ namespace Microsoft.Dafny {
       headerFileWr.WriteLine("// Dafny program {0} compiled into a Cpp header file", program.Name);
       headerFileWr.WriteLine("#pragma once");
       headerFileWr.WriteLine("#include \"DafnyRuntime.h\"");
+      foreach (var header in this.headers) {
+        headerFileWr.WriteLine("#include \"{0}\"", header);
+      }
       // TODO: Include appropriate .h file here
       //ReadRuntimeSystem("DafnyRuntime.h", wr);
 
