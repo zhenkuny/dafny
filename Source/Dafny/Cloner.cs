@@ -487,8 +487,10 @@ namespace Microsoft.Dafny
     }
 
     public virtual Expression CloneApplySuffix(ApplySuffix e) {
-        return new ApplySuffix(Tok(e.tok), CloneExpr(e.Lhs), e.Args.ConvertAll(
+        var applySuffix = new ApplySuffix(Tok(e.tok), CloneExpr(e.Lhs), e.Args.ConvertAll(
           x => new ApplySuffixArg { Inout = x.Inout, Expr = CloneExpr(x.Expr) }));
+        applySuffix.RewrittenAsInoutThis = e.RewrittenAsInoutThis;
+        return applySuffix;
     }
 
     public virtual CasePattern<VT> CloneCasePattern<VT>(CasePattern<VT> pat) where VT: IVariable {

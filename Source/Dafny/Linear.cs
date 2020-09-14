@@ -293,6 +293,7 @@ namespace Microsoft.Dafny.Linear {
                 Expression selfArg = cloner.CloneExpr(((ExprDotName) applySuffix.Lhs).Lhs);
                 var selfApplySuffixArg = new ApplySuffixArg { Expr = selfArg, Inout = true };
                 applySuffix.Args.Insert(0, selfApplySuffixArg);
+                applySuffix.RewrittenAsInoutThis = true;
                 inoutArgs.Add(selfApplySuffixArg);
               }
 
@@ -360,6 +361,11 @@ namespace Microsoft.Dafny.Linear {
       foreach (var (tld, method) in Visit.AllMethodMembers(module)) {
         Util.OxideDebug(method.tok, "Rewriting method for compilation {0}", method.Name);
 
+        if (method.HasInoutThis) {
+          method.Ins.RemoveAt(0);
+          method.Outs.RemoveAt(0);
+        }
+
         var inoutInArgs = method.Ins.Where(x => x.Inout).Select((_, i) => i).ToList();
         var inoutArgCount = inoutInArgs.Count;
         method.Outs.RemoveRange(method.Outs.Count - inoutArgCount, inoutArgCount);
@@ -417,11 +423,19 @@ namespace Microsoft.Dafny.Linear {
                   stmtList.RemoveAt(s);
                   var updateStmt = (UpdateStmt) stmtList[s];
                   updateStmt.Lhss.RemoveRange(updateStmt.Lhss.Count - argCount, argCount);
-                  Util.OxideDebug(stmtList[s].Tok, "  (apply)   rewritten as {0}", Printer.StatementToString(stmtList[s]));
+                  var exprRhs = (ExprRhs) updateStmt.Rhss[0];
+                  var applySuffix = exprRhs.Expr as ApplySuffix;
+                  if (applySuffix != null && applySuffix.RewrittenAsInoutThis) {
+                    Contract.Assert(updateStmt.Rhss.Count == 1);
+                    applySuffix.Args.RemoveAt(0);
+                    exprRhs.Expr.Inout = true;
+                  }
+                  Util.OxideDebug(stmtList[s].Tok, "  (apply)   rewritten (a) as {0}", Printer.StatementToString(stmtList[s]));
                 } else {
                   varDeclStmt.Locals.RemoveRange(varDeclStmt.Locals.Count - argCount, argCount);
                   varDeclStmt.Update.Lhss.RemoveRange(varDeclStmt.Update.Lhss.Count - argCount, argCount);
-                  Util.OxideDebug(stmtList[s].Tok, "  (apply)   rewritten as {0}", Printer.StatementToString(stmtList[s]));
+                  throw new NotImplementedException("TODO: Inout this may not be supported, but I forget what's this case.");
+                  Util.OxideDebug(stmtList[s].Tok, "  (apply)   rewritten (b) as {0}", Printer.StatementToString(stmtList[s]));
                 }
                 for (int c = 0; c < argCount; ++c) {
                   Util.OxideDebug(stmtList[s + 1].Tok, "  (apply)   removing {0}", Printer.StatementToString(stmtList[s + 1]));

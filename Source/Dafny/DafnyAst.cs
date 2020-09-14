@@ -11719,6 +11719,8 @@ namespace Microsoft.Dafny {
   {
     public readonly List<ApplySuffixArg> Args;
 
+    public bool RewrittenAsInoutThis;
+
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(Args != null);
