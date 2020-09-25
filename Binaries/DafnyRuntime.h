@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <variant>
 #include <exception>
+#include <smmintrin.h>
+#include <immintrin.h>
 
 class _dafny {
   public:

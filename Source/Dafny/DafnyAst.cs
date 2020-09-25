@@ -4915,7 +4915,7 @@ namespace Microsoft.Dafny {
     public readonly BigInteger LowerBound;
     public readonly BigInteger UpperBound;
     public readonly int Bitwidth;  // for unasigned types, this shows the number of bits in the type; else is 0
-    public enum Selection { Byte, SByte, UShort, Short, UInt, Int, Number, ULong, Long }
+    public enum Selection { Byte, SByte, UShort, Short, UInt, Int, Number, ULong, Long, UInt128 }
     public readonly Selection Sel;
     public readonly DafnyOptions.CompilationTarget CompilationTargets;
     public NativeType(string Name, BigInteger LowerBound, BigInteger UpperBound, int bitwidth, Selection sel, DafnyOptions.CompilationTarget compilationTargets) {

@@ -797,6 +797,9 @@ namespace Microsoft.Dafny {
         case NativeType.Selection.ULong:
           name = "uint64";
           break;
+        case NativeType.Selection.UInt128:
+          name = "__m128i";
+          break;
         case NativeType.Selection.Number:
         case NativeType.Selection.Long:
           name = "int64";
@@ -1273,6 +1276,7 @@ namespace Microsoft.Dafny {
         if (td.Witness != null) {
           return td.Module.CompileName + "::class_" + td.CompileName + "::Witness";
         } else if (td.NativeType != null) {
+          if (td.NativeType.Sel == NativeType.Selection.UInt128) return "_mm_setr_epi32(0,0,0,0)";
           return "0";
         } else {
           return TypeInitializationValue(td.BaseType, wr, tok, usage, inAutoInitContext);
