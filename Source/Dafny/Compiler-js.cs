@@ -1359,7 +1359,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override void EmitThis(TargetWriter wr) {
+    protected override void EmitThis(TargetWriter wr, bool thisIsPointer) {
       wr.Write("_this");
     }
 

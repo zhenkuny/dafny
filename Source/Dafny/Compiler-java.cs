@@ -1083,7 +1083,7 @@ namespace Microsoft.Dafny{
       return type.IsBoolType || type.IsCharType || AsNativeType(type) != null;
     }
 
-    protected override void EmitThis(TargetWriter wr) {
+    protected override void EmitThis(TargetWriter wr, bool thisIsPointer) {
       var custom =
         (enclosingMethod != null && enclosingMethod.IsTailRecursive) ||
         (enclosingFunction != null && enclosingFunction.IsTailRecursive) ||
