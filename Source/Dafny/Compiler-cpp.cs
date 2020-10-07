@@ -2156,7 +2156,11 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitConstructorCheck(string source, DatatypeCtor ctor, TargetWriter wr) {
-      wr.Write("is_{1}({0})", source, DatatypeSubStructName(ctor));
+      if (thisContext is IndDatatypeDecl) {
+        wr.Write("{0}.is_{1}()", source, DatatypeSubStructName(ctor));
+      } else {
+        wr.Write("is_{1}({0})", source, DatatypeSubStructName(ctor));
+      }
     }
 
     protected override void EmitDestructor(string source, Formal dtor, int formalNonGhostIndex, DatatypeCtor ctor, List<Type> typeArgs, Type bvType, TargetWriter wr) {

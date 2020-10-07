@@ -143,6 +143,10 @@ datatype Car = Car(passengers: bool) | Toy(t:bool) {
     if this.Car? {
       var Car(_) := this;
     }
+    match this {
+      case Car(_) => print "It's a car\n";
+      case Toy(_) => print "No, it's a toy\n";
+    }
   }
 
   method LoadPassengers(b:bool) returns (self: Car)
