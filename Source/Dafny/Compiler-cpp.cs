@@ -403,7 +403,6 @@ namespace Microsoft.Dafny {
       this.modDeclWr.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
       var wdecl = this.dtDeclWr;
       var wdef = writer;
-      BlockTargetWriter wmethodDecl = null;
 
       if (IsRecursiveDatatype(dt)) { // Note that if this is true, there must be more than one constructor!
         // Add some forward declarations
@@ -416,7 +415,6 @@ namespace Microsoft.Dafny {
       if (dt.Ctors.Count == 1) {
         var ctor = dt.Ctors[0];
         var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
-        wmethodDecl = ws;
         
         // Declare the struct members
         var i = 0;
@@ -451,9 +449,6 @@ namespace Microsoft.Dafny {
             wc.WriteLine("{0} = {1};", arg.CompileName, DefaultValue(arg.Type, wc, arg.tok, arg.Usage));
           }
         }
-        
-        // Overload the -> operator, since Dafny's Compiler.cs wants to treat datatypes as classes
-        ws.WriteLine("{0}* operator->() {{ return this; }}", DtT_protected);
         
         // Overload the comparison operator
         ws.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right);", DtT_protected, TemplateMethod(dt.TypeArgs));
@@ -556,7 +551,6 @@ namespace Microsoft.Dafny {
         /*** Declare the overall tagged union ***/
         var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
         ws.WriteLine("std::variant<{0}> v;", Util.Comma(dt.Ctors, ctor => DatatypeSubStructName(ctor, true)));
-        wmethodDecl = ws;
 
         // Declare static "constructors" for each Dafny constructor
         foreach (var ctor in dt.Ctors)
@@ -621,9 +615,6 @@ namespace Microsoft.Dafny {
            wdef.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d) {{ return {4}(d.v); }}", 
              DeclareTemplate(dt.TypeArgs), name, DtT_protected, TemplateMethod(dt.TypeArgs), holds);  
         }
-        
-        // Overload the -> operator, since Dafny's Compiler.cs wants to treat datatypes as classes
-        ws.WriteLine("{0}* operator->() {{ return this; }}", DtT_protected);
         
         // Overload the comparison operator
         ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", DtT_protected);
@@ -694,7 +685,7 @@ namespace Microsoft.Dafny {
         }
       }
 
-      return new ClassWriter(DtT_protected, this, wmethodDecl, wdef, wmethodDecl, writer);
+      return null;
     }
 
     protected override IClassWriter DeclareNewtype(NewtypeDecl nt, TargetWriter wr) {    
@@ -1865,10 +1856,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override void EmitThis(TargetWriter wr, bool thisIsPointer) {
-      if (!thisIsPointer) {
-        wr.Write("*");
-      }
+    protected override void EmitThis(TargetWriter wr) {
       wr.Write("this");
     }
 

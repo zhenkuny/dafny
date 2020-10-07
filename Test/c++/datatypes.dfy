@@ -137,29 +137,6 @@ method TestNestedLet() {
   var Level2(u, Level1(v)) := x;
 }
 
-// Test datatype methods
-datatype Car = Car(passengers: bool) | Toy(t:bool) {
-  method Free() {
-    if this.Car? {
-      var Car(_) := this;
-    }
-  }
-
-  method LoadPassengers(b:bool) returns (self: Car)
-  {
-    if this.Car? {
-      var Car(passengers) := this;
-    }
-    self := Car(b);
-  }
-}
-
-method CarTest() {
-  var c := Car(true);
-  c := c.LoadPassengers(false);
-  c.Free();
-}
-
 method Main() {
     var e1 := Example1(22, false);
     var e2 := Ex2a(42);

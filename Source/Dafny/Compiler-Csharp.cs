@@ -1581,7 +1581,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    protected override void EmitThis(TargetWriter wr, bool thisIsPointer) {
+    protected override void EmitThis(TargetWriter wr) {
       var custom =
         (enclosingMethod != null && enclosingMethod.IsTailRecursive) ||
         (enclosingFunction != null && enclosingFunction.IsTailRecursive) ||
