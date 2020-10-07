@@ -34,6 +34,8 @@ def run_test(test):
 
 def run_tests(tests):
   for test in tests:
+    if test == "LinearSequence.s":
+        continue
     run_test(test)
 
 if __name__ == "__main__":

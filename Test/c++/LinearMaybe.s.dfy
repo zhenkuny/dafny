@@ -28,3 +28,8 @@ function method {:extern "LinearMaybe", "discard"} discard<A>(linear m:maybe<A>)
   requires !has(m)
 
 }
+
+method Main() {
+  print "Maybe\n";
+}
+
