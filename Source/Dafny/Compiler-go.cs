@@ -2208,7 +2208,7 @@ namespace Microsoft.Dafny {
       return member != null && cl is ClassDecl cdecl && cdecl.IsDefaultClass && Attributes.Contains(cdecl.Module.Attributes, "extern") && member.IsExtern(out _, out _);
     }
 
-    protected override void EmitThis(TargetWriter wr, bool thisIsPointer) {
+    protected override void EmitThis(TargetWriter wr) {
       wr.Write("_this");
     }
 

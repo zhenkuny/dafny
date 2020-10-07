@@ -1865,8 +1865,8 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override void EmitThis(TargetWriter wr, bool thisIsPointer) {
-      if (!thisIsPointer) {
+    protected override void EmitThis(TargetWriter wr) {
+      if (thisContext is IndDatatypeDecl) {
         wr.Write("*");
       }
       wr.Write("this");

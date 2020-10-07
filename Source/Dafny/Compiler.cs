@@ -34,7 +34,6 @@ namespace Microsoft.Dafny {
     protected Function enclosingFunction;  // non-null when a function body is being translated
 
     FreshIdGenerator idGenerator = new FreshIdGenerator();
-    private bool MakeThisPointer = true;
 
     static FreshIdGenerator compileNameIdGenerator = new FreshIdGenerator();
     public static string FreshId() {
@@ -517,7 +516,7 @@ namespace Microsoft.Dafny {
       return name;
     }
     protected abstract string FullTypeName(UserDefinedType udt, MemberDecl/*?*/ member = null);
-    protected abstract void EmitThis(TargetWriter wr, bool thisIsPointer);
+    protected abstract void EmitThis(TargetWriter wr);
     protected virtual void EmitNull(Type type, TargetWriter wr) {
       wr.Write("null");
     }
@@ -702,10 +701,7 @@ namespace Microsoft.Dafny {
             }
             var w = DeclareDatatype(dt, wr);
             if (w != null) {
-              var oldMakeThisPointer = MakeThisPointer;
-              MakeThisPointer = false;
               CompileClassMembers(dt, w);
-              MakeThisPointer = oldMakeThisPointer;
             }
           } else if (d is IteratorDecl) {
             var iter = (IteratorDecl)d;
@@ -983,7 +979,7 @@ namespace Microsoft.Dafny {
             if (cf.Rhs == null) {
               var sw = EmitReturnExpr(w);
               // get { return this._{0}; }
-              EmitThis(sw, c is ClassDecl);
+              EmitThis(sw);
               sw.Write("._{0}", cf.CompileName);
             } else {
               CompileReturnBody(cf.Rhs, w, null);
@@ -999,12 +995,12 @@ namespace Microsoft.Dafny {
             {
               var sw = EmitReturnExpr(wGet);
               // get { return this._{0}; }
-              EmitThis(sw, c is ClassDecl);
+              EmitThis(sw);
               sw.Write("._{0}", f.CompileName);
             }
             {
               // set { this._{0} = value; }
-              EmitThis(wSet, c is ClassDecl);
+              EmitThis(wSet);
               wSet.Write("._{0}", f.CompileName);
               var sw = EmitAssignmentRhs(wSet);
               EmitSetterParameter(sw);
@@ -1026,12 +1022,12 @@ namespace Microsoft.Dafny {
               {
                 var sw = EmitReturnExpr(wGet);
                 // get { return this.{0}; }
-                EmitThis(sw, c is ClassDecl);
+                EmitThis(sw);
                 sw.Write(".{0}", f.CompileName);
               }
               {
                 // set { this.{0} = value; }
-                EmitThis(wSet, c is ClassDecl);
+                EmitThis(wSet);
                 wSet.Write(".{0}", f.CompileName);
                 var sw = EmitAssignmentRhs(wSet);
                 EmitSetterParameter(sw);
@@ -1090,7 +1086,7 @@ namespace Microsoft.Dafny {
                   CompileReturnBody(cf.Rhs, wBody, null);
                 } else if (!cf.IsStatic) {
                   var sw = EmitReturnExpr(wBody);
-                  EmitMemberSelect(w => EmitThis(w, c is ClassDecl), cf, f.Type, internalAccess: true).EmitRead(sw);
+                  EmitMemberSelect(EmitThis, cf, f.Type, internalAccess: true).EmitRead(sw);
                 } else {
                   EmitReturnExpr(DefaultValue(cf.Type, wBody, cf.tok, Usage.Ordinary, true), wBody);
                 }
@@ -3340,7 +3336,7 @@ namespace Microsoft.Dafny {
         EmitLiteralExpr(wr, e);
 
       } else if (expr is ThisExpr) {
-        EmitThis(wr, MakeThisPointer);
+        EmitThis(wr);
 
       } else if (expr is IdentifierExpr) {
         var e = (IdentifierExpr)expr;
