@@ -845,7 +845,7 @@ namespace Microsoft.Dafny {
       foreach (Formal arg in formals) {
         if (!arg.IsGhost) {
           string name = FormalName(arg, i);
-          if (DeclareFormal(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam, wr)) {
+          if (DeclareFormal(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam | arg.Inout, wr)) {
             sep = ", ";
           }
           i++;
