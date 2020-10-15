@@ -434,8 +434,8 @@ namespace Microsoft.Dafny.Linear {
                 } else {
                   varDeclStmt.Locals.RemoveRange(varDeclStmt.Locals.Count - argCount, argCount);
                   varDeclStmt.Update.Lhss.RemoveRange(varDeclStmt.Update.Lhss.Count - argCount, argCount);
-                  throw new NotImplementedException("TODO: Inout this may not be supported, but I forget what's this case.");
                   Util.OxideDebug(stmtList[s].Tok, "  (apply)   rewritten (b) as {0}", Printer.StatementToString(stmtList[s]));
+                  throw new NotImplementedException("TODO: Inout this may not be supported, but I forget what's this case.");
                 }
                 for (int c = 0; c < argCount; ++c) {
                   Util.OxideDebug(stmtList[s + 1].Tok, "  (apply)   removing {0}", Printer.StatementToString(stmtList[s + 1]));
