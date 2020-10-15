@@ -501,6 +501,12 @@ namespace Microsoft.Dafny
         } else { Contract.Assert(false); }
         Contract.Assert(decl.Signature != null);
       }
+
+      // oxide
+      foreach (var nw in prog.CompileModules) {
+        Linear.OxideCompilationRewriter.Rewrite(nw);
+      }
+
       if (reporter.Count(ErrorLevel.Error) != origErrorCount) {
         // do nothing else
         return;
@@ -7215,7 +7221,7 @@ namespace Microsoft.Dafny
       ///   this reason, it is not necessary to visit all subexpressions, unless the subexpression
       ///   matter for the ghost checking/recording of "stmt".
       /// </summary>
-      public void Visit(Statement stmt, bool mustBeErasable, bool inoutGenerated = false) {
+      public void Visit(Statement stmt, bool mustBeErasable, bool assumeRhsCompilable = false) {
         Contract.Requires(stmt != null);
         Contract.Assume(!codeContext.IsGhost || mustBeErasable);  // (this is really a precondition) codeContext.IsGhost ==> mustBeErasable
         if (usageContext != null) usageContext.AssertNoBorrowed();
@@ -7316,8 +7322,8 @@ namespace Microsoft.Dafny
 
         } else if (stmt is UpdateStmt) {
           var s = (UpdateStmt)stmt;
-          Contract.Assert(!inoutGenerated);
-          s.ResolvedStatements.Iter(ss => Visit(ss, mustBeErasable, s.InoutGenerated));
+          Contract.Assert(!assumeRhsCompilable);
+          s.ResolvedStatements.Iter(ss => Visit(ss, mustBeErasable, s.AssumeRhsCompilable));
           s.IsGhost = s.ResolvedStatements.All(ss => ss.IsGhost);
 
         } else if (stmt is AssignOrReturnStmt) {
@@ -7406,12 +7412,12 @@ namespace Microsoft.Dafny
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
               Usage expectedUsage = x != null ? x.Var.Usage : Usage.Ordinary;
-              if (!inoutGenerated) {
+              if (!assumeRhsCompilable) {
                 resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
               }
               if (x != null && x.Var.IsLinear) {
                 // TODO(andrea) with new assignment syntax, use this again to check correct rewriting for inout?
-                if (usageContext.available[x.Var] != Available.Consumed && !inoutGenerated) {
+                if (usageContext.available[x.Var] != Available.Consumed && !assumeRhsCompilable) {
                   Error(x, "variable must be unavailable before assignment");
                 }
                 usageContext.available[x.Var] = Available.Available;

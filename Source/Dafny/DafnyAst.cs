@@ -6870,6 +6870,8 @@ namespace Microsoft.Dafny {
       Contract.Invariant(Locals.Count != 0);
     }
 
+    public int? InoutRewrittenArgs = null;
+
     public VarDeclStmt(IToken tok, IToken endTok, List<LocalVariable> locals, ConcreteUpdateStatement update)
       : base(tok, endTok)
     {
@@ -7001,7 +7003,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public bool InoutGenerated = false;
+    public bool AssumeRhsCompilable = false;
 
     public (Usage, Expression)? InoutAssignTarget = null;
 
@@ -11716,6 +11718,8 @@ namespace Microsoft.Dafny {
   public class ApplySuffix : SuffixExpr
   {
     public readonly List<ApplySuffixArg> Args;
+
+    public bool RewrittenAsInoutThis;
 
     [ContractInvariantMethod]
     void ObjectInvariant() {

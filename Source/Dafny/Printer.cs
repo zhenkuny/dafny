@@ -973,6 +973,9 @@ namespace Microsoft.Dafny {
       if (showNewKeyword && !f.IsOld) {
         wr.Write("new ");
       }
+      if (f.Inout) {
+        wr.Write("inout ");
+      }
       if (f.IsGhost) {
         wr.Write("ghost ");
       }
@@ -1443,6 +1446,17 @@ namespace Microsoft.Dafny {
       } else if (stmt is ConcreteUpdateStatement) {
         var s = (ConcreteUpdateStatement)stmt;
         string sep = "";
+        var updateStmt = stmt as UpdateStmt;
+        if (updateStmt != null && updateStmt.InoutAssign != InoutAssign.No) {
+          wr.Write(sep);
+          wr.Write("inout");
+          if (updateStmt.InoutAssign == InoutAssign.Ghost) {
+            wr.Write(" ghost");
+          } else {
+            Contract.Assert(updateStmt.InoutAssign == InoutAssign.Ordinary);
+          }
+          wr.Write(" ");
+        }
         foreach (var lhs in s.Lhss) {
           wr.Write(sep);
           PrintExpression(lhs, true);
