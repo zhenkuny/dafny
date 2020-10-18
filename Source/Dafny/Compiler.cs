@@ -241,7 +241,7 @@ namespace Microsoft.Dafny {
       return type;
     }
 
-    protected abstract bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, TextWriter wr);
+    protected abstract bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, bool isInoutParam, TextWriter wr);
     /// <summary>
     /// If "leaveRoomForRhs" is false and "rhs" is null, then generates:
     ///     type name;
@@ -845,7 +845,7 @@ namespace Microsoft.Dafny {
       foreach (Formal arg in formals) {
         if (!arg.IsGhost) {
           string name = FormalName(arg, i);
-          if (DeclareFormal(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam | arg.Inout, wr)) {
+          if (DeclareFormal(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam | arg.Inout, arg.Inout, wr)) {
             sep = ", ";
           }
           i++;
@@ -2027,6 +2027,7 @@ namespace Microsoft.Dafny {
           }
         }
       } else if (stmt is AssignStmt) {
+        /* TODO DEBUG */ Console.WriteLine("TODO DEBUG " + Printer.StatementToString(stmt));
         var s = (AssignStmt)stmt;
         Contract.Assert(!(s.Lhs is SeqSelectExpr) || ((SeqSelectExpr)s.Lhs).SelectOne);  // multi-element array assignments are not allowed
         if (s.Rhs is HavocRhs) {

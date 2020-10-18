@@ -738,7 +738,7 @@ namespace Microsoft.Dafny
       if (customReceiver) {
         var nt = m.EnclosingClass;
         var receiverType = UserDefinedType.FromTopLevelDecl(m.tok, nt);
-        DeclareFormal("", "_this", receiverType, m.tok, Usage.Ordinary, true, wr);
+        DeclareFormal("", "_this", receiverType, m.tok, Usage.Ordinary, true, false, wr);
         nIns = 1;
       } else {
         nIns = 0;
@@ -776,7 +776,7 @@ namespace Microsoft.Dafny
       if (customReceiver) {
         var nt = member.EnclosingClass;
         var receiverType = UserDefinedType.FromTopLevelDecl(tok, nt);
-        DeclareFormal("", "_this", receiverType, tok, Usage.Ordinary, true, wr);
+        DeclareFormal("", "_this", receiverType, tok, Usage.Ordinary, true, false, wr);
       }
       WriteFormals(customReceiver ? ", " : "", formals, wr);
       if (!createBody || hasDllImportAttribute) {
@@ -1079,7 +1079,7 @@ namespace Microsoft.Dafny
         isConst ? "readonly " : "");
     }
 
-    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, TextWriter wr) {
+    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, bool isInoutParam, TextWriter wr) {
       wr.Write("{0}{1}{2} {3}", prefix, isInParam ? "" : "out ", TypeName(type, wr, tok), name);
       return true;
     }

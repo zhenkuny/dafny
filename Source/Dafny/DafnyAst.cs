@@ -5369,7 +5369,7 @@ namespace Microsoft.Dafny {
     public string DisplayName {
       get { return LocalVariable.DisplayNameHelper(this); }
     }
-    private string uniqueName;
+    protected string uniqueName;
     public string UniqueName {
       get {
         return uniqueName;
@@ -5499,7 +5499,7 @@ namespace Microsoft.Dafny {
     }
     public readonly bool IsOld;
 
-    public readonly bool Inout;
+    public bool Inout;
 
     public Formal(IToken tok, string name, Type type, bool inParam, Usage usage, bool isOld = false, bool inout = false)
       : base(tok, name, type, usage) {

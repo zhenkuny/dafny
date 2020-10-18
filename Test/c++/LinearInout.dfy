@@ -9,11 +9,14 @@ import opened LinearLSeq
 
 linear datatype Val0 = Leaf(linear x:bool) //| Branch(linear v:Val0)
 
-method {:extern} do(linear inout m:Val0)
+method do_something(linear inout m:Val0)
+{
+  inout m.x := true;
+}
 
 method test(linear inout m:Val0) 
 {
-  do(inout m);
+  do_something(inout m);
 }
 
 /*

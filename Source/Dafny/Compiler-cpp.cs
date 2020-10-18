@@ -1377,16 +1377,16 @@ namespace Microsoft.Dafny {
       }
     }
 
-    private string DeclareFormalString(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam) {
+    private string DeclareFormalString(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, bool isInoutParam) {
       if (isInParam) {        
-        return String.Format("{0}{2} {1}", prefix, name, TypeName(type, null, tok, usage:usage));
+        return String.Format("{0}{2}{3} {1}", prefix, name, TypeName(type, null, tok, usage:usage), isInoutParam ? "&" : "");
       } else {
         return null;
       }
     }
 
-    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, TextWriter wr) {
-      var formal_str = DeclareFormalString(prefix, name, type, tok, usage, isInParam);
+    protected override bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, bool isInoutParam, TextWriter wr) {
+      var formal_str = DeclareFormalString(prefix, name, type, tok, usage, isInParam, isInoutParam);
       if (formal_str != null) {
         wr.Write(formal_str);
         return true;        
@@ -1402,7 +1402,7 @@ namespace Microsoft.Dafny {
       foreach (Formal arg in formals) {
         if (!arg.IsGhost) {
           string name = FormalName(arg, i);
-          string decl = DeclareFormalString(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam);
+          string decl = DeclareFormalString(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam, arg.Inout);
           if (decl != null) {
             ret += decl;
             sep = ", ";
