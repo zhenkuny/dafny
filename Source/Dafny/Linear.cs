@@ -421,7 +421,6 @@ namespace Microsoft.Dafny.Linear {
                 Contract.Assert(updStmt.ResolvedStatements.Count == 1);
                 updStmt.ResolvedStatements.Clear();
                 updStmt.ResolvedStatements.Add(resolvedAssignStmt);
-                Console.WriteLine(targetExpr.Resolved);
                 Util.OxideDebug(stmtList[s].Tok, "  (assign)   rewritten as {0} ({1})",
                   Printer.StatementToString(stmtList[s]), updStmt.InoutAssign);
               } else if (varDeclStmt != null && varDeclStmt.InoutRewrittenArgs.HasValue) {

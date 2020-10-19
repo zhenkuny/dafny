@@ -2027,7 +2027,6 @@ namespace Microsoft.Dafny {
           }
         }
       } else if (stmt is AssignStmt) {
-        /* TODO DEBUG */ Console.WriteLine("TODO DEBUG " + Printer.StatementToString(stmt));
         var s = (AssignStmt)stmt;
         Contract.Assert(!(s.Lhs is SeqSelectExpr) || ((SeqSelectExpr)s.Lhs).SelectOne);  // multi-element array assignments are not allowed
         if (s.Rhs is HavocRhs) {
