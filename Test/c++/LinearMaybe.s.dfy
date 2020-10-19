@@ -29,7 +29,3 @@ function method {:extern "LinearMaybe", "discard"} discard<A>(linear m:maybe<A>)
 
 }
 
-method Main() {
-  print "Maybe\n";
-}
-

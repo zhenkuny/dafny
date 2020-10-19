@@ -7,16 +7,27 @@ import opened Types
 import opened LinearMaybe 
 import opened LinearLSeq
 
-linear datatype Val0 = Leaf(linear x:bool) //| Branch(linear v:Val0)
+linear datatype Val0 = Leaf(x:bool) //| Branch(linear v:Val0)
 
 method do_something(linear inout m:Val0)
+ensures m.x == true
 {
   inout m.x := true;
 }
 
 method test(linear inout m:Val0) 
+ensures m.x == true
 {
   do_something(inout m);
+}
+
+method Main() {
+  linear var v := Leaf(false);
+  do_something(inout v);
+  var b := v.x;
+  assert b;
+  print b;
+  linear var Leaf(_) := v;
 }
 
 /*
