@@ -5369,7 +5369,7 @@ namespace Microsoft.Dafny {
     public string DisplayName {
       get { return LocalVariable.DisplayNameHelper(this); }
     }
-    protected string uniqueName;
+    private string uniqueName;
     public string UniqueName {
       get {
         return uniqueName;
