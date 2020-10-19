@@ -389,6 +389,10 @@ namespace Microsoft.Dafny.Linear {
 
         var body = method.Body?.Body;
         if (body != null) {
+          if (method.HasInoutThis) {
+            Util.OxideDebug(body[0].Tok, "  removing {0}", Printer.StatementToString(body[0]));
+            body.RemoveRange(0, 1);
+          }
           for (int i = 0; i < inoutArgCount; i++) {
             Util.OxideDebug(body[i].Tok, "  removing {0}", Printer.StatementToString(body[i]));
           }

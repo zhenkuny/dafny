@@ -897,6 +897,11 @@ namespace Microsoft.Dafny {
         EmitReturn(m.Outs, r);
         w.BodySuffix = r.ToString();
       }
+
+      if (m.HasInoutThis) {
+        // TODO(andrea) don't use type inference
+        w.WriteLine("auto& self = *this;");
+      }
       return w;
     }
 
