@@ -427,27 +427,38 @@ namespace Microsoft.Dafny.Linear {
                 var argCount = varDeclStmt.InoutRewrittenArgs.Value;
                 Util.OxideDebug(stmtList[s].Tok, "  (apply) undoing rewrite for {0} args starting {1} (inline update {2})",
                   argCount, Printer.StatementToString(stmtList[s]), varDeclStmt.Update != null ? "present" : "absent");
-                if (varDeclStmt.Update == null) {
-                  Util.OxideDebug(stmtList[s].Tok, "  (apply) removing {0}", Printer.StatementToString(stmtList[s]));
-                  stmtList.RemoveAt(s);
-                  var updateStmt = (UpdateStmt) stmtList[s];
-                  updateStmt.Lhss.RemoveRange(updateStmt.Lhss.Count - argCount, argCount);
-                  var exprRhs = (ExprRhs) updateStmt.Rhss[0];
+
+                void RewriteAUpdateStmt(UpdateStmt updateStmt) {
+                  var exprRhs = (ExprRhs)updateStmt.Rhss[0];
                   var applySuffix = exprRhs.Expr as ApplySuffix;
                   if (applySuffix != null && applySuffix.RewrittenAsInoutThis) {
                     Contract.Assert(updateStmt.Rhss.Count == 1);
                     applySuffix.Args.RemoveAt(0);
                     exprRhs.Expr.Inout = true;
                   }
-                  Contract.Assert(updateStmt.ResolvedStatements.Count == 1);
-                  var resolvedCallStmt = (CallStmt) updateStmt.ResolvedStatements[0];
-                  resolvedCallStmt.Lhs.RemoveRange(resolvedCallStmt.Lhs.Count - argCount, argCount);
+                  if (updateStmt.ResolvedStatements.Count == 1) {
+                    var resolvedCallStmt = (CallStmt)updateStmt.ResolvedStatements[0];
+                    resolvedCallStmt.Lhs.RemoveRange(resolvedCallStmt.Lhs.Count - argCount, argCount);
+                  } else {
+                    // TODO(andrea) should this case ever happen?
+                    Util.OxideDebug(stmtList[s].Tok, "  (apply)   DEBUG no resolved statement for {0}", Printer.StatementToString(updateStmt));
+                  }
+                }
+
+                if (varDeclStmt.Update == null) {
+                  Util.OxideDebug(stmtList[s].Tok, "  (apply) removing {0}", Printer.StatementToString(stmtList[s]));
+                  stmtList.RemoveAt(s);
+                  var updateStmt = (UpdateStmt) stmtList[s];
+                  updateStmt.Lhss.RemoveRange(updateStmt.Lhss.Count - argCount, argCount);
+                  RewriteAUpdateStmt(updateStmt);
                   Util.OxideDebug(stmtList[s].Tok, "  (apply)   rewritten (a) as {0}", Printer.StatementToString(stmtList[s]));
                 } else {
                   varDeclStmt.Locals.RemoveRange(varDeclStmt.Locals.Count - argCount, argCount);
                   varDeclStmt.Update.Lhss.RemoveRange(varDeclStmt.Update.Lhss.Count - argCount, argCount);
+                  // TODO(andrea) deduplicate
+                  var updateStmt = (UpdateStmt)varDeclStmt.Update;
+                  RewriteAUpdateStmt(updateStmt);
                   Util.OxideDebug(stmtList[s].Tok, "  (apply)   rewritten (b) as {0}", Printer.StatementToString(stmtList[s]));
-                  throw new NotImplementedException("TODO: Inout this may not be supported, but I forget what's this case.");
                 }
                 for (int c = 0; c < argCount; ++c) {
                   Util.OxideDebug(stmtList[s + 1].Tok, "  (apply)   removing {0}", Printer.StatementToString(stmtList[s + 1]));
@@ -458,6 +469,7 @@ namespace Microsoft.Dafny.Linear {
           }
         }
       }
+
     }
   }
 }
