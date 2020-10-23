@@ -650,7 +650,11 @@ namespace Microsoft.Dafny
         var s = (UpdateStmt)stmt;
         var clonedUpdateStmt = new UpdateStmt(Tok(s.Tok), Tok(s.EndTok), s.Lhss.ConvertAll(CloneExpr), s.Rhss.ConvertAll(CloneRHS), s.CanMutateKnownState);
         clonedUpdateStmt.AssumeRhsCompilable = s.AssumeRhsCompilable;
-        clonedUpdateStmt.InoutAssignTarget = s.InoutAssignTarget;
+        if (s.InoutAssignTarget.HasValue) {
+          clonedUpdateStmt.InoutAssignTarget = (s.InoutAssignTarget.Value.Item1, CloneExpr(s.InoutAssignTarget.Value.Item2));
+        } else {
+          clonedUpdateStmt.InoutAssignTarget = null;
+        }
         r = clonedUpdateStmt;
 
       } else if (stmt is AssignOrReturnStmt) {

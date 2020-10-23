@@ -241,7 +241,7 @@ namespace Microsoft.Dafny {
       return type;
     }
 
-    protected abstract bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, TextWriter wr);
+    protected abstract bool DeclareFormal(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, bool isInoutParam, TextWriter wr);
     /// <summary>
     /// If "leaveRoomForRhs" is false and "rhs" is null, then generates:
     ///     type name;
@@ -845,7 +845,7 @@ namespace Microsoft.Dafny {
       foreach (Formal arg in formals) {
         if (!arg.IsGhost) {
           string name = FormalName(arg, i);
-          if (DeclareFormal(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam | arg.Inout, wr)) {
+          if (DeclareFormal(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam | arg.Inout, arg.Inout, wr)) {
             sep = ", ";
           }
           i++;
