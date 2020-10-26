@@ -7408,6 +7408,9 @@ namespace Microsoft.Dafny
               } else {
                 Error(s, "invalid inout update lhs");
               }
+              if (inoutAssignTargetUsage == Usage.Ghost) {
+                s.IsGhost = true;
+              }
             }
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
