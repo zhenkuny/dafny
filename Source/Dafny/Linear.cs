@@ -100,6 +100,13 @@ namespace Microsoft.Dafny.Linear {
           foreach (var mc in ms.Cases) {
             foreach (var ls in AllStatementLists(mc.Body)) { yield return ls; }
           }
+          if (ms.ResolvedStatement != null) {
+            Contract.Assert(ms.ResolvedStatement is MatchStmt);
+            var resolvedMs = (MatchStmt) ms.ResolvedStatement;
+            foreach (var mc in resolvedMs.Cases) {
+              foreach (var ls in AllStatementLists(mc.Body)) { yield return ls; }
+            }
+          }
           break;
         case WhileStmt ws:
           foreach (var ls in AllStatementLists(ws.Body.Body)) { yield return ls; }
