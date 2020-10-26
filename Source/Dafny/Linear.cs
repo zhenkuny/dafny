@@ -456,7 +456,6 @@ namespace Microsoft.Dafny.Linear {
                 }
 
                 if (varDeclStmt.Update == null) {
-                  // TODO(andrea) this case should probably be impossible
                   Util.OxideDebug(stmtList[s].Tok, "  (apply) removing {0}", Printer.StatementToString(stmtList[s]));
                   stmtList.RemoveAt(s);
                   var updateStmt = (UpdateStmt) stmtList[s];
