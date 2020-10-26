@@ -363,7 +363,7 @@ namespace Microsoft.Dafny.Linear {
 
         if (method.HasInoutThis) {
           method.Ins.RemoveAt(0);
-          method.Outs.RemoveAt(0);
+          method.Outs.RemoveAt(method.Outs.Count - 1);
         }
 
         var inoutInArgs = method.Ins.Where(x => x.Inout).Select((_, i) => i).ToList();
