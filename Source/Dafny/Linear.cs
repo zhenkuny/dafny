@@ -431,7 +431,8 @@ namespace Microsoft.Dafny.Linear {
                 Contract.Assert(updStmt.ResolvedStatements.Count == 1);
                 updStmt.ResolvedStatements.Clear();
                 if (resolvedRhs is CallStmt callStmt) {
-                  updStmt.ResolvedStatements.Add(resolvedRhs);
+                  var resolvedCallStmt = new CallStmt(generatedTok, generatedTok, new List<Expression> { targetExpr.Resolved }, callStmt.MethodSelect, callStmt.Args);
+                  updStmt.ResolvedStatements.Add(resolvedCallStmt);
                 } else {
                   var resolvedAssignStmt = new AssignStmt(generatedTok, generatedTok, targetExpr.Resolved, rhs);
                   updStmt.ResolvedStatements.Add(resolvedAssignStmt);
