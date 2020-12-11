@@ -50,7 +50,7 @@ For any `O` and `L`, the type checker can check that an expression `e` or a stat
 - `O ; L |- e : linear` means that `e` is a well-typed linear expression, consuming all of `L`.
 - `O ; L |- e : ordinary` means that `e` is a well-typed ordinary expression, consuming all of `L`.
 - `O ; L |- s : L'` means that `s` is a well-typed statement,
-consuming some of all of `L`, and leaving any remaining linear variables in `L'`.
+consuming some or all of `L`, and leaving any remaining linear variables in `L'`.
 
 When checking subexpressions `e1` and `e2` of an expression `f(e1, e2)`,
 linear variables from `L` are split into disjoint `L1` and `L2`,
@@ -269,10 +269,11 @@ then `(e1; e2)` borrows `x` from `e3`).
 `if`/`else` expressions exploit order of evaluation (`e0` precedes `e1` or `e2`) allow borrowing:
 
 ```
+u0 != linear
 G ; O ; S, Bs ; {} ; L0          |- e0     : u0
 G ; O ; S     ; {} ;     Bs, L12 |-     e1 : u12
 G ; O ; S     ; {} ;     Bs, L12 |-     e2 : u12
---------------------------------------------------------------- u0 != linear
+---------------------------------------------------------------
 G ; O ; S     ; {} ; L0, Bs, L12 |- if e0 then e1 else e2 : u12
 ```
 
@@ -285,8 +286,9 @@ and then rejoin `Bs, Bm, L2` in the linear output:
 ```
 G ; O ; S ; L |- skip : L
 
+u != linear
 G ; O ; S, Bs ; Bm ; L1             |- e : u
------------------------------------------------------ u != linear
+-----------------------------------------------------
 G ; O ; S     ;      L1, Bs, Bm, L2 |- e : Bs, Bm, L2
 
 If u = ghost then G contains x
@@ -294,7 +296,7 @@ If u = ordinary then O contains x
 If u = shared then S contains x and Bs = {}
 u != linear (see rule below for linear)
 G ; O ; S, Bs ; Bm ; L1             |-      e : u
----------------------------------------------------------- u != linear
+----------------------------------------------------------
 G ; O ; S     ;      L1, Bs, Bm, L2 |- x := e : Bs, Bm, L2
 
 G ; O ; S, Bs ; Bm ; L1             |-      e : linear
@@ -307,15 +309,15 @@ G ; O ; S ; L1 |- s2 : L2
 G ; O ; S ; L0 |- s1; s2 |- L2
 
 G ; O ; S, Bs ; Bm ;    Le |- e : ordinary
-G ; O ; S ;             L0 |- s1 : L12
-G ; O ; S ;             L0 |- s2 : L12
-----------------------------------------------------------------
-G ; O ; S ; Le, Bs, Bm, L0 |- if e then s1 else s2 : Bs, Bm, L12
+G ; O ; S ;     Bs, Bm, L0 |- s1 : L12
+G ; O ; S ;     Bs, Bm, L0 |- s2 : L12
+--------------------------------------------------------
+G ; O ; S ; Le, Bs, Bm, L0 |- if e then s1 else s2 : L12
 ```
 
 The current implementation of linear Dafny does not support borrowing across statements:
 the typing rule for `s1; s2` shown above does not extend `S` when checking `s1`.
-Suppose `x` is `shared` and `y` is `linear` when checking the statement `x := y; f(x, y)`:
+For example, suppose `x` is `shared` and `y` is `linear` when checking the statement `x := y; f(x, y)`:
 
 ```
 G ; O ; S, {x} ; {y} |- x := y; f(x, y) : ...
@@ -327,7 +329,7 @@ and the assignment rule for `x := y` would allow the shared `y` to be assigned t
 Then `x` and `y` would hold the same value, which would get passed twice into `f(x, y)`,
 which should not happen (the shared `x` should not coexist with the linear `y`).
 
-Note that this is not a problem for the `e1; s2` and `x := e1; s2` rules shown earlier, because a Dafny expression `e1`
+Note that this is not a problem for the `e1; e2` rule shown earlier, because a Dafny expression `e1`
 cannot contain an assignment to a local variable.
 (And in linear Dafny, `shared` is *only* used for local variables:
 there are no global `shared` variables, `shared` fields in objects or datatypes, or `shared inout` parameters,
