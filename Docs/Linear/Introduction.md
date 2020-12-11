@@ -10,7 +10,7 @@ with the linear type system, and *standard Dafny* refers to Dafny without the li
 Standard Dafny supports both immutable data structures (e.g. `datatype` and `seq`)
 and mutable data structures (e.g. `class` and `array`).
 Programs with mutable data structures are often more difficult to verify,
-because of aliasing and mutation: two variable may refer to the same object,
+because of aliasing and mutation: two variables may refer to the same object,
 and therefore a write to one variable may affect reads from another variable:
 
 ```dafny
@@ -26,7 +26,7 @@ method M(x: array<int>, y: array<int>)
 ```
 
 Programs based on immutable data structures do not have to worry about aliasing and mutation.
-Without mutation, though, programs may have to copy a data structures to update the data structure:
+Without mutation, though, programs may have to copy a data structure to update the data structure:
 
 ```dafny
 method M(x: seq<int>, y: seq<int>) returns(y': seq<int>)
