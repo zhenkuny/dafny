@@ -79,9 +79,10 @@ O      ; {x} |- x : linear
 The remaining rules for expressions follow the patterns in the rules above:
 
 ```
+u1 != linear
 O ; L1     |- e1     : u1
 O ;     L2 |-     e2 : u2
-------------------------- u1 != linear
+-------------------------
 O ; L1, L2 |- e1; e2 : u2
 
 O      ; L1     |-                   e1     : ordinary
@@ -217,9 +218,10 @@ which appear as shared in `S, Bs` when checking `e1`
 and then rejoin `Bs, L2` as linear when checking `e2`:
 
 ```
+u1 != linear
 G ; O ; S, Bs ; {} ; L1         |- e1     : u1
 G ; O ; S     ; {} ;     Bs, L2 |-     e2 : u2
----------------------------------------------- u1 != linear
+----------------------------------------------
 G ; O ; S     ; {} ; L1, Bs, L2 |- e1; e2 : u2
 ```
 
