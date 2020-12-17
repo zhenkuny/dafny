@@ -889,11 +889,57 @@ TopDecl<. ModuleDefinition module, List<MemberDecl/*!*/> membersDefaultClass, bo
                     !isTopLevel && DafnyOptions.O.IronDafny && isAbstract>
   ) .
 
+// A.B(C,D).E
+ModuleApplicationProd<out ModuleApplication modapp>
+=   (.
+        IToken id = null;
+        ModuleExpression param = null;
+        List<ModuleExpression> moduleParams = new List<ModuleExpression>();
+    .)
+    (
+    NoUSIdent<out id>
+    [ "(" ModuleExpressionProd<out param>  (. moduleParams.Add(param); .)
+        { "," ModuleExpressionProd<out param> (. moduleParams.Add(param); .) }
+      ")"
+    ]
+    (.  modapp = new ModuleApplication(id, moduleParams); .)
+    ).
+
+ModuleExpressionProd<out ModuleExpression modexp>
+= (.
+        ModuleApplication modapp = null;
+        List<ModuleApplication> modapps = new List<ModuleApplication>();
+  .)
+  (
+  ModuleApplicationProd<out modapp> (. modapps.Add(modapp); .)
+  { "." ModuleApplicationProd<out modapp> (. modapps.Add(modapp); .) }
+  (. modexp = new ModuleExpression(modapps); .)
+  ) .
+
+ModuleFormal
+= (.
+    IToken id;
+    ModuleExpression moduleRefined = null;
+  .)
+  ( NoUSIdent<out id> ":" ModuleExpressionProd<out moduleRefined> ) .
+
+ModuleFormals<. out List<IToken> formals .>
+= (.
+    formals = null;
+  .)
+  ( "(" ModuleFormal
+    { "," ModuleFormal }
+    ")"
+  ) .
+
 SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl submodule>
 = (. Attributes attrs = null;  IToken/*!*/ id; var prefixIds = new List<IToken>();
      List<MemberDecl/*!*/> namedModuleDefaultClassMembers = new List<MemberDecl>();;
-     List<IToken> idPath, idExports;
-     IToken idRefined = null;
+     List<IToken> idExports;
+     List<IToken> formals = new List<IToken>();
+     IToken idRefined = null;   // XXX delete after code dependency removed.
+     ModuleExpression modexp = null;
+     ModuleExpression moduleRefined = null;
      ModuleDefinition module;
      submodule = null; // appease compiler
      bool isAbstract = dmod.IsAbstract;
@@ -903,10 +949,11 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
   ( "module"
     { Attribute<ref attrs> }
     NoUSIdent<out id>
-    { (. prefixIds.Add(id); .)
+    { (. prefixIds.Add(id); .)  // XXX what the bleep is this thing?
       "." NoUSIdent<out id>
     }
-    [ "refines" ModuleName<out idRefined> ]
+    [ ModuleFormals<out formals> ]
+    [ "refines" ModuleExpressionProd<out moduleRefined> /*XXXModuleName<out idRefined>*/ ]
     (. module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false, idRefined, parent, attrs,
                                       false, theVerifyThisFile, theCompileThisFile);
     .)
@@ -918,15 +965,20 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
   |
     "import" ["opened" (.opened = true;.)]
     ModuleName<out id>
-    ( (. idPath = new List<IToken>(); idExports = new List<IToken>(); .)
-      OptQualifiedModuleExportSuffix<idPath, idExports>
-      (. idPath.Insert(0, id);
-         submodule = new AliasModuleDecl(idPath, idPath[idPath.Count-1], parent, opened, idExports);
+    ( (. idExports = new List<IToken>(); .)
+      OptQualifiedModuleExportSuffix<idExports>
+      (.
+        // Construct singleton simple module expression
+        ModuleApplication application = new ModuleApplication(id, new List<ModuleExpression>());
+        List<ModuleApplication> applications = new List<ModuleApplication>();
+        applications.Add(application);
+        ModuleExpression nameExpr = new ModuleExpression(applications);
+         submodule = new AliasModuleDecl(nameExpr, id, parent, opened, idExports);
       .)
-    | "=" QualifiedModuleExport<out idPath, out idExports>
-      (. submodule = new AliasModuleDecl(idPath, id, parent, opened, idExports); .)
-    | ":" QualifiedModuleExport<out idPath, out idExports>
-        (. submodule = new ModuleFacadeDecl(idPath, id, parent, opened, idExports); .)
+    | "=" QualifiedModuleExport<out modexp, out idExports>
+      (. submodule = new AliasModuleDecl(modexp, id, parent, opened, idExports); .)
+    | ":" QualifiedModuleExport<out modexp, out idExports>
+        (. submodule = new ModuleFacadeDecl(modexp, id, parent, opened, idExports); .)
     )
 
   | (.
@@ -985,9 +1037,8 @@ ModuleName<out IToken id>
   .
 
 /* This production is for referring to module exports for imports (both normal and facades) */
-OptQualifiedModuleExportSuffix<.List<IToken> ids, List<IToken> exports.>
+OptQualifiedModuleExportSuffix<.List<IToken> exports.>
 = (. IToken id; .)
-  { "." ModuleName<out id> (. ids.Add(id); .) }
   [ "`"
     ( ExportIdent<out id>       (. exports.Add(id); .)
     | "{" ExportIdent<out id>   (. exports.Add(id); .)
@@ -997,13 +1048,12 @@ OptQualifiedModuleExportSuffix<.List<IToken> ids, List<IToken> exports.>
   ]
   .
 
-QualifiedModuleExport<.out List<IToken> ids, out List<IToken> exports.>
-= (. IToken id; ids = new List<IToken>();
-     List<IToken> sids = new List<IToken>(); exports = new List<IToken>();
+QualifiedModuleExport<. out ModuleExpression modexp, out List<IToken> exports.>
+= (. 
+     exports = new List<IToken>();
   .)
-  ModuleName<out id> (. ids.Add(id); .)
-  OptQualifiedModuleExportSuffix<sids, exports>
-  (. ids.AddRange(sids); .)
+  ModuleExpressionProd<out modexp>
+  OptQualifiedModuleExportSuffix<exports>
   .
 
 ClassDecl<DeclModifierData dmodClass, ModuleDefinition/*!*/ module, out ClassDecl/*!*/ c>

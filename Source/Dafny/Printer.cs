@@ -370,7 +370,7 @@ namespace Microsoft.Dafny {
               wr.Write("*/");
             }
             wr.Write(" {0} ", dd.Name);
-            wr.Write("= {0}", Util.Comma(".", dd.Path, id => id.val));
+            wr.Write("= {0}", dd.ModExp);
             if (dd.Exports.Count > 0) {
               wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
             }
@@ -385,7 +385,7 @@ namespace Microsoft.Dafny {
               wr.Write("*/");
             }
             wr.Write(" {0} ", dd.Name);
-            wr.Write(": {0}", Util.Comma(".", dd.Path, id => id.val));
+            wr.Write(": {0}", dd.ModExp);
             if (dd.Exports.Count > 0) {
               wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
             }

@@ -474,7 +474,7 @@ namespace Microsoft.Dafny
           var alias = (AliasModuleDecl)decl;
           // resolve the path
           ModuleSignature p;
-          if (ResolveExport(alias, alias.Root, alias.Module, alias.Path, alias.Exports, out p, reporter)) {
+          if (ResolveExport(alias, alias.Root, alias.Module, alias.ModExp, alias.Exports, out p, reporter)) {
             if (alias.Signature == null) {
               alias.Signature = p;
             }
@@ -484,7 +484,7 @@ namespace Microsoft.Dafny
         } else if (decl is ModuleFacadeDecl) {
           var abs = (ModuleFacadeDecl)decl;
           ModuleSignature p;
-          if (ResolveExport(abs, abs.Root, abs.Module, abs.Path, abs.Exports, out p, reporter)) {
+          if (ResolveExport(abs, abs.Root, abs.Module, abs.ModExp, abs.Exports, out p, reporter)) {
             abs.OriginalSignature = p;
             abs.Signature = MakeAbstractSignature(p, abs.FullCompileName, abs.Height, prog.ModuleSigs, compilationModuleClones);
           } else {
@@ -1375,7 +1375,7 @@ namespace Microsoft.Dafny
             Contract.Assert(yes);
             if (prevDecl is ModuleFacadeDecl || prevDecl is AliasModuleDecl) {
               reporter.Error(MessageSource.Resolver, subdecl.tok, "Duplicate name of import: {0}", subdecl.Name);
-            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened && importDecl.Path.Count == 1 && importDecl.Name == importDecl.Path[0].val) {
+            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened && importDecl.ModExp.IsSimpleSingleton(importDecl.Name)) {
               importDecl.ShadowsLiteralModule = true;
             } else {
               reporter.Error(MessageSource.Resolver, subdecl.tok, "Import declaration uses same name as a module in the same scope: {0}", subdecl.Name);
@@ -1450,9 +1450,9 @@ namespace Microsoft.Dafny
       } else if (moduleDecl is AliasModuleDecl) {
         var alias = moduleDecl as AliasModuleDecl;
         ModuleDecl root;
-        if (!bindings.TryLookupFilter(alias.Path[0], out root,
+        if (!bindings.TryLookupFilter(alias.ModExp.FirstToken(), out root,
           m => alias != m && (((alias.Module == m.Module) && (alias.Exports.Count == 0)) || m is LiteralModuleDecl)))
-          reporter.Error(MessageSource.Resolver, alias.tok, ModuleNotFoundErrorMessage(0, alias.Path));
+          reporter.Error(MessageSource.Resolver, alias.tok, ModuleNotFoundErrorMessage(0, alias.ModExp.ToTokenList()));
         else {
           dependencies.AddEdge(moduleDecl, root);
           alias.Root = root;
@@ -1460,9 +1460,9 @@ namespace Microsoft.Dafny
       } else if (moduleDecl is ModuleFacadeDecl) {
         var abs = moduleDecl as ModuleFacadeDecl;
         ModuleDecl root;
-        if (!bindings.TryLookupFilter(abs.Path[0], out root,
+        if (!bindings.TryLookupFilter(abs.ModExp.FirstToken(), out root,
           m => abs != m && (((abs.Module == m.Module) && (abs.Exports.Count == 0)) || m is LiteralModuleDecl)))
-          reporter.Error(MessageSource.Resolver, abs.tok, ModuleNotFoundErrorMessage(0, abs.Path));
+          reporter.Error(MessageSource.Resolver, abs.tok, ModuleNotFoundErrorMessage(0, abs.ModExp.ToTokenList()));
         else {
           dependencies.AddEdge(moduleDecl, root);
           abs.Root = root;
@@ -2071,7 +2071,7 @@ namespace Microsoft.Dafny
       if (d is ModuleFacadeDecl) {
         var abs = (ModuleFacadeDecl)d;
         var sig = MakeAbstractSignature(abs.OriginalSignature, Name + "." + abs.Name, abs.Height, mods, compilationModuleClones);
-        var a = new ModuleFacadeDecl(abs.Path, abs.tok, m, abs.Opened, abs.Exports);
+        var a = new ModuleFacadeDecl(abs.ModExp, abs.tok, m, abs.Opened, abs.Exports);
         a.Signature = sig;
         a.OriginalSignature = abs.OriginalSignature;
         return a;
@@ -2080,11 +2080,12 @@ namespace Microsoft.Dafny
       }
     }
 
-    public bool ResolveExport(ModuleDecl alias, ModuleDecl root, ModuleDefinition parent, List<IToken> Path,
+    public bool ResolveExport(ModuleDecl alias, ModuleDecl root, ModuleDefinition parent, ModuleExpression modexp,
       List<IToken> Exports, out ModuleSignature p, ErrorReporter reporter) {
-      Contract.Requires(Path != null);
-      Contract.Requires(Path.Count > 0);
+      Contract.Requires(modexp != null && !modexp.IsDegenerate());
       Contract.Requires(Exports != null);
+
+      List<IToken> Path = modexp.ToTokenList(); // XXX NOT correct! Ignores module params!
 
       ModuleDecl decl = root;
       for (int k = 1; k < Path.Count; k++) {
@@ -2235,7 +2236,7 @@ namespace Microsoft.Dafny
         } else if (d is ModuleDecl) {
           var decl = (ModuleDecl)d;
           if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract) {
-            reporter.Error(MessageSource.Resolver, am.Path.Last(), "a compiled module ({0}) is not allowed to import an abstract module ({1})", def.Name, Util.Comma(".", am.Path, tok => tok.val));
+            reporter.Error(MessageSource.Resolver, am.ModExp.FirstToken(), "a compiled module ({0}) is not allowed to import an abstract module ({1})", def.Name, am.ModExp.ToString());
           }
         } else if (d is DatatypeDecl) {
           var dd = (DatatypeDecl)d;

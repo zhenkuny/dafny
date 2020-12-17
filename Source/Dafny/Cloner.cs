@@ -114,10 +114,10 @@ namespace Microsoft.Dafny
           return new LiteralModuleDecl(((LiteralModuleDecl)d).ModuleDef, m);
         } else if (d is AliasModuleDecl) {
           var a = (AliasModuleDecl)d;
-          return new AliasModuleDecl(a.Path, a.tok, m, a.Opened, a.Exports);
+          return new AliasModuleDecl(a.ModExp, a.tok, m, a.Opened, a.Exports);
         } else if (d is ModuleFacadeDecl) {
           var a = (ModuleFacadeDecl)d;
-          return new ModuleFacadeDecl(a.Path, a.tok, m, a.Opened, a.Exports);
+          return new ModuleFacadeDecl(a.ModExp, a.tok, m, a.Opened, a.Exports);
         } else if (d is ModuleExportDecl) {
           var a = (ModuleExportDecl)d;
           return new ModuleExportDecl(a.tok, m, a.Exports, a.Extends, a.ProvideAll, a.RevealAll, a.IsDefault);
