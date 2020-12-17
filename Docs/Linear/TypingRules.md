@@ -307,8 +307,8 @@ G ; O ; S     ;      L1, Bs, Bm, L2 |- x := e : Bs, Bm, L2, {x}
 
 G ; O ; S ; L0 |- s1 : L1
 G ; O ; S ; L1 |- s2 : L2
-------------------------------
-G ; O ; S ; L0 |- s1; s2 |- L2
+-----------------------------
+G ; O ; S ; L0 |- s1; s2 : L2
 
 G ; O ; S, Bs ; Bm ;    Le |- e : ordinary
 G ; O ; S ;     Bs, Bm, L0 |- s1 : L12

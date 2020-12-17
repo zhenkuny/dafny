@@ -264,3 +264,130 @@ so that the shared variables can't escape the scope of the borrowing.
 
 ## Rust
 
+Rust is a C-like language with a sophisticated type system for linearity and borrowing,
+which allows Rust to be both low-level and type-safe, without requiring garbage collection
+or reference counting.
+
+Answers to key questions:
+
+1. Rust uses a variable's type to determine the variable's linearity.
+2. Rust prohibits assigning duplicable immutable variables to linear mutable variables.
+3. Rust has a sophisticated borrowing system to temporarily view
+linear mutable variables as duplicable immutable variables.
+
+### References vs. value types
+
+Rust is primarily an imperative language that manipulates C-like pointer-based data structures.
+This contrasts with Wadler's 1990 language, Linear Haskell, and Cogent,
+which are functional languages (although Cogent distinguishes between unboxed value types
+and reference types).
+Dafny supports both functional programming based on value types (e.g. seq, datatypes)
+and imperative programming based on heap objects (e.g. arrays, class objects).
+However, in contrast to Rust, linear Dafny uses linearity and borrowing just for
+the functional subset of Dafny, for which it tends to be easier to write proofs.
+
+### Lifetime parameters
+
+One limitation of shared variables in linear Dafny (and similar `{D, S}` variables in Cogent)
+is that the type checker blocks all shared variables from escaping
+the scope of a borrowing.
+In some cases, this is more restrictive than necessary.
+In the following example, the call `f(x, y)` is not allowed to assign
+the return value to a shared variable `y'`:
+
+```
+function method f(shared x: int, shared y: int): (shared y': int) {
+    y
+}
+function method consume(linear x: int, shared y: int): ()
+function method g(linear x: int, shared y: int): () {
+    shared var y' := f(x, y); // FAILS: borrowing x blocks the return of shared y'
+    consume(x, y')
+}
+```
+
+Blocking `y'` is unfortunate in this example.
+It's important to block `f(x, y)` from returning `x` as shared,
+so that `x` cannot be simultaneously `linear` and `shared`,
+but returning `y` as shared is perfectly safe.
+
+Rust "lifetime parameters" can distinguish between varying lifetimes
+of different borrowed variables.
+If linear Dafny had Rust's lifetime parameters,
+then the code above could be written as:
+
+```
+function method f<a, b>(shared<a> x: int, shared<b> y: int): (shared<b> y': int) {
+    y
+}
+function method consume(linear x: int, shared y: int): ()
+function method g(linear x: int, shared y: int): () {
+    shared var y' := f(x, y); // ok to return y' because of its long lifetime
+    consume(x, y')
+}
+```
+
+In this (hypothetical) code, `f`'s parameters `x` and `y` have explicitly
+different lifetimes `a` and `b`, and the return value `y'` has the same lifetime as `y`,
+namely `b`.
+This tells `g` that `y'` outlives the borrowing of the linear `x`,
+and therefore is safe to store in a local shared variable.
+
+### Borrowing components of data structures
+
+Linear Dafny's type system tracks borrowing of variables.
+In some cases, it would be useful to separately borrow different components
+of the data stored in a single variable:
+
+```
+method m1(shared x: int, shared y: int)
+method m2(linear inout x: int, shared y: int)
+method m3(linear inout x: int, linear inout y: int)
+method n(linear inout p: (linear int, linear int)) {
+  m1(p.0, p.1); // supported (borrows all of p once, uses shared borrowed p twice)
+  m2(inout p.0, p.1);       // not yet supported in linear Dafny: separately borrowing p.0 and p.1
+  m3(inout p.0, inout p.1); // not yet supported in linear Dafny: separately borrowing p.0 and p.1
+}
+```
+
+Rust's checker tracks borrowing of fine-grained "paths" through variables, like `p.0` and `p.1`,
+rather than just coarsely tracking borrowing of entire variables,
+and is therefore able to support examples like the code shown above.
+
+### Non-lexical lifetimes
+
+Linear Dafny tracks the scope of linear and shared variables
+to ensure that if shared `s` borrows from linear `x`,
+then `x` remains unavailable until `s` is out of scope.
+The following code fails to satisfy this criterion,
+and is rejected by linear Dafny's type checker:
+
+```
+function method borrow(shared s: int): (shared s': int)
+function method consume(i: int, linear x: int): ()
+function method f(shared s1: int, shared s2: int): (i: int)
+
+function method g(linear x: int): () {
+    shared var s := borrow(x);
+    var i := f(s, s);
+    consume(i, x) // FAILS: s is still lexically in scope when x is consumed
+}
+```
+
+Thus, the code must be rewritten to reduce the scope of `s`:
+
+```
+function method g(linear x: int): () {
+    var i := (
+        shared var s := borrow(x);
+        f(s, s));
+    consume(i, x) // SUCCEEDS: s is not in scope when x is consumed
+}
+```
+
+Rewriting the code like this is inconvenient.
+After all, there's nothing inherently unsafe about the first version
+of `g`, since it doesn't actually use `s` simultaneously with consuming `x`.
+Therefore, newer versions of Rust support non-lexical lifetimes,
+so that the checker tracks the actual usage of variables like `s`
+rather than just their scope.
