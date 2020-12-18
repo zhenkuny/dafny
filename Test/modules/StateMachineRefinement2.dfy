@@ -168,4 +168,17 @@ module Final {
         map[1 := 2],
         MapIfc.Query(1, 2));
   }
+
+  lemma names_for_same_type(
+      a: MapIfc.TransitionLabel,
+      b: A.ifc.TransitionLabel,
+      c: B.ifc.TransitionLabel,
+      d: BigRef.ifc.TransitionLabel,
+      e: BigRef.Ref1.L.TransitionLabel,
+      f: BigRef.Ref1.H.TransitionLabel,
+      g: BigRef.Ref2.L.TransitionLabel,
+      h: BigRef.Ref2.H.TransitionLabel)
+  requires a == b == c == d == e == f == g == h
+  {
+  }
 }
