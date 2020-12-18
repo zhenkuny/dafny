@@ -170,8 +170,8 @@ namespace Microsoft.Dafny.Linear {
     }
 
     void PreRewriteMethod(Method m, TopLevelDecl enclosingDecl) {
-      Util.OxideDebug(m.tok, "Rewriting method {0}", m.Name);
       Contract.Requires(m != null);
+      Util.OxideDebug(m.tok, "Rewriting method {0}", m.Name);
       // TODO(andrea) m.CompileOuts = m.Outs.ToList();
       // TODO(andrea) m.CompileIns = m.Ins.ToList();
 

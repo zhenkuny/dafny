@@ -15333,7 +15333,7 @@ namespace Microsoft.Dafny
             }
           }
           if (!ok) {
-            if (usageContext.available.ContainsKey(e.Var) && usageContext.available[e.Var] == Available.MutablyBorrowed) {
+            if (usageContext != null && usageContext.available.ContainsKey(e.Var) && usageContext.available[e.Var] == Available.MutablyBorrowed) {
               reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here (it's already mutably borrowed)");
             } else {
               reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here");
