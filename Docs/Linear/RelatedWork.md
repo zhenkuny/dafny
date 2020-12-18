@@ -295,7 +295,7 @@ In some cases, this is more restrictive than necessary.
 In the following example, the call `F(x, y)` is not allowed to assign
 the return value to a shared variable `y'`:
 
-```
+```dafny
 function method F(shared x: int, shared y: int): (shared y': int) {
     y
 }
@@ -316,7 +316,7 @@ of different borrowed variables.
 If linear Dafny had Rust's lifetime parameters,
 then the code above could be written as:
 
-```
+```dafny
 function method F<a, b>(shared<a> x: int, shared<b> y: int): (shared<b> y': int) {
     y
 }
@@ -339,7 +339,7 @@ Linear Dafny's type system tracks borrowing of variables.
 In some cases, it would be useful to separately borrow different components
 of the data stored in a single variable:
 
-```
+```dafny
 method M1(shared x: int, shared y: int)
 method M2(linear inout x: int, shared y: int)
 method M3(linear inout x: int, linear inout y: int)
@@ -362,7 +362,7 @@ then `x` remains unavailable until `s` is out of scope.
 The following code fails to satisfy this criterion,
 and is rejected by linear Dafny's type checker:
 
-```
+```dafny
 function method Borrow(shared s: int): (shared s': int)
 function method Consume(i: int, linear x: int): ()
 function method F(shared s1: int, shared s2: int): (i: int)
@@ -376,7 +376,7 @@ function method G(linear x: int): () {
 
 Thus, the code must be rewritten to reduce the scope of `s`:
 
-```
+```dafny
 function method G(linear x: int): () {
     var i := (
         shared var s := Borrow(x);
