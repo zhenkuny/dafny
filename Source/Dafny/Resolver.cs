@@ -7359,7 +7359,7 @@ namespace Microsoft.Dafny
               local.MakeGhost();
             }
           }
-          s.IsGhost = s.LocalVars.All(v => v.IsGhost);
+          s.IsGhost = s.LocalVars.All(v => v.IsGhost) && s.Usage != Usage.Linear;
           if (!s.IsGhost) {
             resolver.CheckIsCompilable(s.RHS, usageContext, s.Usage);
           }
@@ -9773,7 +9773,7 @@ namespace Microsoft.Dafny
           ScopePushAndReport(scope, bv, "local_variable");
           c++;
         }
-        if (c == 0) {
+        if (c == 0 && s.Usage != Usage.Linear) {
           // Every identifier-looking thing in the pattern resolved to a constructor; that is, this LHS is a constant literal
           reporter.Error(MessageSource.Resolver, s.LHS.tok, "LHS is a constant literal; to be legal, it must introduce at least one bound variable");
         }
@@ -13469,7 +13469,7 @@ namespace Microsoft.Dafny
               ScopePushAndReport(scope, v, "let-variable");
               c++;
             }
-            if (c == 0) {
+            if (c == 0 && e.Usage != Usage.Linear) {
               // Every identifier-looking thing in the pattern resolved to a constructor; that is, this LHS is a constant literal
               reporter.Error(MessageSource.Resolver, lhs.tok, "LHS is a constant literal; to be legal, it must introduce at least one bound variable");
             }
@@ -15477,7 +15477,7 @@ namespace Microsoft.Dafny
           var uc0 = UsageContext.Copy(usageContext);
           foreach (var ee in e.RHSs) {
             var xs = e.LHSs[i].Vars.ToList();
-            if (!xs.All(bv => bv.IsGhost)) {
+            if (!xs.All(bv => bv.IsGhost) || e.Usage == Usage.Linear) {
               CheckIsCompilable(ee, usageContext, e.Usage);
             }
             i++;

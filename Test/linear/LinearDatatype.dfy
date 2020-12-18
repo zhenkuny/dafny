@@ -148,6 +148,31 @@ linear datatype fd = FD(i:int)
   linear method m3() returns(linear r:fd) {var i := f2(); r := m1();}
 }
 
+linear datatype D0 = D0
+linear datatype Dg = Dg(ghost g:int)
+
+method TestD0(linear x:D0)
+{
+    linear var D0() := x; // note:it's important to allow the "()"; this is *not* the same as "linear var D0 := x;"
+}
+
+method TestDg(linear x:Dg)
+{
+    linear var Dg(g) := x;
+}
+
+function method FunD0(linear x:D0):()
+{
+    linear var D0() := x;
+    ()
+}
+
+function method FunDg(linear x:Dg):()
+{
+    linear var Dg(g) := x;
+    ()
+}
+
 //
 //
 //
