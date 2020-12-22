@@ -941,7 +941,6 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
      List<MemberDecl/*!*/> namedModuleDefaultClassMembers = new List<MemberDecl>();;
      List<IToken> idExports;
      List<ModuleFacadeDecl> formals = new List<ModuleFacadeDecl>();
-     IToken idRefined = null;   // XXX delete after code dependency removed.
      ModuleExpression modexp = null;
      ModuleExpression moduleRefined = null;
      ModuleDefinition module;
@@ -957,11 +956,15 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
       "." NoUSIdent<out id>
     }
     [ ModuleFormals<parent, out formals> ]
-    [ "refines" ModuleExpressionProd<out moduleRefined> /*XXXModuleName<out idRefined>*/ ]
-    (. module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false, idRefined, parent, attrs,
+    [ "refines" ModuleExpressionProd<out moduleRefined> /* XXX TODO disallow dots, per Rustan. */ ]
+    (. module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false, moduleRefined, parent, attrs,
                                       false, theVerifyThisFile, theCompileThisFile);
        module.TopLevelDecls.AddRange(formals);
     .)
+    {
+      "requires" ModuleExpressionProd<out var moduleRequiresLeft> "==" ModuleExpressionProd<out var moduleRequiresRight>
+        (. module.AddModuleRequiresConstraint(moduleRequiresLeft, moduleRequiresRight); .)
+    }
     "{"                                 (. module.BodyStartTok = t; .)
       { TopDecl<module, namedModuleDefaultClassMembers, /* isTopLevel */ false, isAbstract>}
     "}"                                 (. module.BodyEndTok = t;

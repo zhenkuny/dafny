@@ -1426,6 +1426,7 @@ namespace Microsoft.Dafny {
       super = super.NormalizeExpandKeepConstraints();  // expand type synonyms
       var origSub = sub;
       sub = sub.NormalizeExpand();  // expand type synonyms AND constraints
+      //Console.Out.WriteLine("XXX-J1 IsHeadSupertypeOf " + super.GetType().Name + " sub " + sub.GetType().Name);
       if (super is TypeProxy) {
         return super == sub;
       } else if (super is BoolType) {
@@ -1470,6 +1471,7 @@ namespace Microsoft.Dafny {
       } else if (super is UserDefinedType) {
         var udtSuper = (UserDefinedType)super;
         if (udtSuper.ResolvedParam != null) {
+          //Console.Out.WriteLine("XXX-J3 IsHeadSupertypeOf rp " + udtSuper.ResolvedParam + " sub.atp " + sub.AsTypeParameter);
           return udtSuper.ResolvedParam == sub.AsTypeParameter;
         } else {
           Contract.Assert(udtSuper.ResolvedClass != null);
@@ -1478,6 +1480,7 @@ namespace Microsoft.Dafny {
             sub = sub.NormalizeExpandKeepConstraints();  // skip past proxies and type synonyms
             var udtSub = sub as UserDefinedType;
             if (udtSub == null) {
+              //Console.Out.WriteLine("XXX-J2 IsHeadSupertypeOf false");
               return false;
             } else if (udtSuper.ResolvedClass == udtSub.ResolvedClass) {
               return true;
@@ -1495,6 +1498,7 @@ namespace Microsoft.Dafny {
               var cl = (ClassDecl)udtSub.ResolvedClass;
               return cl.HeadDerivesFrom(udtSuper.ResolvedClass);
             } else {
+              //Console.Out.WriteLine("XXX-J2 IsHeadSupertypeOf false");
               return false;
             }
           }
@@ -2756,6 +2760,7 @@ namespace Microsoft.Dafny {
       this.Name = tp.Name;
       this.TypeArgs = new List<Type>();
       this.ResolvedParam = tp;
+      //Console.Out.WriteLine("XXX-J1 UserDefinedType rp " + tp);
       var ns = new NameSegment(tok, tp.Name, null);
       var r = new Resolver_IdentifierExpr(tok, tp);
       ns.ResolvedExpression = r;
@@ -2773,6 +2778,7 @@ namespace Microsoft.Dafny {
       this.tok = tp.tok;
       this.Name = tp.Name;
       this.ResolvedParam = tp;
+      //Console.Out.WriteLine("XXX-J2 UserDefinedType rp " + tp);
       this.ResolvedClass = decl;
       this.TypeArgs = typeArgs;
       var ns = new NameSegment(tok, tp.Name, null);
@@ -3751,6 +3757,16 @@ namespace Microsoft.Dafny {
     }
   }
 
+  public class ModuleExpressionPair {
+    public ModuleExpression A, B;
+    public ModuleExpressionPair(ModuleExpression a, ModuleExpression b) {
+      Contract.Requires(a != null);
+      Contract.Requires(b != null);
+      A = a;
+      B = b;
+    }
+  }
+
   public class ModuleDefinition : INamedRegion, IAttributeBearingDeclaration
   {
     public readonly IToken tok;
@@ -3772,8 +3788,11 @@ namespace Microsoft.Dafny {
     string INamedRegion.Name { get { return Name; } }
     public ModuleDefinition Module;  // readonly, except can be changed by resolver for prefix-named modules when the real parent is discovered
     public readonly Attributes Attributes;
-    public readonly IToken RefinementBaseName;  // null if no refinement base
-    public ModuleDecl RefinementBaseRoot; // filled in early during resolution, corresponds to RefinementBaseName[0]
+    public readonly ModuleExpression RefinementBaseExpr;  // null if no refinement base
+    public ModuleDecl RefinementBaseRoot; // filled in early during resolution, corresponds to RefinementBaseExpr[0]
+
+    public List<ModuleExpressionPair> ModuleRequiresConstraints;
+
     public bool SuccessfullyResolved;  // set to true upon successful resolution; modules that import an unsuccessfully resolved module are not themselves resolved
 
     public List<Include> Includes;
@@ -3827,7 +3846,7 @@ namespace Microsoft.Dafny {
       Contract.Invariant(CallGraph != null);
     }
 
-    public ModuleDefinition(IToken tok, string name, List<IToken> prefixIds, bool isAbstract, bool isFacade, IToken refinementBase, ModuleDefinition parent, Attributes attributes, bool isBuiltinName,
+    public ModuleDefinition(IToken tok, string name, List<IToken> prefixIds, bool isAbstract, bool isFacade, ModuleExpression refinementBaseExpr, ModuleDefinition parent, Attributes attributes, bool isBuiltinName,
       bool isToBeVerified, bool isToBeCompiled)
     {
       Contract.Requires(tok != null);
@@ -3837,7 +3856,8 @@ namespace Microsoft.Dafny {
       this.PrefixIds = prefixIds;
       this.Attributes = attributes;
       this.Module = parent;
-      RefinementBaseName = refinementBase;
+      RefinementBaseExpr = refinementBaseExpr;
+      ModuleRequiresConstraints = new List<ModuleExpressionPair>();
       IsAbstract = isAbstract;
       IsFacade = isFacade;
       RefinementBaseRoot = null;
@@ -3846,6 +3866,10 @@ namespace Microsoft.Dafny {
       IsBuiltinName = isBuiltinName;
       IsToBeVerified = isToBeVerified;
       IsToBeCompiled = isToBeCompiled;
+    }
+
+    public void AddModuleRequiresConstraint(ModuleExpression a, ModuleExpression b) {
+        ModuleRequiresConstraints.Add(new ModuleExpressionPair(a, b));
     }
 
     VisibilityScope visibilityScope;
@@ -5330,6 +5354,7 @@ namespace Microsoft.Dafny {
       var thisType = UserDefinedType.FromTopLevelDecl(d.tok, d);
       if (d is OpaqueTypeDecl) {
         thisType.ResolvedParam = ((OpaqueTypeDecl)d).TheType;
+        //Console.Out.WriteLine("XXX-J2 NewSelfSynonym rp " + thisType.ResolvedParam);
       }
 
       var tsd = new InternalTypeSynonymDecl(d.tok, d.Name, TypeParameter.GetExplicitCharacteristics(d), d.TypeArgs, d.Module, thisType, d.Attributes);

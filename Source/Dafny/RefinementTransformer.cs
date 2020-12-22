@@ -106,7 +106,7 @@ namespace Microsoft.Dafny
           PreResolveWorker(m);
 
         } else {
-          reporter.Error(MessageSource.RefinementTransformer, m.RefinementBaseName, "module ({0}) named as refinement base does not exist", m.RefinementBaseName.val);
+          reporter.Error(MessageSource.RefinementTransformer, m.RefinementBaseExpr.FirstToken(), "module ({0}) named as refinement base does not exist", m.RefinementBaseExpr.ToString());
         }
       }
     }

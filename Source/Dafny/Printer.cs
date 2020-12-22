@@ -492,8 +492,8 @@ namespace Microsoft.Dafny {
         }
       }
       wr.Write("{0} ", module.Name);
-      if (module.RefinementBaseName != null) {
-        wr.Write("refines {0} ", module.RefinementBaseName.val);
+      if (module.RefinementBaseExpr != null) {
+        wr.Write("refines {0} ", module.RefinementBaseExpr.ToString());
       }
       if (module.TopLevelDecls.Count == 0) {
         wr.WriteLine("{ }");

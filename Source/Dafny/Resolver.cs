@@ -1417,16 +1417,21 @@ namespace Microsoft.Dafny
     }
 
     private void ProcessDependenciesDefinition(ModuleDecl decl, ModuleDefinition m, ModuleBindings bindings, Graph<ModuleDecl> dependencies) {
-      if (m.RefinementBaseName != null) {
-        ModuleDecl other;
-        if (!bindings.TryLookup(m.RefinementBaseName, out other)) {
-          reporter.Error(MessageSource.Resolver, m.RefinementBaseName, "module {0} named as refinement base does not exist", m.RefinementBaseName.val);
-        } else if (other is LiteralModuleDecl && ((LiteralModuleDecl)other).ModuleDef == m) {
-          reporter.Error(MessageSource.Resolver, m.RefinementBaseName, "module cannot refine itself: {0}", m.RefinementBaseName.val);
+      if (m.RefinementBaseExpr != null) {
+        if (!m.RefinementBaseExpr.IsSimpleName()) {
+          reporter.Error(MessageSource.Resolver, m.RefinementBaseExpr.FirstToken(), "module {0} named as refinement base is too tricky (work in progress)", m.RefinementBaseExpr.ToString());
         } else {
-          Contract.Assert(other != null);  // follows from postcondition of TryGetValue
-          dependencies.AddEdge(decl, other);
-          m.RefinementBaseRoot = other;
+            ModuleDecl other;
+            IToken TempRefinementBaseName = m.RefinementBaseExpr.FirstToken(); // XXX hack to get simplest refinement working
+            if (!bindings.TryLookup(TempRefinementBaseName, out other)) {
+              reporter.Error(MessageSource.Resolver, TempRefinementBaseName, "module {0} named as refinement base does not exist", TempRefinementBaseName.val);
+            } else if (other is LiteralModuleDecl && ((LiteralModuleDecl)other).ModuleDef == m) {
+              reporter.Error(MessageSource.Resolver, TempRefinementBaseName, "module cannot refine itself: {0}", TempRefinementBaseName.val);
+            } else {
+              Contract.Assert(other != null);  // follows from postcondition of TryGetValue
+              dependencies.AddEdge(decl, other);
+              m.RefinementBaseRoot = other;
+            }
         }
       }
       foreach (var toplevel in m.TopLevelDecls) {
@@ -3879,6 +3884,7 @@ namespace Microsoft.Dafny
       Contract.Requires(super != null);
       Contract.Requires(errMsg != null);
 
+      //Console.Out.WriteLine("XXX-J1 ConstrainSubtypeRelation super " + super + " sub " + sub);
       if (!keepConstraints && super is InferredTypeProxy) {
         var ip = (InferredTypeProxy)super;
         if (ip.KeepConstraints) {
@@ -3905,6 +3911,7 @@ namespace Microsoft.Dafny
       Contract.Requires(!(super is TypeProxy) || ((TypeProxy)super).T == null);  // caller is expected to have Normalized away proxies
       Contract.Requires(c != null);
 
+      //Console.Out.WriteLine("XXX-J1 ConstrainSubtypeRelation_Aux super " + super + " sub " + sub);
       if (object.ReferenceEquals(super, sub)) {
         return true;
       } else if (super is TypeProxy && sub is TypeProxy) {
@@ -3928,6 +3935,7 @@ namespace Microsoft.Dafny
         bool headSymbolsAgree = Type.IsHeadSupertypeOf(super.NormalizeExpand(keepConstraints), sub);
         if (!headSymbolsAgree) {
           c.FlagAsError();
+          //Console.Out.WriteLine("XXX-J2 ConstrainSubtypeRelation_Aux error super "+ super.NormalizeExpand(keepConstraints)+ " sub" + sub);
           return false;
         }
         // TODO: inspect type parameters in order to produce some error messages sooner
@@ -4434,6 +4442,7 @@ namespace Microsoft.Dafny
                 return true;
               } else if (u.IsTypeParameter) {
                 // we need the constraint base(t) :> u, which for a type parameter t can happen iff t :> u
+                //Console.Out.WriteLine("XXX-J1 Confirm:ConstrainSubtypeRelation");
                 resolver.ConstrainSubtypeRelation(t, u, errorMsg);
                 convertedIntoOtherTypeConstraints = true;
                 return true;
@@ -4447,6 +4456,7 @@ namespace Microsoft.Dafny
                 return true;
               } else if (fullstrength && u is NonProxyType) {
                 // We're willing to change "base(t) :> u" to the stronger constraint "t :> u" for the sake of making progress.
+                //Console.Out.WriteLine("XXX-J2 Confirm:ConstrainSubtypeRelation");
                 resolver.ConstrainSubtypeRelation(t, u, errorMsg);
                 convertedIntoOtherTypeConstraints = true;
                 return true;
@@ -4642,6 +4652,7 @@ namespace Microsoft.Dafny
               return true;
             }
             // note, it's okay if "Types[1]" is a TypeProxy
+            //Console.Out.WriteLine("XXX-J3 Confirm:ConstrainSubtypeRelation");
             resolver.ConstrainSubtypeRelation(indexType, Types[1], errorMsg);  // use the same error message
             convertedIntoOtherTypeConstraints = true;
             return true;
@@ -13955,7 +13966,7 @@ namespace Microsoft.Dafny
         } else {
           for (var i = 0; i < fnType.Arity; i++) {
             AddAssignableConstraint(e.Args[i].tok, fnType.Args[i], e.Args[i].Type,
-              "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects {0}, got {1})");
+              "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects XXX-B {0}, got {1})");
           }
         }
 
@@ -15086,6 +15097,12 @@ namespace Microsoft.Dafny
               }
             }
           }
+          // If we get here and find that decl is a module, check to see if it has a synonym via requires.
+          // XXX jonh left off here
+          Console.Out.WriteLine(String.Format("XXX-NameSegment tok {0} name {1}, decl {2}", expr.tok, name, decl));
+//          if (decl is ModuleDecl) {
+//            decl = Canonicalize(decl);
+//          }
           r = CreateResolver_IdentifierExpr(expr.tok, name, expr.OptTypeArguments, decl);
         }
 
@@ -15390,6 +15407,8 @@ namespace Microsoft.Dafny
                 reporter.Error(MessageSource.Resolver, expr.tok, "To access members of {0} '{1}', write '{1}', not '{2}'", decl.WhatKind, decl.Name, name);
               }
             }
+            Console.Out.WriteLine(String.Format("XXX-DotSuffix tok {0} name {1}, decl {2}", expr.tok, name, decl));
+            // XXX jonh left off second entry point for decl canonicalization
             r = CreateResolver_IdentifierExpr(expr.tok, name, expr.OptTypeArguments, decl);
           }
         } else if (sig.StaticMembers.TryGetValue(name, out member)) {
@@ -15781,7 +15800,7 @@ namespace Microsoft.Dafny
             reporter.Error(MessageSource.Resolver, e.tok, "wrong number of arguments to function application ({0} expects {1}, got {2})", what, fnType.Arity, e.Args.Count);
           } else {
             for (var i = 0; i < fnType.Arity; i++) {
-              AddAssignableConstraint(e.Args[i].tok, fnType.Args[i], e.Args[i].Type, "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects {0}, got {1})");
+              AddAssignableConstraint(e.Args[i].tok, fnType.Args[i], e.Args[i].Type, "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects XXX-A {0}, got {1})");
             }
             if (errorCount != reporter.Count(ErrorLevel.Error)) {
               // do nothing else; error has been reported
