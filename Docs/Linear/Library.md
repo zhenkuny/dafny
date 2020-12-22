@@ -84,6 +84,46 @@ heap modifications
 If methods without modifies clauses could modify the heap,
 `caller_must_be_pure` would have to be changed to disallow calls to methods.
 
+## Swapping and assignment via inout
+
+The following methods are convenient for updating linear fields of datatypes:
+
+```dafny
+method Replace<V>(linear inout v: V, linear newV: V) returns (linear replaced: V)
+    ensures replaced == old_v
+    ensures v == newV
+{
+    replaced := v;
+    v := newV;
+}
+
+method Swap<V>(linear inout a: V, linear inout b: V)
+    ensures b == old_a
+    ensures a == old_b
+{
+    b := Replace(inout a, b);
+}
+```
+
+For example:
+
+```
+linear datatype LList<A> = LNil | LCons(hd: A, linear tl: LList<A>)
+
+method M(linear inout l: LList<int>) {
+    if (l.LCons?) {
+        inout l.hd := 10;
+        inout l.hd := l.hd + 20;
+
+        linear var tmp := Replace(inout l.tl, LNil);
+        Swap(inout l.tl, inout tmp);
+        linear var LNil() := tmp;
+
+        assert l == old_l.(hd := 30);
+    }
+}
+```
+
 ## The seq type
 
 Linear Dafny uses standard Dafny's `seq` type for both ordinary operations

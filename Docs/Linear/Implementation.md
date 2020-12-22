@@ -137,6 +137,48 @@ This makes checking `if/else` and `while` slightly tricky, requiring saving copi
 (In retrospect, this design led to several bugs, so a more functional programming style with an immutable `UsageContext`
 might have been a safer design.)
 
+To check borrowing in an expression like "`var x := e1; e2`",
+given a `UsageContext` `uc0`,
+the type checker performs the following steps:
+- Check `e1` in `uc0` to produce a revised `UsageContext` `uc1`.
+- Let `borrow` be the list of all variables newly borrowed by `e1`
+(i.e. marked Borrowed in `uc1` but not in `uc0`).
+Let `uc2` be `uc1` with all variables in `borrow` set to Available
+(see `RemoveInnerBorrowed` in Resolver.cs, shown below)
+- Check `e2` in `uc2` to produce `uc3`.
+- For each `x` in `borrow` (see `MaybeIntroduceLetBang` in Resolver.cs, shown below):
+  - if `e2` consumed `x`, then we discharge the borrowing, leaving `x` Available
+  - if `e2` did not consume `x`, we broaden the scope of the borrowing, leaving `x` Borrowed
+
+```csharp
+    static List<IVariable> RemoveInnerBorrowed(UsageContext outer, UsageContext inner) {
+      List<IVariable> borrow = new List<IVariable>();
+      if (inner == null) inner = new UsageContext(null, null);
+      if (outer == null) outer = new UsageContext(null, null);
+      foreach (var k in new List<IVariable>(inner.available.Keys)) {
+        if (outer.available[k] == Available.Available && inner.available[k] == Available.Borrowed) {
+          inner.available[k] = Available.Available;
+          borrow.Add(k);
+        }
+      }
+      return borrow;
+    }
+
+    void MaybeIntroduceLetBang(IToken tok, Usage usage, UsageContext usageContext, List<IVariable> borrow) {
+      foreach (var x in borrow) {
+        if (usageContext.available[x] == Available.Consumed) {
+          // If Body consumed x, try to introduce let!(x) here
+          if (usage == Usage.Shared) {
+            reporter.Error(MessageSource.Resolver, tok, "cannot borrow {0} when assigning to shared variable", x.Name);
+          }
+        } else {
+          // Otherwise, we don't introduce let!(x) here; just propagate the fact that x was Borrowed
+          usageContext.available[x] = Available.Borrowed;
+        }
+      }
+    }
+```
+
 ## Relevant git commits
 
 ### Linear and shared
