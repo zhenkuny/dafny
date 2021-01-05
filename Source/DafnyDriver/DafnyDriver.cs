@@ -75,7 +75,7 @@ namespace Microsoft.Dafny
         Console.WriteLine("Press Enter to exit.");
         Console.ReadLine();
       }
-      if (!DafnyOptions.O.CountVerificationErrors && exitValue != ExitValue.PREPROCESSING_ERROR)
+      if (!DafnyOptions.O.CountVerificationErrors)
       {
         return 0;
       }
@@ -145,6 +145,7 @@ namespace Microsoft.Dafny
         Console.WriteLine("--------------------");
       }
 
+      ISet<String> filesSeen = new HashSet<string>();
       foreach (string file in CommandLineOptions.Clo.Files)
       { Contract.Assert(file != null);
         string extension = Path.GetExtension(file);
@@ -152,7 +153,11 @@ namespace Microsoft.Dafny
 
         bool isDafnyFile = false;
         try {
-          dafnyFiles.Add(new DafnyFile(file));
+          var df = new DafnyFile(file);
+          if (!filesSeen.Add(df.CanonicalPath)) {
+            continue; // silently ignore duplicate
+          }
+          dafnyFiles.Add(df);
           isDafnyFile = true;
         } catch (IllegalDafnyFile) {
           // Fall through and try to handle the file as an "other file"
@@ -263,7 +268,7 @@ namespace Microsoft.Dafny
       }
 
       Dafny.Program dafnyProgram;
-      string programName = dafnyFileNames.Count == 1 ? dafnyFileNames[0] : "the program";
+      string programName = dafnyFileNames.Count == 1 ? dafnyFileNames[0] : "the_program";
       string err = Dafny.Main.ParseCheck(dafnyFiles, programName, reporter, out dafnyProgram);
       if (err != null) {
         exitValue = ExitValue.DAFNY_ERROR;
@@ -371,9 +376,8 @@ namespace Microsoft.Dafny
           TimeSpan ts = watch.Elapsed;
           string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}",
             ts.Hours, ts.Minutes, ts.Seconds);
-
           ExecutionEngine.printer.AdvisoryWriteLine("Elapsed time: {0}", elapsedTime);
-          ExecutionEngine.printer.WriteTrailer(newstats);
+          WriteTrailer(newstats);
         }
 
         statss.Add(prog.Item1, newstats);
@@ -382,6 +386,30 @@ namespace Microsoft.Dafny
       watch.Stop();
 
       return isVerified;
+    }
+
+    private static void WriteTrailer(PipelineStatistics stats) {
+      if (CommandLineOptions.Clo.vcVariety != CommandLineOptions.VCVariety.Doomed && !CommandLineOptions.Clo.Verify && stats.ErrorCount == 0) {
+        Console.WriteLine();
+        Console.Write("{0} did not attempt verification", CommandLineOptions.Clo.DescriptiveToolName);
+        if (stats.InconclusiveCount != 0) {
+          Console.Write(", {0} inconclusive{1}", stats.InconclusiveCount, stats.InconclusiveCount == 1 ? "" : "s");
+        }
+        if (stats.TimeoutCount != 0) {
+          Console.Write(", {0} time out{1}", stats.TimeoutCount, stats.TimeoutCount == 1 ? "" : "s");
+        }
+        if (stats.OutOfMemoryCount != 0) {
+          Console.Write(", {0} out of memory", stats.OutOfMemoryCount);
+        }
+        if (stats.OutOfResourceCount != 0) {
+          Console.Write(", {0} out of resource", stats.OutOfResourceCount);
+        }
+        Console.WriteLine();
+        Console.Out.Flush();
+      } else {
+        // This calls a routine within Boogie
+        ExecutionEngine.printer.WriteTrailer(stats);
+      }
     }
 
     private static void WriteStatss(Dictionary<string, PipelineStatistics> statss) {
@@ -398,7 +426,7 @@ namespace Microsoft.Dafny
         statSum.CachedVerifiedCount += stats.Value.CachedVerifiedCount;
         statSum.InconclusiveCount += stats.Value.InconclusiveCount;
       }
-      ExecutionEngine.printer.WriteTrailer(statSum);
+      WriteTrailer(statSum);
     }
 
 

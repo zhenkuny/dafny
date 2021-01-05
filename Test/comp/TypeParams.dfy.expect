@@ -17,7 +17,7 @@ Color.Pink 19 -3
 null null null null
 System.Func`2[Dafny.BigRational,System.Boolean]
 System.Func`1[System.Numerics.BigInteger]
-System.Func`3[_module.Color,Dafny.Set`1[System.UInt16],System.UInt32]
+System.Func`3[_module.Color,Dafny.ISet`1[System.UInt16],System.UInt32]
 0 0
 
 Dafny program verifier finished with 21 verified, 0 errors
@@ -37,8 +37,8 @@ NonemptyCoList.CoAtom
 Color.Pink 19 -3
 null null null null
 function () { return false; }
-function () { return new BigNumber(0); }
-function () { return new BigNumber(0); }
+function () { return _dafny.ZERO; }
+function () { return _dafny.ZERO; }
 0 0
 
 Dafny program verifier finished with 21 verified, 0 errors

@@ -1,3 +1,6 @@
+// RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:cpp "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
 newtype uint32 = i:int | 0 <= i < 0x100000000
 
 datatype Example0 = Example0(u:uint32, b:bool)
@@ -78,7 +81,7 @@ method LetSuchThat() {
   var s:set<uint32> := { 0, 1, 2, 3 };
   var e:uint32 :| e in s;
 
-  print e, "\n";
+  //print e, "\n";
   Test("LetSuchThatMembership", e in s);
   Test("LetSuchThatValue", e == 0 || e == 1 || e == 2 || e == 3);
 }
