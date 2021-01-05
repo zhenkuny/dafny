@@ -3093,13 +3093,13 @@ namespace Microsoft.Dafny
                     if (x.Inout) {
                       Contract.Assert(false);
                     }
-                    reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at method exit");
+                    reporter.Error(MessageSource.Resolver, x, "linear variable <<{0}>> must be unavailable at method exit", x.Name);
                   }
                 }
               }
               foreach (Formal x in m.Outs) {
                 if (x.IsLinear && usageContext.available[x] != Available.Available) {
-                  reporter.Error(MessageSource.Resolver, x, "linear variable must be assigned at method exit");
+                  reporter.Error(MessageSource.Resolver, x, "linear variable <<{0}>> must be assigned at method exit", x.Name);
                 }
               }
               DetermineTailRecursion(m);
@@ -3120,7 +3120,7 @@ namespace Microsoft.Dafny
               }
               foreach (Formal x in f.Formals) {
                 if (x.IsLinear && usageContext.available[x] != Available.Consumed) {
-                  reporter.Error(MessageSource.Resolver, x, "linear variable must be unavailable at function exit");
+                  reporter.Error(MessageSource.Resolver, x, "linear variable <<{0}>> must be unavailable at function exit", x.Name);
                 }
               }
             }
@@ -7176,7 +7176,7 @@ namespace Microsoft.Dafny
         IdentifierExpr x = ExprAsIdentifier(usageContext, expr);
         if (expr is NameSegment && x != null) {
           if (!x.Var.IsLinear) {
-            Error(expr, String.Format("only linear member selection is allowed in inout {0}", contextDesc));
+            Error(expr, String.Format("only linear member selection (e.g., <<{0}>>) is allowed in inout {1}", x.Var.Name, contextDesc));
             return false;
           } else {
             return true;
@@ -15334,17 +15334,17 @@ namespace Microsoft.Dafny
           }
           if (!ok) {
             if (usageContext != null && usageContext.available.ContainsKey(e.Var) && usageContext.available[e.Var] == Available.MutablyBorrowed) {
-              reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here (it's already mutably borrowed)");
+              reporter.Error(MessageSource.Resolver, expr, "linear variable <<{0}>> is unavailable here (it's already mutably borrowed)", e.Var.Name);
             } else {
-              reporter.Error(MessageSource.Resolver, expr, "linear variable is unavailable here");
+              reporter.Error(MessageSource.Resolver, expr, "linear variable <<{0}>> is unavailable here", e.Var.Name);
             }
           }
         }
         if (e.Var != null && e.Var.IsShared && usageContext == null) {
-          reporter.Error(MessageSource.Resolver, expr, "shared variable is out of scope here");
+          reporter.Error(MessageSource.Resolver, expr, "shared variable <<{0}>> is out of scope here", e.Var.Name);
         }
         if (e.Var != null && e.Var.IsGhost) {
-          reporter.Error(MessageSource.Resolver, expr, "ghost variables are allowed only in specification contexts");
+          reporter.Error(MessageSource.Resolver, expr, "ghost variables (e.g., <<{0}>>)  are allowed only in specification contexts", e.Var.Name);
           return Usage.Ordinary;
         }
         return e.Var.Usage;
@@ -15355,7 +15355,7 @@ namespace Microsoft.Dafny
       } else if (expr is MemberSelectExpr) {
         var e = (MemberSelectExpr)expr;
         if (e.Member != null && e.Member.IsGhost) {
-          reporter.Error(MessageSource.Resolver, expr, "ghost fields are allowed only in specification contexts");
+          reporter.Error(MessageSource.Resolver, expr, "ghost fields (e.g., <<{0}>>) are allowed only in specification contexts", e.Member.Name);
           return Usage.Ordinary;
         }
         var d = e.Member as DatatypeDestructor;

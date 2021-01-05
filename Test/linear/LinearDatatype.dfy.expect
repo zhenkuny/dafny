@@ -8,14 +8,14 @@ LinearDatatype.dfy(208,20): Error: expected ordinary expression, found linear ex
 LinearDatatype.dfy(215,4): Error: cannot borrow o when assigning to shared variable
 LinearDatatype.dfy(222,11): Error: cannot borrow o when assigning to shared variable
 LinearDatatype.dfy(231,6): Error: expected linear expression, found shared expression
-LinearDatatype.dfy(228,39): Error: linear variable must be unavailable at function exit
+LinearDatatype.dfy(228,39): Error: linear variable <<o>> must be unavailable at function exit
 LinearDatatype.dfy(236,14): Error: expected linear expression, found ordinary expression
 LinearDatatype.dfy(236,10): Error: expected ordinary expression, found linear expression
 LinearDatatype.dfy(241,11): Error: expected ordinary expression, found shared expression
 LinearDatatype.dfy(241,14): Error: expected linear expression, found shared expression
 LinearDatatype.dfy(241,10): Error: expected ordinary expression, found linear expression
 LinearDatatype.dfy(246,11): Error: expected ordinary expression, found linear expression
-LinearDatatype.dfy(246,14): Error: linear variable is unavailable here
+LinearDatatype.dfy(246,14): Error: linear variable <<i>> is unavailable here
 LinearDatatype.dfy(246,10): Error: expected ordinary expression, found linear expression
 LinearDatatype.dfy(251,14): Error: expected linear expression, found ordinary expression
 LinearDatatype.dfy(251,10): Error: expected shared expression, found linear expression
@@ -23,13 +23,13 @@ LinearDatatype.dfy(256,11): Error: expected ordinary expression, found shared ex
 LinearDatatype.dfy(256,14): Error: expected linear expression, found shared expression
 LinearDatatype.dfy(256,10): Error: expected shared expression, found linear expression
 LinearDatatype.dfy(261,11): Error: expected ordinary expression, found linear expression
-LinearDatatype.dfy(261,14): Error: linear variable is unavailable here
+LinearDatatype.dfy(261,14): Error: linear variable <<i>> is unavailable here
 LinearDatatype.dfy(261,10): Error: expected shared expression, found linear expression
 LinearDatatype.dfy(266,14): Error: expected linear expression, found ordinary expression
 LinearDatatype.dfy(271,11): Error: expected ordinary expression, found shared expression
 LinearDatatype.dfy(271,14): Error: expected linear expression, found shared expression
 LinearDatatype.dfy(276,11): Error: expected ordinary expression, found linear expression
-LinearDatatype.dfy(276,14): Error: linear variable is unavailable here
+LinearDatatype.dfy(276,14): Error: linear variable <<i>> is unavailable here
 LinearDatatype.dfy(281,31): Error: expected shared expression, found ordinary expression
 LinearDatatype.dfy(286,31): Error: expected linear expression, found ordinary expression
 LinearDatatype.dfy(286,4): Error: linear variable b must be unavailable at end of block
@@ -113,9 +113,9 @@ LinearDatatype.dfy(476,13): Error: linear variable b must be unavailable at end 
 LinearDatatype.dfy(481,11): Error: in conditional, linear variable r must be available after both branches or unavailable after both branches
 LinearDatatype.dfy(490,11): Error: in conditional, linear variable r must be available after both branches or unavailable after both branches
 LinearDatatype.dfy(499,11): Error: in conditional, linear variable r must be available after both branches or unavailable after both branches
-LinearDatatype.dfy(497,44): Error: linear variable must be unavailable at method exit
+LinearDatatype.dfy(497,44): Error: linear variable <<r>> must be unavailable at method exit
 LinearDatatype.dfy(508,11): Error: in conditional, linear variable r must be available after both branches or unavailable after both branches
-LinearDatatype.dfy(506,44): Error: linear variable must be unavailable at method exit
+LinearDatatype.dfy(506,44): Error: linear variable <<r>> must be unavailable at method exit
 LinearDatatype.dfy(517,11): Error: in conditional, linear variable x must be available after both branches or unavailable after both branches
 LinearDatatype.dfy(526,11): Error: in conditional, linear variable x must be available after both branches or unavailable after both branches
 LinearDatatype.dfy(536,33): Error: cannot borrow variable because expression returns a shared result
