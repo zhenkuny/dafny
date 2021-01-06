@@ -330,7 +330,7 @@ wmethodDecl = ws;
 
         // Overload the comparison operator
         ws.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right);", DtT_protected, InstantiateTemplate(dt.TypeArgs));
-        var weq = wdef.NewNamedBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right) ", DtT_protected, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)));
+        var weq = wdef.NewNamedBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right) ", DtT_protected, DeclareTemplate(dt.TypeArgs), InstantiateTemplate(dt.TypeArgs)));
         weq.Write("\treturn true ");
         foreach (var arg in argNames) {
             weq.WriteLine("\t\t&& left.{0} == right.{0}", arg);
@@ -361,7 +361,7 @@ wmethodDecl = ws;
           string structName = DatatypeSubStructName(ctor);
           // First add a forward declaration of the type and the equality operator to workaround templating issues
           wdecl.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), structName);
-          wdecl.WriteLine("{0}\nbool operator==(const {1}{2} &left, const {1}{2} &right); ", DeclareTemplate(dt.TypeArgs), structName, TemplateMethod(dt.TypeArgs));
+          wdecl.WriteLine("{0}\nbool operator==(const {1}{2} &left, const {1}{2} &right); ", DeclareTemplate(dt.TypeArgs), structName, InstantiateTemplate(dt.TypeArgs));
 
           var wstruct = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), structName), ";");
           // Declare the struct members
@@ -378,8 +378,8 @@ wmethodDecl = ws;
           }
 
           // Overload the comparison operator
-          wstruct.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right); ", structName, TemplateMethod(dt.TypeArgs));
-          var weq = wdef.NewBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right)", structName, DeclareTemplate(dt.TypeArgs), TemplateMethod(dt.TypeArgs)));
+          wstruct.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right); ", structName, InstantiateTemplate(dt.TypeArgs));
+          var weq = wdef.NewBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right)", structName, DeclareTemplate(dt.TypeArgs), InstantiateTemplate(dt.TypeArgs)));
           var preReturn = weq.Fork();
           weq.Write("\treturn true ");
           i = 0;
@@ -1017,7 +1017,7 @@ wmethodDecl = ws;
       if (udt.ResolvedParam != null) {
         if (udt.ResolvedClass != null && Attributes.Contains(udt.ResolvedClass.Attributes, "extern")) {
           // Assume the external definition includes a default value
-          return String.Format("{1}::get_{0}_default{2}()", IdProtect(udt.Name), udt.ResolvedClass.EnclosingModuleDefinition.CompileName, TemplateMethod(udt.TypeArgs));
+          return String.Format("{1}::get_{0}_default{2}()", IdProtect(udt.Name), udt.ResolvedClass.EnclosingModuleDefinition.CompileName, InstantiateTemplate(udt.TypeArgs));
         } else if (usePlaceboValue && !udt.ResolvedParam.Characteristics.MustSupportZeroInitialization) {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
         } else {
@@ -2351,7 +2351,7 @@ wmethodDecl = ws;
     }
 
     protected override void EmitSetBuilder_New(TargetWriter wr, SetComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
       wrVarInit.Write("DafnySet<{0}>()", TypeName(e.Type.AsSetType.Arg, wrVarInit, e.tok, null, false));
     }
 

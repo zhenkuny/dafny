@@ -110,7 +110,7 @@ namespace Microsoft.Dafny {
   {
     public readonly ModuleDefinition SystemModule = new ModuleDefinition(Token.NoToken, "_System", new List<IToken>(), false, false, null, null, null, true, true, true);
     readonly Dictionary<int, ClassDecl> arrayTypeDecls = new Dictionary<int, ClassDecl>();
-    readonly Dictionary<object, ArrowTypeDecl> arrowTypeDecls = new Dictionary<object, ArrowTypeDecl>();
+    readonly Dictionary<object, ArrowTypeDecl> ArrowTypeDecls = new Dictionary<object, ArrowTypeDecl>();
     readonly Dictionary<Tuple<Arrow, object>, SubsetTypeDecl> arrowSubsets =
       new Dictionary<Tuple<Arrow, object>, SubsetTypeDecl>();
     readonly Dictionary<object, TupleTypeDecl> tupleTypeDecls = new Dictionary<object, TupleTypeDecl>();
@@ -163,8 +163,8 @@ namespace Microsoft.Dafny {
             new Formal(Token.NoToken, "a", rankVarA, true, Usage.Ghost),
             new Formal(Token.NoToken, "b", rankVarB, true, Usage.Ghost) },
           new Formal(Token.NoToken, "r", new BoolType(), true, Usage.Ghost),
-          new BoolType(), new List<MaybeFreeExpression>(), new List<FrameExpression>(),
-          new List<MaybeFreeExpression>(), new Specification<Expression>(new List<Expression>(), null),
+          new BoolType(), new List<AttributedExpression>(), new List<FrameExpression>(),
+          new List<AttributedExpression>(), new Specification<Expression>(new List<Expression>(), null),
           null, rankAttrs, null);
         rankFun.IsBuiltin = true;
         var defaultClass = new DefaultClassDecl(SystemModule,
@@ -210,7 +210,7 @@ namespace Microsoft.Dafny {
         }
         arrayTypeDecls.Add(dims, arrayClass);
         SystemModule.TopLevelDecls.Add(arrayClass);
-        CreateArrowTypeDecl(dims);  // also create an arrow type with this arity, since it may be used in an initializing expression for the array
+        CreateArrowTypeDecl(dims, Usage.Ordinary, null);  // also create an arrow type with this arity, since it may be used in an initializing expression for the array
       }
       UserDefinedType udt = new UserDefinedType(tok, arrayName, optTypeArgs);
       return udt;
@@ -244,7 +244,7 @@ namespace Microsoft.Dafny {
       CreateArrowTypeDecl(typeArgs.Count, resultUsage, usages);
       object key = Tuple.Create(resultUsage, MakeTupleKey(usages, usages.Count));
       if (arrow == Arrow.Any) {
-        return resolved ? new ArrowType(tok, arrowTypeDecls[key], typeArgs, result, resultUsage, usages)
+        return resolved ? new ArrowType(tok, ArrowTypeDecls[key], typeArgs, result, resultUsage, usages)
           : new ArrowType(tok, typeArgs, result, resultUsage, usages);
       } else {
         string name = ArrowType.ArrowTypeName(arrow, resultUsage, usages);
@@ -271,7 +271,7 @@ namespace Microsoft.Dafny {
         usages = new Usage[arity].ToList().ConvertAll(_ => Usage.Ordinary);
       }
       object key = Tuple.Create(resultUsage, MakeTupleKey(usages, arity));
-      if (!arrowTypeDecls.ContainsKey(key)) {
+      if (!ArrowTypeDecls.ContainsKey(key)) {
         IToken tok = Token.NoToken;
         var tps = Util.Map(Enumerable.Range(0, arity + 1), x => x < arity ?
           new TypeParameter(tok, "T" + x, TypeParameter.TPVarianceSyntax.Contravariance) :
@@ -298,7 +298,7 @@ namespace Microsoft.Dafny {
         readsIS.TypeApplication_AtEnclosingClass = tys;  // ditto
         readsIS.TypeApplication_JustFunction = new List<Type>();  // ditto
         var arrowDecl = new ArrowTypeDecl(tps, req, reads, SystemModule, resultUsage, usages, DontCompile());
-        arrowTypeDecls.Add(key, arrowDecl);
+        ArrowTypeDecls.Add(key, arrowDecl);
         SystemModule.TopLevelDecls.Add(arrowDecl);
 
         // declaration of read-effect-free arrow-type, aka heap-independent arrow-type, aka partial-function arrow-type
@@ -384,7 +384,8 @@ namespace Microsoft.Dafny {
       var formals = Util.Concat(f.EnclosingClass.TypeArgs, f.TypeArgs);
       var actuals = Util.Concat(typeArgumentsClass, typeArgumentsMember);
       var typeMap = Resolver.TypeSubstitutionMap(formals, actuals);
-      return new ArrowType(f.tok, atd, f.Formals.ConvertAll(arg => Resolver.SubstType(arg.Type, typeMap)), Resolver.SubstType(f.ResultType, typeMap));
+      return new ArrowType(f.tok, atd, f.Formals.ConvertAll(arg => Resolver.SubstType(arg.Type, typeMap)), Resolver.SubstType(f.ResultType, typeMap),
+        f.Result.Usage, f.Formals.ConvertAll(arg => arg.Usage));
     }
 
     private object MakeTupleKey(List<Usage> usages, int dims) {
@@ -2505,7 +2506,7 @@ namespace Microsoft.Dafny {
       }
       string s = "";
       if (domainNeedsParens) { s += "("; }
-      s += Util.Comma(typeArgs.Take(arity).Zip(usage.Item2), arg =>
+      s += Util.Comma(System.Linq.Enumerable.Zip(typeArgs.Take(arity), usage.Item2), arg =>
         Resolver.UsagePrefix(arg.Item2) + arg.Item1.TypeName(context, parseAble));
       if (domainNeedsParens) { s += ")"; }
       s += " " + arrow + " ";
@@ -2957,7 +2958,7 @@ namespace Microsoft.Dafny {
       if (BuiltIns.IsTupleTypeName(Name)) {
         // Unfortunately, ResolveClass may be null, so Name is all we have.  Reverse-engineer the string name.
         List<Usage> usages = BuiltIns.UsagesFromString(Name, TypeArgs.Count).Item2;
-        return "(" + Util.Comma(TypeArgs.Zip(usages),
+        return "(" + Util.Comma(System.Linq.Enumerable.Zip(TypeArgs, usages),
           (ty_u) => Resolver.UsagePrefix(ty_u.Item2) + ty_u.Item1.TypeName(context, parseAble)) + ")";
       } else if (ArrowType.IsPartialArrowTypeName(Name)) {
         return ArrowType.PrettyArrowTypeName(ArrowType.PARTIAL_ARROW, TypeArgs, null, context, parseAble,
@@ -4653,8 +4654,8 @@ namespace Microsoft.Dafny {
       Contract.Requires(systemModule != null);
 
       // Resolve the type parameters here
-      Contract.Assert(TypeArgs.Count == dims);
-      for (var i = 0; i < dims; i++) {
+      Contract.Assert(TypeArgs.Count == Dims);
+      for (var i = 0; i < Dims; i++) {
         var tp = TypeArgs[i];
         tp.Parent = this;
         tp.PositionalIndex = i;
@@ -5198,7 +5199,7 @@ namespace Microsoft.Dafny {
       List<TypeParameter> typeArgs, List<Formal> formals, Type resultType,
       List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens, Specification<Expression> decreases,
       Expression body, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, isGhost ? Usage.Ghost : Usage.Ordinary, typeArgs, formals, null, resultType, req, reads, ens, decreases, body, attributes, signatureEllipsis)
+      : base(tok, name, hasStaticKeyword, isGhost, isGhost ? Usage.Ghost : Usage.Ordinary, typeArgs, formals, null, resultType, req, reads, ens, decreases, body, attributes, signatureEllipsis)
     {
       Module = module;
     }
@@ -6104,7 +6105,7 @@ namespace Microsoft.Dafny {
     }
 
     public void makeGhost() {
-      IsGhost = true;
+      Usage = Usage.Ghost;
     }
 
     public BoundVar(IToken tok, string name, Type type, Usage usage = Usage.Ordinary)
@@ -6188,8 +6189,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(atd.Arity == Formals.Count);
 
       // Note, the following returned type can contain type parameters from the function and its enclosing class
-      // TODO: Old inout: return new ArrowType(tok, Formals.ConvertAll(f => f.Type), ResultType, ResultUsage, Formals.ConvertAll(f => f.Usage));
-      return new ArrowType(tok, atd, Formals.ConvertAll(f => f.Type), ResultType);
+      return new ArrowType(tok, atd, Formals.ConvertAll(f => f.Type), ResultType, Result.Usage, Formals.ConvertAll(f => f.Usage));
     }
 
     public bool AllowsNontermination {
@@ -6248,7 +6248,7 @@ namespace Microsoft.Dafny {
                     List<TypeParameter> typeArgs, List<Formal> formals, Formal result, Type resultType,
                     List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens, Specification<Expression> decreases,
                     Expression body, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, makeName(name, formals), hasStaticKeyword, isGhost, usage, removeInline(attributes), signatureEllipsis != null) {
+      : base(tok, makeName(name, formals), hasStaticKeyword, usage, removeInline(attributes), signatureEllipsis != null) {
 
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
@@ -7442,7 +7442,7 @@ namespace Microsoft.Dafny {
     public bool IsAutoGhost;
     public readonly Usage Usage;
 
-    public VarDeclPattern(IToken tok, IToken endTok, CasePattern<LocalVariable> lhs, Expression rhs, bool isAutoGhost = false, Usage usage)
+    public VarDeclPattern(IToken tok, IToken endTok, CasePattern<LocalVariable> lhs, Expression rhs, Usage usage, bool isAutoGhost = false)
       : base(tok, endTok) {
       LHS = lhs;
       RHS = rhs;

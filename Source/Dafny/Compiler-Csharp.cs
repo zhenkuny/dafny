@@ -202,7 +202,7 @@ namespace Microsoft.Dafny
       Contract.Requires(wr != null);
 
       var type = UserDefinedType.FromTopLevelDecl(enclosingTypeDecl.tok, enclosingTypeDecl);
-      var initializer = TypeInitializationValue(type, wr, enclosingTypeDecl.tok, false, true);
+      var initializer = TypeInitializationValue(type, wr, enclosingTypeDecl.tok, Usage.Ordinary, false, true);
 
       var targetTypeName = TypeName(type, wr, enclosingTypeDecl.tok);
       var typeDescriptorExpr = $"new {DafnyTypeDescriptor}<{targetTypeName}>({initializer})";
@@ -277,7 +277,7 @@ namespace Microsoft.Dafny
       foreach (var member in iter.Members) {
         var f = member as Field;
         if (f != null && !f.IsGhost) {
-          cw.DeclareField(IdName(f), iter, false, false, f.Type, f.tok, DefaultValue(f.Type, w, f.tok, true), f);
+          cw.DeclareField(IdName(f), iter, false, false, f.Type, f.tok, DefaultValue(f.Type, w, f.tok, Usage.Ordinary, true), f);
         } else if (member is Constructor) {
           Contract.Assert(ct == null);  // we're expecting just one constructor
           ct = (Constructor)member;
@@ -401,7 +401,7 @@ namespace Microsoft.Dafny
       wDefault.Write(DtCreateName(groundingCtor));
       wDefault.Write("(");
       var nonGhostFormals = groundingCtor.Formals.Where(f => !f.IsGhost);
-      wDefault.Write(Util.Comma(nonGhostFormals, f => DefaultValue(f.Type, wDefault, f.tok)));
+      wDefault.Write(Util.Comma(nonGhostFormals, f => DefaultValue(f.Type, wDefault, f.tok, f.Usage)));
       wDefault.Write(")");
 
       EmitTypeDescriptorMethod(dt, wr);
@@ -1191,7 +1191,7 @@ namespace Microsoft.Dafny
           s += "<" + TypeNames(udt.TypeArgs, wr, udt.tok) + ">";
         }
         var relevantTypeArgs = UsedTypeParameters(dt, udt.TypeArgs);
-        return string.Format($"{s}.Default({Util.Comma(relevantTypeArgs, ta => DefaultValue(ta.Actual, wr, tok, constructTypeParameterDefaultsFromTypeDescriptors))})");
+        return string.Format($"{s}.Default({Util.Comma(relevantTypeArgs, ta => DefaultValue(ta.Actual, wr, tok, Usage.Ordinary, constructTypeParameterDefaultsFromTypeDescriptors))})");
       } else {
         Contract.Assert(false); throw new cce.UnreachableException();  // unexpected type
       }
@@ -1593,7 +1593,7 @@ namespace Microsoft.Dafny
       } else {
         wr.Write("Dafny.ArrayHelpers.InitNewArray{0}<{1}>", dimCount, TypeName(elmtType, wr, tok));
         wr.Write("(");
-        wr.Write(DefaultValue(elmtType, wr, tok, true));
+        wr.Write(DefaultValue(elmtType, wr, tok, Usage.Ordinary,true));
         for (var d = 0; d < dimCount; d++) {
           wr.Write(", ");
           var w = wr.Fork();
@@ -2664,12 +2664,12 @@ namespace Microsoft.Dafny
     }
 
     protected override void EmitSetBuilder_New(TargetWriter wr, SetComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
       wrVarInit.Write("new System.Collections.Generic.List<{0}>()", TypeName(e.Type.AsSetType.Arg, wrVarInit, e.tok));
     }
 
     protected override void EmitMapBuilder_New(TargetWriter wr, MapComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
       var mt = e.Type.AsMapType;
       var domtypeName = TypeName(mt.Domain, wrVarInit, e.tok);
       var rantypeName = TypeName(mt.Range, wrVarInit, e.tok);

@@ -121,8 +121,8 @@ namespace Microsoft.Dafny.Linear {
       }
       return !(
           m is Constructor ||
-          m is InductiveLemma ||
-          m is CoLemma ||
+          m is LeastLemma ||
+          m is GreatestLemma ||
           m is Lemma ||
           m is TwoStateLemma);
     }
@@ -145,7 +145,7 @@ namespace Microsoft.Dafny.Linear {
     public delegate string FreshTempVarName(string prefix, ICodeContext context);
 
     FreshTempVarName freshTempVarName;
-    
+
     public InoutTranslateRewriter(ErrorReporter reporter, FreshTempVarName freshTempVarName) : base(reporter) {
       this.freshTempVarName = freshTempVarName;
     }

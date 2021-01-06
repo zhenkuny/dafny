@@ -7775,7 +7775,7 @@ namespace Microsoft.Dafny
           Contract.Assert(s.Args.Count == s.Method.Ins.Count);
           for (var i = 0; i < s.Method.Ins.Count; i++) {
             if (!s.Method.Ins[i].IsGhost) {
-              Visit(s.Args[i], st);
+              Visit(s.Args[i].Expr, st);
             }
           }
           return false;  // we've done what there is to be done
@@ -8259,7 +8259,9 @@ namespace Microsoft.Dafny
           } else {
             bool spec = resolver.UsesSpecFeatures(s.RHS);
             foreach (var local in s.LocalVars) {
-              local.IsGhost = spec;
+              if (spec) {
+                local.MakeGhost();
+              }
             }
             if (!spec) resolver.CheckIsCompilable(s.RHS);
             s.IsGhost = spec;
@@ -8353,7 +8355,7 @@ namespace Microsoft.Dafny
               if (rhs.InitCall != null) {
                 for (var i = 0; i < rhs.InitCall.Args.Count; i++) {
                   if (!rhs.InitCall.Method.Ins[i].IsGhost) {
-                    resolver.CheckIsCompilable(rhs.InitCall.Args[i], usageContext, inArg.Item1.Usage);
+                    resolver.CheckIsCompilable(rhs.InitCall.Args[i].Expr, usageContext, rhs.InitCall.Method.Ins[i].Usage);
                   }
                 }
               }
@@ -12568,7 +12570,7 @@ namespace Microsoft.Dafny
 
     private Expression makeTemp(String prefix, AssignOrReturnStmt s, ICodeContext codeContext, Expression ex) {
       var temp = FreshTempVarName(prefix, codeContext);
-      var locvar = new LocalVariable(s.Tok, s.Tok, temp, ex.Type, false);
+      var locvar = new LocalVariable(s.Tok, s.Tok, temp, ex.Type, Usage.Ordinary);  // REVIEW: Should callers specify something other than Usage.Ordinary?
       var id = new IdentifierExpr(s.Tok, temp);
       var idlist = new List<Expression>() { id };
       var lhss = new List<LocalVariable>() { locvar };
@@ -12917,8 +12919,8 @@ namespace Microsoft.Dafny
       bool tryToResolve = false;
       if (callee.Ins.Count != s.Args.Count) {
         reporter.Error(MessageSource.Resolver, s, "wrong number of method arguments (got {0}, expected {1})", s.Args.Count, callee.Ins.Count);
-      } else if (callee.Ins.Zip(s.Args).Any(z => z.Item1.Inout != z.Item2.Inout)) {
-        foreach (var (fInout, aInout, idx) in callee.Ins.Zip(s.Args)
+      } else if (System.Linq.Enumerable.Zip(callee.Ins, s.Args).Any(z => z.Item1.Inout != z.Item2.Inout)) {
+        foreach (var (fInout, aInout, idx) in System.Linq.Enumerable.Zip(callee.Ins, s.Args)
           .Select((z, index) => (z.Item1.Inout, z.Item2.Inout, index))
           .Where(ff => ff.Item1 != ff.Item2)) {
           if (fInout) {

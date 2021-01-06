@@ -409,7 +409,7 @@ namespace Microsoft.Dafny {
       Constructor ct = null;
       foreach (var member in iter.Members) {
         if (member is Field f && !f.IsGhost) {
-          cw.DeclareField(IdName(f), iter, false, false, f.Type, f.tok, DefaultValue(f.Type, wr, f.tok, true), f);
+          cw.DeclareField(IdName(f), iter, false, false, f.Type, f.tok, DefaultValue(f.Type, wr, f.tok, f.Usage, true), f);
         } else if (member is Constructor c) {
           Contract.Assert(ct == null);
           ct = c;
@@ -707,7 +707,7 @@ namespace Microsoft.Dafny {
         wDefault.Write("return ");
         var groundingCtor = dt.GetGroundingCtor();
         var nonGhostFormals = groundingCtor.Formals.Where(f => !f.IsGhost).ToList();
-        var arguments = Util.Comma(nonGhostFormals, f => DefaultValue(f.Type, wDefault, f.tok));
+        var arguments = Util.Comma(nonGhostFormals, f => DefaultValue(f.Type, wDefault, f.tok, f.Usage));
         EmitDatatypeValue(dt, groundingCtor, dt is CoDatatypeDecl, arguments, wDefault);
         wDefault.WriteLine();
       }
@@ -843,7 +843,7 @@ namespace Microsoft.Dafny {
 
         WriteRuntimeTypeDescriptorsLocals(usedTypeParams, true, wDefault);
 
-        var arguments = Util.Comma(UsedTypeParameters(dt), tp => DefaultValue(new UserDefinedType(tp), wDefault, dt.tok, true));
+        var arguments = Util.Comma(UsedTypeParameters(dt), tp => DefaultValue(new UserDefinedType(tp), wDefault, dt.tok, Usage.Ordinary, true));
         wDefault.WriteLine($"return {TypeName_Companion(dt, wr, dt.tok)}.Default({arguments});");
       }
 
@@ -1020,7 +1020,7 @@ namespace Microsoft.Dafny {
         new List<TypeArgumentInstantiation>(), enclosingClass.ParentFormalTypeParametersToActuals, instantiatedFieldType);
         var wRHS = lvalue.EmitWrite(FieldInitWriter(false));
         Compiler.EmitCoercionIfNecessary(instantiatedFieldType, field.Type, tok, wRHS);
-        wRHS.Write(Compiler.PlaceboValue(instantiatedFieldType, ErrorWriter(), tok));
+        wRHS.Write(Compiler.PlaceboValue(instantiatedFieldType, ErrorWriter(), tok, Usage.Ordinary));
       }
 
       public TextWriter/*?*/ ErrorWriter() => ConcreteMethodWriter;
@@ -1108,7 +1108,7 @@ namespace Microsoft.Dafny {
             if (!instantiatedType.Equals(p.Type)) {
               // var p instantiatedType = p.(instantiatedType)
               var pName = IdName(inParams[i]);
-              DeclareLocalVar(pName, instantiatedType, p.tok, true, null, w);
+              DeclareLocalVar(pName, instantiatedType, p.tok, Usage.Ordinary, true, null, w);
               var wRhs = EmitAssignmentRhs(w);
               wRhs = EmitCoercionIfNecessary(p.Type, instantiatedType, p.tok, wRhs);
               wRhs.Write(pName);
@@ -1244,7 +1244,7 @@ namespace Microsoft.Dafny {
       } else if (xType is MapType) {
         return "_dafny.MapType";
       } else if (xType.IsRefType) {
-        return string.Format("_dafny.CreateStandardTypeDescriptor({0})", TypeInitializationValue(xType, wr, tok, false, true));
+        return string.Format("_dafny.CreateStandardTypeDescriptor({0})", TypeInitializationValue(xType, wr, tok, Usage.Ordinary, false, true));
       } else if (xType.IsArrayType) {
         return "_dafny.ArrayType";
       } else if (xType.IsTypeParameter) {
@@ -1287,7 +1287,7 @@ namespace Microsoft.Dafny {
 
       var getterWriter = CreateGetter(name, resultType, tok, isStatic, createBody, member, ownerName, abstractWriter, concreteWriter, forBodyInheritance);
 
-      var valueParam = new Formal(tok, "value", resultType, true, false);
+      var valueParam = new Formal(tok, "value", resultType, true, Usage.Ordinary, false);
       setterWriter = CreateSubroutine(name + "_set_", new List<TypeArgumentInstantiation>(), new List<Formal>() {valueParam}, new List<Formal>(), null,
         new List<Formal>() {valueParam}, new List<Formal>(), null, tok, isStatic, createBody, ownerName, member,
         abstractWriter, concreteWriter, forBodyInheritance, false);
@@ -1492,7 +1492,7 @@ namespace Microsoft.Dafny {
         }
         var n = dt is TupleTypeDecl ? "_dafny.TupleOf" : $"{TypeName_Companion(dt, wr, tok)}.Default";
         var relevantTypeArgs = UsedTypeParameters(dt, udt.TypeArgs);
-        return $"{n}({Util.Comma(relevantTypeArgs, ta => DefaultValue(ta.Actual, wr, tok, constructTypeParameterDefaultsFromTypeDescriptors))})";
+        return $"{n}({Util.Comma(relevantTypeArgs, ta => DefaultValue(ta.Actual, wr, tok, Usage.Ordinary, constructTypeParameterDefaultsFromTypeDescriptors))})";
       } else {
         Contract.Assert(false); throw new cce.UnreachableException();  // unexpected type
       }
@@ -1630,7 +1630,7 @@ namespace Microsoft.Dafny {
         wr.WriteLine("{0} {1}", name, TypeName(type, initWriter, tok));
 
         if (isStatic) {
-          initWriter.WriteLine("{0}: {1},", name, rhs ?? PlaceboValue(type, initWriter, tok));
+          initWriter.WriteLine("{0}: {1},", name, rhs ?? PlaceboValue(type, initWriter, tok, Usage.Ordinary));
         } else if (rhs != null) {
           initWriter.WriteLine("_this.{0} = {1}", name, rhs);
         }
@@ -1906,7 +1906,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitNewArray(Type elmtType, Bpl.IToken tok, List<Expression> dimensions, bool mustInitialize, TargetWriter wr) {
-      var initValue = DefaultValue(elmtType, wr, tok, true);
+      var initValue = DefaultValue(elmtType, wr, tok, Usage.Ordinary, true);
 
       string sep;
       if (!mustInitialize) {
@@ -3293,12 +3293,12 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitSetBuilder_New(TargetWriter wr, SetComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
       wrVarInit.Write("_dafny.NewBuilder()");
     }
 
     protected override void EmitMapBuilder_New(TargetWriter wr, MapComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
       wrVarInit.Write("_dafny.NewMapBuilder()");
     }
 

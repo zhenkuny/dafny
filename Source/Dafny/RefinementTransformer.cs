@@ -655,7 +655,7 @@ namespace Microsoft.Dafny
               } else if (f.Body != null) {
                 reporter.Error(MessageSource.RefinementTransformer, nwMember, $"a refining {f.WhatKind} is not allowed to extend/change the body");
               }
-              var newF = CloneFunction(f.tok, prevFunction, f.Usage, f.Ens, f.Result, moreBody, replacementBody, prevFunction.Body == null, f.Attributes);
+              var newF = CloneFunction(f.tok, prevFunction, f.IsGhost, f.Usage, f.Ens, f.Result, moreBody, replacementBody, prevFunction.Body == null, f.Attributes);
               newF.RefinementBase = member;
               nw.Members[index] = newF;
             }
