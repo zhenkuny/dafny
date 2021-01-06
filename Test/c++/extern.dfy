@@ -1,6 +1,8 @@
+// RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:cpp "%s" ExternDefs.h > "%t"
+// RUN: %diff "%s.expect" "%t"
 
 module {:extern "Extern"} Extern {
-  newtype{:nativeType "ulong"} uint64 = i:int | 0 <= i < 0x10000000000000000
+  newtype uint64 = i:int | 0 <= i < 0x10000000000000000
 
   method {:extern "Extern", "newArrayFill"} newArrayFill<T>(n: uint64, t: T) returns (ar: array<T>)
 
@@ -38,6 +40,7 @@ module TestMod {
   method TestClass(e:ExternClass) {
     var x := e.my_method0(0);
     var y := e.my_method1(1);
+    print x,y;
   }
 
   method TestExternClass2() {

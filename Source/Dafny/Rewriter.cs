@@ -88,8 +88,8 @@ namespace Microsoft.Dafny
       var forallvisiter = new ForAllStmtVisitor(reporter);
       foreach (var decl in ModuleDefinition.AllCallables(m.TopLevelDecls)) {
         forallvisiter.Visit(decl, true);
-        if (decl is FixpointLemma) {
-          var prefixLemma = ((FixpointLemma)decl).PrefixLemma;
+        if (decl is ExtremeLemma) {
+          var prefixLemma = ((ExtremeLemma)decl).PrefixLemma;
           if (prefixLemma != null) {
             forallvisiter.Visit(prefixLemma, true);
           }
@@ -139,7 +139,10 @@ namespace Microsoft.Dafny
                     Fi = ll.Obj;
                     lhsBuilder = e => {
                       var l = new MemberSelectExpr(ll.tok, e, ll.MemberName);
-                      l.Member = ll.Member; l.TypeApplication = ll.TypeApplication; l.Type = ll.Type;
+                      l.Member = ll.Member;
+                      l.TypeApplication_AtEnclosingClass = ll.TypeApplication_AtEnclosingClass;
+                      l.TypeApplication_JustMember = ll.TypeApplication_JustMember;
+                      l.Type = ll.Type;
                       return l; };
                   } else if (lhs is SeqSelectExpr) {
                     var ll = (SeqSelectExpr)lhs;
@@ -210,15 +213,13 @@ namespace Microsoft.Dafny
             for (int i = 0; i < s0.Method.Ins.Count; i++) {
               argsSubstMap.Add(s0.Method.Ins[i], s0.Args[i].Expr);
             }
-            var substituter = new Translator.AlphaConverting_Substituter(s0.Receiver, argsSubstMap, s0.MethodSelect.TypeArgumentSubstitutions());
+            var substituter = new Translator.AlphaConverting_Substituter(s0.Receiver, argsSubstMap, s0.MethodSelect.TypeArgumentSubstitutionsWithParents());
             // Strengthen the range of the "forall" statement with the precondition of the call, suitably substituted with the actual parameters.
             if (Attributes.Contains(s.Attributes, "_autorequires")) {
               var range = s.Range;
               foreach (var req in s0.Method.Req) {
-                if (!req.IsFree) {
-                  var p = substituter.Substitute(req.E);  // substitute the call's actuals for the method's formals
-                  range = Expression.CreateAnd(range, p);
-                }
+                var p = substituter.Substitute(req.E);  // substitute the call's actuals for the method's formals
+                range = Expression.CreateAnd(range, p);
               }
               s.Range = range;
             }
@@ -411,6 +412,7 @@ namespace Microsoft.Dafny
   ///
   /// For function/predicate Valid(), insert:
   ///    reads this, Repr
+  ///    ensures Valid() ==> this in Repr
   /// Into body of Valid(), insert (at the beginning of the body):
   ///    this in Repr && null !in Repr
   /// and also insert, for every array-valued field A declared in the class:
@@ -421,7 +423,7 @@ namespace Microsoft.Dafny
   /// be added.
   ///
   /// For every constructor, add:
-  ///    ensures Valid() && fresh(Repr - {this})
+  ///    ensures Valid() && fresh(Repr)
   /// At the end of the body of the constructor, add:
   ///    Repr := {this};
   ///    if (A != null) { Repr := Repr + {A}; }
@@ -479,8 +481,8 @@ namespace Microsoft.Dafny
       // Add:  predicate Valid()
       // ...unless an instance function with that name is already present
       if (!cl.Members.Exists(member => member is Function && member.Name == "Valid" && !member.IsStatic)) {
-        var valid = new Predicate(cl.tok, "Valid", false, false, Usage.Ghost, new List<TypeParameter>(), new List<Formal>(),
-          new List<MaybeFreeExpression>(), new List<FrameExpression>(), new List<MaybeFreeExpression>(), new Specification<Expression>(new List<Expression>(), null),
+        var valid = new Predicate(cl.tok, "Valid", false, true, Usage.Ghost, new List<TypeParameter>(), new List<Formal>(),
+          new List<AttributedExpression>(), new List<FrameExpression>(), new List<AttributedExpression>(), new Specification<Expression>(new List<Expression>(), null),
           null, Predicate.BodyOriginKind.OriginalOrInherited, null, null);
         cl.Members.Add(valid);
         // It will be added to hover text later
@@ -504,17 +506,24 @@ namespace Microsoft.Dafny
           var r1 = new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr");
           valid.Reads.Add(new FrameExpression(tok, r0, null));
           valid.Reads.Add(new FrameExpression(tok, r1, null));
+          // ensures Valid() ==> this in Repr
+          var post = new BinaryExpr(tok, BinaryExpr.Opcode.Imp,
+            new FunctionCallExpr(tok, "Valid", new ImplicitThisExpr(tok), tok, new List<Expression>()),
+            new BinaryExpr(tok, BinaryExpr.Opcode.In,
+              new ThisExpr(tok),
+               new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr")));
+          valid.Ens.Insert(0, new AttributedExpression(post));
           if (member.tok == cl.tok) {
             // We added this function above, so produce a hover text for the entire function signature
             AddHoverText(cl.tok, "{0}", Printer.FunctionSignatureToString(valid));
           } else {
-            AddHoverText(member.tok, "reads {0}, {1}", r0, r1);
+            AddHoverText(member.tok, $"reads {r0}, {r1}\nensures {post}");
           }
         } else if (member is Function && !member.IsStatic) {
           var f = (Function)member;
           // requires Valid()
           var valid = new FunctionCallExpr(tok, "Valid", new ImplicitThisExpr(tok), tok, new List<Expression>());
-          f.Req.Insert(0, new MaybeFreeExpression(valid));
+          f.Req.Insert(0, new AttributedExpression(valid));
           var format = "requires {0}";
           var repr = new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr");
           if (f.Reads.Count == 0) {
@@ -527,12 +536,11 @@ namespace Microsoft.Dafny
           var ctor = (Constructor)member;
           // ensures Valid();
           var valid = new FunctionCallExpr(tok, "Valid", new ImplicitThisExpr(tok), tok, new List<Expression>());
-          ctor.Ens.Insert(0, new MaybeFreeExpression(valid));
-          // ensures fresh(Repr - {this});
-          var freshness = new UnaryOpExpr(tok, UnaryOpExpr.Opcode.Fresh, new BinaryExpr(tok, BinaryExpr.Opcode.Sub,
-            new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr"),
-            new SetDisplayExpr(tok, true, new List<Expression>() { new ThisExpr(tok) })));
-          ctor.Ens.Insert(1, new MaybeFreeExpression(freshness));
+          ctor.Ens.Insert(0, new AttributedExpression(valid));
+          // ensures fresh(Repr);
+          var freshness = new UnaryOpExpr(tok, UnaryOpExpr.Opcode.Fresh,
+            new MemberSelectExpr(tok, new ImplicitThisExpr(tok), "Repr"));
+          ctor.Ens.Insert(1, new AttributedExpression(freshness));
           var m0 = new ThisExpr(tok);
           AddHoverText(member.tok, "modifies {0}\nensures {1} && {2}", m0, valid, freshness);
         }
@@ -691,13 +699,13 @@ namespace Microsoft.Dafny
                 valid = new OldExpr(tok, valid);
                 valid.Type = Type.Bool;
               }
-              m.Req.Insert(0, new MaybeFreeExpression(valid));
+              m.Req.Insert(0, new AttributedExpression(valid));
               AddHoverText(member.tok, "requires {0}", valid);
             }
           } else if (m.RefinementBase == null) {
             // requires Valid()
             var valid = ValidCall(tok, implicitSelf, Valid, m);
-            m.Req.Insert(0, new MaybeFreeExpression(valid));
+            m.Req.Insert(0, new AttributedExpression(valid));
             var format = "requires {0}";
             if (m.Mod.Expressions.Count == 0) {
               // modifies Repr
@@ -706,7 +714,7 @@ namespace Microsoft.Dafny
               addStatementsToUpdateRepr = true;
             }
             // ensures Valid()
-            m.Ens.Insert(0, new MaybeFreeExpression(valid));
+            m.Ens.Insert(0, new AttributedExpression(valid));
             // ensures fresh(Repr - old(Repr));
             var e0 = new OldExpr(tok, Repr);
             e0.Type = Repr.Type;
@@ -715,7 +723,7 @@ namespace Microsoft.Dafny
             e1.Type = Repr.Type;
             var freshness = new UnaryOpExpr(tok, UnaryOpExpr.Opcode.Fresh, e1);
             freshness.Type = Type.Bool;
-            m.Ens.Insert(1, new MaybeFreeExpression(freshness));
+            m.Ens.Insert(1, new AttributedExpression(freshness));
             AddHoverText(m.tok, format + "\nensures {0} && {2}", valid, Repr, freshness);
           } else {
             addStatementsToUpdateRepr = true;
@@ -860,11 +868,8 @@ namespace Microsoft.Dafny
       var call = new FunctionCallExpr(tok, Valid.Name, receiver, tok, new List<Expression>());
       call.Function = Valid;
       call.Type = Type.Bool;
-      // Add the identity substitution to this call
-      call.TypeArgumentSubstitutions = new Dictionary<TypeParameter, Type>();
-      for (int i = 0; i < Valid.EnclosingClass.TypeArgs.Count; i++) {
-        call.TypeArgumentSubstitutions.Add(Valid.EnclosingClass.TypeArgs[i], receiver.Type.TypeArgs[i]);
-      }
+      call.TypeApplication_AtEnclosingClass = receiver.Type.TypeArgs;
+      call.TypeApplication_JustFunction = new List<Type>();
       callingContext.EnclosingModule.CallGraph.AddEdge(callingContext, Valid);
       return call;
     }
@@ -939,19 +944,19 @@ namespace Microsoft.Dafny
         receiver = new ImplicitThisExpr(f.tok);
         //receiver.Type = GetThisType(expr.tok, (TopLevelDeclWithMembers)member.EnclosingClass);  // resolve here
       }
-      List<Type> typeApplication = null;
-      if (f.TypeArgs.Count > 0) {
-        typeApplication = new List<Type>();
-        for (int i = 0; i < f.TypeArgs.Count; i++) {
-          // doesn't matter what type, just so we have it to make the resolver happy when resolving function member of
-          // the fuel attribute. This might not be needed after fixing codeplex issue #172.
-          typeApplication.Add(new IntType());
-        }
+      var typeApplication = new List<Type>();
+      var typeApplication_JustForMember = new List<Type>();
+      for (int i = 0; i < f.TypeArgs.Count; i++) {
+        // doesn't matter what type, just so we have it to make the resolver happy when resolving function member of
+        // the fuel attribute. This might not be needed after fixing codeplex issue #172.
+        typeApplication.Add(new IntType());
+        typeApplication_JustForMember.Add(new IntType());
       }
-      var nameSegment = new NameSegment(f.tok, f.Name, typeApplication);
+      var nameSegment = new NameSegment(f.tok, f.Name, f.TypeArgs.Count == 0 ? null : typeApplication);
       var rr = new MemberSelectExpr(f.tok, receiver, f.Name);
       rr.Member = f;
-      rr.TypeApplication = typeApplication ?? new List<Type>();
+      rr.TypeApplication_AtEnclosingClass = typeApplication;
+      rr.TypeApplication_JustMember = typeApplication_JustForMember;
       List<Type> args = new List<Type>();
       for (int i = 0; i < f.Formals.Count; i++) {
         args.Add(new IntType());
@@ -975,9 +980,7 @@ namespace Microsoft.Dafny
 
           if (!Attributes.Contains(f.Attributes, "opaque")) {
             // Nothing to do
-          } else if (f.IsProtected) {
-            reporter.Error(MessageSource.Rewriter, f.tok, ":opaque is not allowed to be applied to protected functions (this will be allowed when the language introduces 'opaque'/'reveal' as keywords)");
-          } else if (!RefinementToken.IsInherited(f.tok, c.Module)) {
+          } else if (!RefinementToken.IsInherited(f.tok, c.EnclosingModuleDefinition)) {
             RewriteOpaqueFunctionUseFuel(f, newDecls);
           }
         }
@@ -1017,8 +1020,8 @@ namespace Microsoft.Dafny
       lemma_attrs = new Attributes("auto_generated", new List<Expression>(), lemma_attrs);
       lemma_attrs = new Attributes("opaque_reveal", new List<Expression>(), lemma_attrs);
       lemma_attrs = new Attributes("verify", new List<Expression>() { new LiteralExpr(f.tok, false)}, lemma_attrs);
-      var reveal = new Lemma(f.tok, "reveal_" + f.Name, f.HasStaticKeyword, new List<TypeParameter>(), new List<Formal>(), new List<Formal>(), new List<MaybeFreeExpression>(),
-                              new Specification<FrameExpression>(new List<FrameExpression>(), null), /* newEnsuresList*/new List<MaybeFreeExpression>(),
+      var reveal = new Lemma(f.tok, "reveal_" + f.Name, f.HasStaticKeyword, new List<TypeParameter>(), new List<Formal>(), new List<Formal>(), new List<AttributedExpression>(),
+                              new Specification<FrameExpression>(new List<FrameExpression>(), null), /* newEnsuresList*/new List<AttributedExpression>(),
                               new Specification<Expression>(new List<Expression>(), null), null, lemma_attrs, null);
       newDecls.Add(reveal);
       revealOriginal[reveal] = f;
@@ -1056,12 +1059,12 @@ namespace Microsoft.Dafny
             parentFunction = fn;  // Remember where the recursion started
             containsMatch = false;  // Assume no match statements are involved
 
-            List<MaybeFreeExpression> auto_reqs = new List<MaybeFreeExpression>();
+            List<AttributedExpression> auto_reqs = new List<AttributedExpression>();
 
             // First handle all of the requirements' preconditions
-            foreach (MaybeFreeExpression req in fn.Req) {
+            foreach (AttributedExpression req in fn.Req) {
               foreach (Expression e in generateAutoReqs(req.E)) {
-                auto_reqs.Add(new MaybeFreeExpression(e, req.IsFree, req.Attributes));
+                auto_reqs.Add(new AttributedExpression(e, req.Attributes));
               }
             }
             fn.Req.InsertRange(0, auto_reqs); // Need to come before the actual requires
@@ -1069,9 +1072,9 @@ namespace Microsoft.Dafny
 
             // Then the body itself, if any
             if (fn.Body != null) {
-              auto_reqs = new List<MaybeFreeExpression>();
+              auto_reqs = new List<AttributedExpression>();
               foreach (Expression e in generateAutoReqs(fn.Body)) {
-                auto_reqs.Add(new MaybeFreeExpression(e));
+                auto_reqs.Add(new AttributedExpression(e));
               }
               fn.Req.AddRange(auto_reqs);
               addAutoReqToolTipInfoToFunction("post", fn, auto_reqs);
@@ -1086,13 +1089,13 @@ namespace Microsoft.Dafny
                 parentFunction = null;
                 containsMatch = false; // Assume no match statements are involved
 
-                List<MaybeFreeExpression> auto_reqs = new List<MaybeFreeExpression>();
-                foreach (MaybeFreeExpression req in method.Req)
+                List<AttributedExpression> auto_reqs = new List<AttributedExpression>();
+                foreach (AttributedExpression req in method.Req)
                 {
                     List<Expression> local_auto_reqs = generateAutoReqs(req.E);
                     foreach (Expression local_auto_req in local_auto_reqs)
                     {
-                        auto_reqs.Add(new MaybeFreeExpression(local_auto_req, !req.IsFree));
+                        auto_reqs.Add(new AttributedExpression(local_auto_req));
                     }
                 }
                 method.Req.InsertRange(0, auto_reqs); // Need to come before the actual requires
@@ -1117,7 +1120,7 @@ namespace Microsoft.Dafny
       return sub.Substitute(e);
     }
 
-    public void addAutoReqToolTipInfoToFunction(string label, Function f, List<MaybeFreeExpression> reqs) {
+    public void addAutoReqToolTipInfoToFunction(string label, Function f, List<AttributedExpression> reqs) {
       string prefix = "auto requires " + label + " ";
       string tip = "";
 
@@ -1142,14 +1145,11 @@ namespace Microsoft.Dafny
       }
     }
 
-    public void addAutoReqToolTipInfoToMethod(string label, Method method, List<MaybeFreeExpression> reqs) {
+    public void addAutoReqToolTipInfoToMethod(string label, Method method, List<AttributedExpression> reqs) {
       string tip = "";
 
       foreach (var req in reqs) {
         string prefix = "auto ";
-        if (req.IsFree) {
-          prefix += "free ";
-        }
         prefix += " requires " + label + " ";
         if (containsMatch) {  // Pretty print the requirements
           tip += prefix + Printer.ExtendedExprToString(req.E) + ";\n";
@@ -1423,38 +1423,49 @@ namespace Microsoft.Dafny
       var declarations = m.TopLevelDecls;
 
       foreach (var d in declarations) {
-        if (d is ModuleExportDecl) {
-          var me = (ModuleExportDecl)d;
-
+        if (d is ModuleExportDecl me) {
           var revealAll = me.RevealAll || DafnyOptions.O.DisableScopes;
 
+          HashSet<string> explicitlyRevealedTopLevelIDs = null;
+          if (!revealAll) {
+            explicitlyRevealedTopLevelIDs = new HashSet<string>();
+            foreach (var esig in me.Exports) {
+              if (esig.ClassId == null && !esig.Opaque) {
+                explicitlyRevealedTopLevelIDs.Add(esig.Id);
+              }
+            }
+          }
+
           if (revealAll || me.ProvideAll) {
+            foreach (var newt in declarations) {
+              if (!newt.CanBeExported()) {
+                continue;
+              }
 
-              foreach (var newt in declarations) {
-                if (!newt.CanBeExported())
-                  continue;
+              if (!(newt is DefaultClassDecl)) {
+                me.Exports.Add(new ExportSignature(newt.tok, newt.Name, !revealAll || !newt.CanBeRevealed()));
+              }
 
-                if (!(newt is DefaultClassDecl)) {
-                  me.Exports.Add(new ExportSignature(newt.tok, newt.Name, !revealAll || !newt.CanBeRevealed()));
-                }
+              if (newt is TopLevelDeclWithMembers) {
+                var cl = (TopLevelDeclWithMembers)newt;
+                var newtIsRevealed = revealAll || explicitlyRevealedTopLevelIDs.Contains(newt.Name);
 
-                if (newt is ClassDecl) {
-                  var cl = (ClassDecl)newt;
-
-                  foreach (var mem in cl.Members) {
-                    var opaque = !revealAll || !mem.CanBeRevealed();
-                    if (newt is DefaultClassDecl) {
-                      me.Exports.Add(new ExportSignature(mem.tok, mem.Name, opaque));
-                    } else {
-                      me.Exports.Add(new ExportSignature(cl.tok, cl.Name, mem.tok, mem.Name, opaque));
-                    }
+                foreach (var mem in cl.Members) {
+                  var opaque = !revealAll || !mem.CanBeRevealed();
+                  if (newt is DefaultClassDecl) {
+                    // add everything from the default class
+                    me.Exports.Add(new ExportSignature(mem.tok, mem.Name, opaque));
+                  } else if (mem is Constructor && !newtIsRevealed) {
+                    // "provides *" does not pick up class constructors, unless the class is to be revealed
+                  } else if (opaque && mem is Field field && !(mem is ConstantField) && !newtIsRevealed) {
+                    // "provides *" does not pick up mutable fields, unless the class is to be revealed
+                  } else {
+                    me.Exports.Add(new ExportSignature(cl.tok, cl.Name, mem.tok, mem.Name, opaque));
                   }
                 }
               }
             }
-          me.RevealAll = false;
-          me.ProvideAll = false;
-
+          }
         }
       }
     }
@@ -1643,8 +1654,8 @@ namespace Microsoft.Dafny
           if (decl is TopLevelDeclWithMembers) {
             var cl = (TopLevelDeclWithMembers)decl;
             foreach (var member in cl.Members) {
-              if (member is FixpointLemma) {
-                var method = (FixpointLemma)member;
+              if (member is ExtremeLemma) {
+                var method = (ExtremeLemma)member;
                 ProcessMethodExpressions(method);
                 ComputeLemmaInduction(method.PrefixLemma);
                 ProcessMethodExpressions(method.PrefixLemma);
@@ -1652,8 +1663,8 @@ namespace Microsoft.Dafny
                 var method = (Method)member;
                 ComputeLemmaInduction(method);
                 ProcessMethodExpressions(method);
-              } else if (member is FixpointPredicate) {
-                var function = (FixpointPredicate)member;
+              } else if (member is ExtremePredicate) {
+                var function = (ExtremePredicate)member;
                 ProcessFunctionExpressions(function);
                 ProcessFunctionExpressions(function.PrefixPredicate);
               } else if (member is Function) {
@@ -1695,7 +1706,7 @@ namespace Microsoft.Dafny
 
     void ComputeLemmaInduction(Method method) {
       Contract.Requires(method != null);
-      if (method.Body != null && method.IsGhost && method.Mod.Expressions.Count == 0 && method.Outs.Count == 0 && !(method is FixpointLemma)) {
+      if (method.Body != null && method.IsGhost && method.Mod.Expressions.Count == 0 && method.Outs.Count == 0 && !(method is ExtremeLemma)) {
         var specs = new List<Expression>();
         method.Req.ForEach(mfe => specs.Add(mfe.E));
         method.Ens.ForEach(mfe => specs.Add(mfe.E));

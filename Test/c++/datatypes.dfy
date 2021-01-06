@@ -1,4 +1,7 @@
-newtype{:nativeType "uint"} uint32 = i:int | 0 <= i < 0x100000000
+// RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:cpp "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
+newtype uint32 = i:int | 0 <= i < 0x100000000
 
 datatype Op =
   | NoOp
@@ -33,10 +36,10 @@ method TupleMatch(e1:Example2, e2:Example2) {
 }
 
 method Callee(e:Example2) {
-    match e {
-        case Ex2a(u) => print "Case A: ", u, "\n";
-        case Ex2b(b) => print "Case B: ", b, "\n";
-    }
+  match e {
+    case Ex2a(u) => print "Case A: ", u, "\n";
+    case Ex2b(b) => print "Case B: ", b, "\n";
+  }
 }
 
 method DtUpdate(e:Example1)
@@ -45,14 +48,14 @@ method DtUpdate(e:Example1)
 }
 
 method TestDestructor() {
-    var e1 := Example1(22, false);
-    var x := e1.u;
-    if x == 22 {
-      print "This is expected\n";
-    } else {
-      assert false;
-      print "This is unexpected!!!\n";
-    }
+  var e1 := Example1(22, false);
+  var x := e1.u;
+  if x == 22 {
+    print "This is expected\n";
+  } else {
+    assert false;
+    print "This is unexpected!!!\n";
+  }
 }
 
 datatype Option<V> = None | Some(value:V)
@@ -109,7 +112,7 @@ method DupTestTest()
   DupTest(Dup2(330));
 }
 
-datatype IntList = 
+datatype IntList =
   | Nil
   | Cons(hd:uint32, tl:IntList)
 
@@ -117,7 +120,7 @@ method IntListLen(l:IntList) returns (len:uint32)
 {
   match l {
     case Nil => len := 0;
-    case Cons(hd, tl) => 
+    case Cons(hd, tl) =>
       var len_rest := IntListLen(tl);
       if len_rest < 0xFFFFFFFF {
         len := len_rest + 1;
@@ -165,19 +168,18 @@ method CarTest() {
 }
 
 method Main() {
-    var e1 := Example1(22, false);
-    var e2 := Ex2a(42);
-    Callee(e2);
-    e2 := Ex2b(true);
-    Callee(e2);
-    TestDestructor();
-    GenericTest();
-    Comparison(Example1(42, true), Example1(42, true), Ex4b, Ex4b);
-    Comparison(Example1(42, false), Example1(42, true), Ex4a, Ex4a);
-    Comparison(Example1(2,  false), Example1(42, false), Ex4a, Ex4b);
-    DupTestTest();
-    TestNestedLet();
+  var e1 := Example1(22, false);
+  var e2 := Ex2a(42);
+  Callee(e2);
+  e2 := Ex2b(true);
+  Callee(e2);
+  TestDestructor();
+  GenericTest();
+  Comparison(Example1(42, true), Example1(42, true), Ex4b, Ex4b);
+  Comparison(Example1(42, false), Example1(42, true), Ex4a, Ex4a);
+  Comparison(Example1(2,  false), Example1(42, false), Ex4a, Ex4b);
+  DupTestTest();
 
-    var len := IntListLen(Cons(15, Cons(18, Cons(330, Nil))));
-    print len;
+  var len := IntListLen(Cons(15, Cons(18, Cons(330, Nil))));
+  print len;
 }

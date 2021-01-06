@@ -15,7 +15,6 @@ CXXFLAGS += -g -Wall -Wextra -Wpedantic -std=c++17 -I$(DAFNY_RUNTIME_DIR)
 .SECONDARY: $(CPPS)
 
 all:$(EXECS)
-#all:hello ints
 
 vars:
 	echo $(DAFNYS)
@@ -33,13 +32,6 @@ $(EXECS): % : %.cpp $(DAFNY_RUNTIME_CPP)
 
 test: $(EXECS)
 	python run_cpp_tests.py $(EXECS)
-#for e in $(EXECS); do echo; echo "*******************"; echo "Running $$e"; echo "*******************"; echo; ./$$e; done | tee $(TEST_LOG)
-#	grep unexpected $(TEST_LOG)
-#	if [ $$? -ne 0 ]; then
-#	  echo "FAILED A TEST"
-#	else
-#		echo "SUCCESS!"
-#	fi
 
 clean:
 	mv ExternFramework.cs ExternFramework; rm -f *.cpp *cs $(DOT_H_S) $(EXECS) $(TEST_LOG); mv ExternFramework ExternFramework.cs

@@ -20,22 +20,30 @@ public class DafnyMap<K, V> implements Map<K, V> {
 
     public static <K, V> DafnyMap<K, V> empty() { return new DafnyMap<K, V>(); }
 
-    @SuppressWarnings("unchecked")
-    public static <K, V> Type<DafnyMap<K, V>> _type(
-            Type<K> keyType, Type<V> valueType) {
-        // Fudge the type parameters; it's not great, but it's safe because
-        // (for now) type descriptors are only used for default values
-        return Type.referenceWithInitializer(
-                (Class<DafnyMap<K, V>>) (Class<?>) DafnyMap.class,
-                DafnyMap::empty);
+    public static <K, V> DafnyMap<K, V> fromElements(Tuple2<K, V> ... pairs) {
+        DafnyMap<K, V> result = new DafnyMap<K, V>();
+        for (Tuple2<K, V> pair : pairs) {
+            result.put(pair.dtor__0(), pair.dtor__1());
+        }
+        return result;
     }
 
-    public boolean contains(K t) {
+    @SuppressWarnings("unchecked")
+    public static <K, V> TypeDescriptor<DafnyMap<? extends K, ? extends V>> _typeDescriptor(
+            TypeDescriptor<K> keyType, TypeDescriptor<V> valueType) {
+        // Fudge the type parameters; it's not great, but it's safe because
+        // (for now) type descriptors are only used for default values
+        return TypeDescriptor.referenceWithDefault(
+                (Class<DafnyMap<? extends K, ? extends V>>) (Class<?>) DafnyMap.class,
+                DafnyMap.empty());
+    }
+
+    public boolean contains(Object t) {
         return innerMap.containsKey(t);
     }
 
-    public DafnyMap<K, V> update(K k, V v) {
-        HashMap<K, V> copy = new HashMap<>(innerMap);
+    public static <K, V> DafnyMap<K, V> update(DafnyMap<? extends K, ? extends V> th, K k, V v) {
+        HashMap<K, V> copy = new HashMap<>(th.innerMap);
         copy.put(k, v);
         DafnyMap<K, V> r = new DafnyMap<>();
         r.innerMap = copy;
@@ -199,11 +207,13 @@ public class DafnyMap<K, V> implements Map<K, V> {
         return new DafnySet<>(innerMap.values());
     }
 
-    public DafnySet<Tuple2<K, V>> dafnyEntrySet() {
+    // Until tuples (and other datatypes) are compiled with type-argument variance, the following
+    // method takes type parameters <KK, VV>. The expectation is that <K, V> is <? extends KK, ? extends VV>.
+    public <KK, VV> DafnySet<? extends Tuple2<KK, VV>> dafnyEntrySet() {
         ArrayList<Tuple2<K, V>> list = new ArrayList<Tuple2<K, V>>();
         for (Entry<K, V> entry : innerMap.entrySet()) {
             list.add(new Tuple2<K, V>(entry.getKey(), entry.getValue()));
         }
-        return new DafnySet<Tuple2<K, V>>(list);
+        return (DafnySet<? extends Tuple2<KK, VV>>)(Object)new DafnySet<Tuple2<K, V>>(list);
     }
 }

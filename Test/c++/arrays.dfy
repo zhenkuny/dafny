@@ -1,25 +1,17 @@
-//newtype{:nativeType "sbyte"} sbyte = i:int | -0x80 <= i < 0x80
-//newtype{:nativeType "byte"} byte = i:int | 0 <= i < 0x100
-//newtype{:nativeType "short"} int16 = i:int | -0x8000 <= i < 0x8000
-//newtype{:nativeType "ushort"} uint16 = i:int | 0 <= i < 0x10000
-//newtype{:nativeType "int"} int32 = i:int | -0x80000000 <= i < 0x80000000
-newtype{:nativeType "uint"} uint32 = i:int | 0 <= i < 0x100000000
-//newtype{:nativeType "long"} int64 = i:int | -0x8000000000000000 <= i < 0x8000000000000000
-//newtype{:nativeType "ulong"} uint64 = i:int | 0 <= i < 0x10000000000000000
-//newtype{:nativeType "sbyte"} nat8 = i:int | 0 <= i < 0x80
-//newtype{:nativeType "short"} nat16 = i:int | 0 <= i < 0x8000
-//newtype{:nativeType "int"} nat32 = i:int | 0 <= i < 0x80000000
-//newtype{:nativeType "long"} nat64 = i:int | 0 <= i < 0x8000000000000000
+// RUN: %dafny /compile:3 /spillTargetCode:2 /compileTarget:cpp "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
+newtype uint32 = i:int | 0 <= i < 0x100000000
 
 method returnANullArray() returns (a: array?<uint32>)
-ensures a == null
+  ensures a == null
 {
   a := null;
 }
 
 method returnANonNullArray() returns (a: array?<uint32>)
-ensures a != null
-ensures a.Length == 5
+  ensures a != null
+  ensures a.Length == 5
 {
   a := new uint32[5];
   a[0] := 1;
@@ -46,7 +38,7 @@ method LinearSearch(a: array<uint32>, len:uint32, key: uint32) returns (n: uint3
 }
 
 method PrintArray<A>(a:array?<A>, len:uint32) 
-  requires a != null ==> len as int == a.Length;
+  requires a != null ==> len as int == a.Length
 {
   if (a == null) {
     print "It's null\n";
