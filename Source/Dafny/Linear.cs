@@ -101,15 +101,25 @@ namespace Microsoft.Dafny.Linear {
             foreach (var ls in AllStatementLists(mc.Body)) { yield return ls; }
           }
           if (ms.ResolvedStatement != null) {
-            Contract.Assert(ms.ResolvedStatement is MatchStmt);
-            var resolvedMs = (MatchStmt) ms.ResolvedStatement;
-            foreach (var mc in resolvedMs.Cases) {
-              foreach (var ls in AllStatementLists(mc.Body)) { yield return ls; }
+            if (ms.ResolvedStatement is MatchStmt resolvedMs) {
+              foreach (var mc in resolvedMs.Cases) {
+                foreach (var ls in AllStatementLists(mc.Body)) {
+                  yield return ls;
+                }
+              }
+            } else if (ms.ResolvedStatement is IfStmt resolvedIs) {
+              foreach (var ls in AllStatementLists(resolvedIs)) { yield return ls; }
+            } else {
+              Contract.Assert(false);  // Did not expect to reach this.  Need to handle more cases.
             }
           }
           break;
         case WhileStmt ws:
-          foreach (var ls in AllStatementLists(ws.Body.Body)) { yield return ls; }
+          if (ws.Body != null) {
+            foreach (var ls in AllStatementLists(ws.Body.Body)) {
+              yield return ls;
+            }
+          }
           break;
       }
     }

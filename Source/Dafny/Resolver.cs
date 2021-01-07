@@ -16864,7 +16864,7 @@ namespace Microsoft.Dafny
           reporter.Error(MessageSource.Resolver, expr, "shared variable <<{0}>> is out of scope here", e.Var.Name);
         }
         if (e.Var != null && e.Var.IsGhost) {
-          reporter.Error(MessageSource.Resolver, expr, "ghost variables (e.g., <<{0}>>)  are allowed only in specification contexts", e.Var.Name);
+          reporter.Error(MessageSource.Resolver, expr, "ghost variables are allowed only in specification contexts");
           return Usage.Ordinary;
         }
         return e.Var.Usage;
@@ -16875,7 +16875,7 @@ namespace Microsoft.Dafny
       } else if (expr is MemberSelectExpr) {
         var e = (MemberSelectExpr)expr;
         if (e.Member != null && e.Member.IsGhost) {
-          reporter.Error(MessageSource.Resolver, expr, "ghost fields (e.g., <<{0}>>) are allowed only in specification contexts", e.Member.Name);
+          reporter.Error(MessageSource.Resolver, expr, "ghost fields are allowed only in specification contexts");
           return Usage.Ordinary;
         }
         var d = e.Member as DatatypeDestructor;

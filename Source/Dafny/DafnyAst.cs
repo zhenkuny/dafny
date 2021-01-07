@@ -6203,7 +6203,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(atd.Arity == Formals.Count);
 
       // Note, the following returned type can contain type parameters from the function and its enclosing class
-      return new ArrowType(tok, atd, Formals.ConvertAll(f => f.Type), ResultType, Result.Usage, Formals.ConvertAll(f => f.Usage));
+      return new ArrowType(tok, atd, Formals.ConvertAll(f => f.Type), ResultType, ResultUsage, Formals.ConvertAll(f => f.Usage));
     }
 
     public bool AllowsNontermination {
