@@ -1712,11 +1712,7 @@ namespace Microsoft.Dafny
 
       // add for the module itself
       foreach (var kv in m.TopLevels) {
-        // TODO: inout previously had:
-        // if (kv.Key != "_default") { // System._default has rank_is_less_than
-        //   Contract.Assert(EquivIfPresent(info.TopLevels, kv.Key, kv.Value));
-        // }
-        if (info.TopLevels.TryGetValue(kv.Key, out var infoValue)) {
+        if (info.TopLevels.TryGetValue(kv.Key, out var infoValue) && kv.Key != "_default") {  // REVIEW: System._default has rank_is_less_than
           if (infoValue != kv.Value) {
             // This only happens if one signature contains the name C as a class C (because it
             // provides C) and the other signature contains the name C as a non-null type decl
