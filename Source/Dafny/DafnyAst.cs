@@ -379,13 +379,27 @@ namespace Microsoft.Dafny {
       Contract.Requires(typeArgumentsClass.Count == f.EnclosingClass.TypeArgs.Count);
       Contract.Requires(typeArgumentsMember.Count == f.TypeArgs.Count);
 
-      var atd = ArrowTypeDecls[f.Formals.Count];
+      var formals = Util.Concat(f.EnclosingClass.TypeArgs, f.TypeArgs);
+      var actuals = Util.Concat(typeArgumentsClass, typeArgumentsMember);
+      var typeMap = Resolver.TypeSubstitutionMap(formals, actuals);
+      var arg_usages = f.Formals.ConvertAll(arg => arg.Usage);
+      bool hasReads = f.Reads.Count != 0;
+      bool hasReq = f.Req.Count != 0;
+      Arrow arrow = hasReads ? Arrow.Any : hasReq ? Arrow.Partial : Arrow.Total;
+      return CreateArrowType(f.tok, resolved:false, arrow, f.Formals.ConvertAll(
+        arg => Resolver.SubstType(arg.Type, typeMap)),
+        Resolver.SubstType(f.ResultType, typeMap), f.ResultUsage, arg_usages);
+
+      /*
+      object key = Tuple.Create(f.ResultUsage, MakeTupleKey(arg_usages, arg_usages.Count));
+      var atd = ArrowTypeDecls[key];
 
       var formals = Util.Concat(f.EnclosingClass.TypeArgs, f.TypeArgs);
       var actuals = Util.Concat(typeArgumentsClass, typeArgumentsMember);
       var typeMap = Resolver.TypeSubstitutionMap(formals, actuals);
       return new ArrowType(f.tok, atd, f.Formals.ConvertAll(arg => Resolver.SubstType(arg.Type, typeMap)), Resolver.SubstType(f.ResultType, typeMap),
-        f.Result.Usage, f.Formals.ConvertAll(arg => arg.Usage));
+        f.Result.Usage, arg_usages);
+        */
     }
 
     private object MakeTupleKey(List<Usage> usages, int dims) {
