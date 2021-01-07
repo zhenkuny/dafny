@@ -1578,7 +1578,7 @@ namespace Microsoft.Dafny {
             var wGet = classWriter.CreateGetterSetter(IdName(f), f.Type, f.tok, f.IsStatic, false, member, out wSet, false);
             Contract.Assert(wSet == null && wGet == null);  // since the previous line specified no body
           } else {
-            var rhs = c is TraitDecl ? null : PlaceboValue(f.Type, errorWr, f.tok, Usage.Ordinary);
+            var rhs = c is TraitDecl ? null : PlaceboValue(f.Type, errorWr, f.tok, Usage.Ordinary, true);
             classWriter.DeclareField(IdName(f), c, f.IsStatic, false, f.Type, f.tok, rhs, f);
           }
           if (f is ConstantField && ((ConstantField)f).Rhs != null) {
