@@ -2066,7 +2066,7 @@ namespace Microsoft.Dafny {
         var useReturnStyleOuts = UseReturnStyleOuts(m, nonGhostOutsCount);
         foreach (var p in m.Outs) {
           if (!p.IsGhost) {
-            DeclareLocalOutVar(IdName(p), p.Type, p.tok, p.Usage, PlaceboValue(p.Type, w, p.tok, p.Usage), useReturnStyleOuts, w);
+            DeclareLocalOutVar(IdName(p), p.Type, p.tok, p.Usage, PlaceboValue(p.Type, w, p.tok, p.Usage, true), useReturnStyleOuts, w);
           }
         }
 
