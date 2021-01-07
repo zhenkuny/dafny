@@ -107,6 +107,8 @@ namespace Microsoft.Dafny.Linear {
                   yield return ls;
                 }
               }
+            } else if (ms.ResolvedStatement is BlockStmt resolvedBs) {
+              foreach (var ls in AllStatementLists(resolvedBs.Body)) { yield return ls; }
             } else if (ms.ResolvedStatement is IfStmt resolvedIs) {
               foreach (var ls in AllStatementLists(resolvedIs)) { yield return ls; }
             } else {
