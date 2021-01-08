@@ -766,7 +766,7 @@ namespace Microsoft.Dafny
       }
 
       if (f is Predicate) {
-        return new Predicate(Tok(f.tok), newName, f.HasStaticKeyword, f.IsGhost, f.Usage, tps, formals,
+        return new Predicate(Tok(f.tok), newName, f.HasStaticKeyword, f.Usage, tps, formals,
           req, reads, ens, decreases, body, Predicate.BodyOriginKind.OriginalOrInherited, CloneAttributes(f.Attributes), null);
       } else if (f is LeastPredicate) {
         return new LeastPredicate(Tok(f.tok), newName, f.HasStaticKeyword, ((LeastPredicate)f).TypeOfK, tps, formals,
@@ -781,7 +781,7 @@ namespace Microsoft.Dafny
         return new TwoStateFunction(Tok(f.tok), newName, f.HasStaticKeyword, tps, formals, f.Result == null ? null : CloneFormal(f.Result), CloneType(f.ResultType),
           req, reads, ens, decreases, body, CloneAttributes(f.Attributes), null);
       } else {
-        return new Function(Tok(f.tok), newName, f.HasStaticKeyword, f.IsGhost, f.Usage, tps, formals, f.Result == null ? null : CloneFormal(f.Result), CloneType(f.ResultType),
+        return new Function(Tok(f.tok), newName, f.HasStaticKeyword, f.Usage, tps, formals, f.Result == null ? null : CloneFormal(f.Result), CloneType(f.ResultType),
           req, reads, ens, decreases, body, CloneAttributes(f.Attributes), null);
       }
     }

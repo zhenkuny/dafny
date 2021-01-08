@@ -157,7 +157,7 @@ namespace Microsoft.Dafny {
         rankVarA.ResolvedParam = rankParamA;
         rankVarB.ResolvedParam = rankParamB;
         Attributes rankAttrs = new Attributes("axiom", new List<Expression>(), null);
-        var rankFun = new Function(Token.NoToken, "rank_is_less_than", false, false, Usage.Ghost,
+        var rankFun = new Function(Token.NoToken, "rank_is_less_than", false, Usage.Ghost,
           new List<TypeParameter>() { rankParamA, rankParamB },
           new List<Formal>() {
             new Formal(Token.NoToken, "a", rankVarA, true, Usage.Ghost),
@@ -284,12 +284,12 @@ namespace Microsoft.Dafny {
           Type = new SetType(true, ObjectQ()),
         };
         var readsFrame = new List<FrameExpression> { new FrameExpression(tok, readsIS, null) };
-        var req = new Function(tok, "requires", false, true, Usage.Ghost,
+        var req = new Function(tok, "requires", false, Usage.Ghost,
           new List<TypeParameter>(), args, null, Type.Bool,
           new List<AttributedExpression>(), readsFrame, new List<AttributedExpression>(),
           new Specification<Expression>(new List<Expression>(), null),
           null, null, null);
-        var reads = new Function(tok, "reads", false, true, Usage.Ghost,
+        var reads = new Function(tok, "reads", false, Usage.Ghost,
           new List<TypeParameter>(), args, null, new SetType(true, ObjectQ()),
           new List<AttributedExpression>(), readsFrame, new List<AttributedExpression>(),
           new Specification<Expression>(new List<Expression>(), null),
@@ -5213,7 +5213,7 @@ namespace Microsoft.Dafny {
       List<TypeParameter> typeArgs, List<Formal> formals, Type resultType,
       List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens, Specification<Expression> decreases,
       Expression body, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, isGhost, isGhost ? Usage.Ghost : Usage.Ordinary, typeArgs, formals, null, resultType, req, reads, ens, decreases, body, attributes, signatureEllipsis)
+      : base(tok, name, hasStaticKeyword, isGhost ? Usage.Ghost : Usage.Ordinary, typeArgs, formals, null, resultType, req, reads, ens, decreases, body, attributes, signatureEllipsis)
     {
       Module = module;
     }
@@ -6258,7 +6258,7 @@ namespace Microsoft.Dafny {
     /// <summary>
     /// Note, functions are "ghost" by default; a non-ghost function is called a "function method".
     /// </summary>
-    public Function(IToken tok, string name, bool hasStaticKeyword, bool isGhost, Usage usage,
+    public Function(IToken tok, string name, bool hasStaticKeyword, Usage usage,
                     List<TypeParameter> typeArgs, List<Formal> formals, Formal result, Type resultType,
                     List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens, Specification<Expression> decreases,
                     Expression body, Attributes attributes, IToken signatureEllipsis)
@@ -6360,11 +6360,11 @@ namespace Microsoft.Dafny {
       Extension  // this predicate extends the definition of a predicate with a body in a module being refined
     }
     public readonly BodyOriginKind BodyOrigin;
-    public Predicate(IToken tok, string name, bool hasStaticKeyword, bool isGhost, Usage usage,
+    public Predicate(IToken tok, string name, bool hasStaticKeyword, Usage usage,
       List<TypeParameter> typeArgs, List<Formal> formals,
       List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens, Specification<Expression> decreases,
       Expression body, BodyOriginKind bodyOrigin, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, isGhost, usage, typeArgs, formals, null, Type.Bool, req, reads, ens, decreases, body, attributes, signatureEllipsis) {
+      : base(tok, name, hasStaticKeyword, usage, typeArgs, formals, null, Type.Bool, req, reads, ens, decreases, body, attributes, signatureEllipsis) {
       Contract.Requires(bodyOrigin == Predicate.BodyOriginKind.OriginalOrInherited || body != null);
       BodyOrigin = bodyOrigin;
     }
@@ -6382,7 +6382,7 @@ namespace Microsoft.Dafny {
       List<TypeParameter> typeArgs, Formal k, List<Formal> formals,
       List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens, Specification<Expression> decreases,
       Expression body, Attributes attributes, ExtremePredicate extremePred)
-      : base(tok, name, hasStaticKeyword, true, Usage.Ghost, typeArgs, formals, null, Type.Bool, req, reads, ens, decreases, body, attributes, null) {
+      : base(tok, name, hasStaticKeyword, Usage.Ghost, typeArgs, formals, null, Type.Bool, req, reads, ens, decreases, body, attributes, null) {
       Contract.Requires(k != null);
       Contract.Requires(extremePred != null);
       Contract.Requires(formals != null && 1 <= formals.Count && formals[0] == k);
@@ -6407,7 +6407,7 @@ namespace Microsoft.Dafny {
       List<TypeParameter> typeArgs, List<Formal> formals,
       List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens,
       Expression body, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, true, Usage.Ghost, typeArgs, formals, null, Type.Bool,
+      : base(tok, name, hasStaticKeyword, Usage.Ghost, typeArgs, formals, null, Type.Bool,
              req, reads, ens, new Specification<Expression>(new List<Expression>(), null), body, attributes, signatureEllipsis) {
       TypeOfK = typeOfK;
     }
@@ -6465,7 +6465,7 @@ namespace Microsoft.Dafny {
                      List<TypeParameter> typeArgs, List<Formal> formals, Formal result, Type resultType,
                      List<AttributedExpression> req, List<FrameExpression> reads, List<AttributedExpression> ens, Specification<Expression> decreases,
                      Expression body, Attributes attributes, IToken signatureEllipsis)
-      : base(tok, name, hasStaticKeyword, true, Usage.Ghost, typeArgs, formals, result, resultType, req, reads, ens, decreases, body, attributes, signatureEllipsis) {
+      : base(tok, name, hasStaticKeyword, Usage.Ghost, typeArgs, formals, result, resultType, req, reads, ens, decreases, body, attributes, signatureEllipsis) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(typeArgs != null);

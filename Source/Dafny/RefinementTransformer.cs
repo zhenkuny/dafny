@@ -367,7 +367,7 @@ namespace Microsoft.Dafny
       moduleUnderConstruction = null;
     }
 
-    Function CloneFunction(IToken tok, Function f, bool isGhost, Usage usage, List<AttributedExpression> moreEnsures, Formal moreResult, Expression moreBody, Expression replacementBody, bool checkPrevPostconditions, Attributes moreAttributes) {
+    Function CloneFunction(IToken tok, Function f, Usage usage, List<AttributedExpression> moreEnsures, Formal moreResult, Expression moreBody, Expression replacementBody, bool checkPrevPostconditions, Attributes moreAttributes) {
       Contract.Requires(tok != null);
       Contract.Requires(moreBody == null || f is Predicate);
       Contract.Requires(moreBody == null || replacementBody == null);
@@ -410,7 +410,7 @@ namespace Microsoft.Dafny
       }
 
       if (f is Predicate) {
-        return new Predicate(tok, f.Name, f.HasStaticKeyword, isGhost, usage, tps, formals,
+        return new Predicate(tok, f.Name, f.HasStaticKeyword, usage, tps, formals,
           req, reads, ens, decreases, body, bodyOrigin, refinementCloner.MergeAttributes(f.Attributes, moreAttributes), null);
       } else if (f is LeastPredicate) {
         return new LeastPredicate(tok, f.Name, f.HasStaticKeyword, ((LeastPredicate)f).TypeOfK, tps, formals,
@@ -425,7 +425,7 @@ namespace Microsoft.Dafny
         return new TwoStateFunction(tok, f.Name, f.HasStaticKeyword, tps, formals, result, refinementCloner.CloneType(f.ResultType),
           req, reads, ens, decreases, body, refinementCloner.MergeAttributes(f.Attributes, moreAttributes), null);
       } else {
-        return new Function(tok, f.Name, f.HasStaticKeyword, isGhost, usage, tps, formals, result, refinementCloner.CloneType(f.ResultType),
+        return new Function(tok, f.Name, f.HasStaticKeyword, usage, tps, formals, result, refinementCloner.CloneType(f.ResultType),
           req, reads, ens, decreases, body, refinementCloner.MergeAttributes(f.Attributes, moreAttributes), null);
       }
     }
@@ -655,7 +655,7 @@ namespace Microsoft.Dafny
               } else if (f.Body != null) {
                 reporter.Error(MessageSource.RefinementTransformer, nwMember, $"a refining {f.WhatKind} is not allowed to extend/change the body");
               }
-              var newF = CloneFunction(f.tok, prevFunction, f.IsGhost, f.Usage, f.Ens, f.Result, moreBody, replacementBody, prevFunction.Body == null, f.Attributes);
+              var newF = CloneFunction(f.tok, prevFunction, f.Usage, f.Ens, f.Result, moreBody, replacementBody, prevFunction.Body == null, f.Attributes);
               newF.RefinementBase = member;
               nw.Members[index] = newF;
             }

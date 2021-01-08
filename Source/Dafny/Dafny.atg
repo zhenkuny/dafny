@@ -2115,7 +2115,7 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
         f = new TwoStateFunction(tok, id.val, dmod.IsStatic, typeArgs, formals, result, returnType,
                                  reqs, reads, ens, new Specification<Expression>(decreases, null), body, attrs, signatureEllipsis);
      } else if (isPredicate) {
-        f = new Predicate(tok, id.val, dmod.IsStatic, !isFunctionMethod, isFunctionMethod ? dmod.Usage : Usage.Ghost, typeArgs, formals,
+        f = new Predicate(tok, id.val, dmod.IsStatic, isFunctionMethod ? dmod.Usage : Usage.Ghost, typeArgs, formals,
                           reqs, reads, ens, new Specification<Expression>(decreases, null), body, Predicate.BodyOriginKind.OriginalOrInherited, attrs, signatureEllipsis);
      } else if (isLeastPredicate) {
         f = new LeastPredicate(tok, id.val, dmod.IsStatic, kType, typeArgs, formals,
@@ -2124,7 +2124,7 @@ FunctionDecl<DeclModifierData dmod, bool isWithinAbstractModule, out Function/*!
         f = new GreatestPredicate(tok, id.val, dmod.IsStatic, kType, typeArgs, formals,
                                   reqs, reads, ens, body, attrs, signatureEllipsis);
      } else {
-        f = new Function(tok, id.val, dmod.IsStatic, !isFunctionMethod, isFunctionMethod ? dmod.Usage : Usage.Ghost, typeArgs, formals, result, returnType,
+        f = new Function(tok, id.val, dmod.IsStatic, isFunctionMethod ? dmod.Usage : Usage.Ghost, typeArgs, formals, result, returnType,
                          reqs, reads, ens, new Specification<Expression>(decreases, null), body, attrs, signatureEllipsis);
      }
      f.BodyStartTok = bodyStart;
