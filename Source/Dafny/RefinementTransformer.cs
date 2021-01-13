@@ -76,12 +76,8 @@ namespace Microsoft.Dafny
     private ModuleSignature refinedSigOpened;
 
     internal override void PreResolve(ModuleDefinition m) {
-      Console.Out.WriteLine(String.Format("PreResolve({0}, refinementBaseRoot {1})", m.Name,
-        m.RefinementBaseRoot==null ? "null" : m.RefinementBaseRoot.ToString()));
       if (m.RefinementBaseRoot != null) {
         RefinedSig = m.RefinementBaseRoot.Signature;
-        Console.Out.WriteLine(String.Format("Angry thing {0} has signature {1}", m.RefinementBaseRoot,
-          RefinedSig == null ? "null" : RefinedSig.ToString()));
 
         if (RefinedSig.ModuleDef != null) {
           m.RefinementBase = RefinedSig.ModuleDef;
@@ -141,37 +137,15 @@ namespace Microsoft.Dafny
       }
 
       // Merge the declarations of prev into the declarations of m
-      Console.Out.WriteLine(String.Format("XXX prev {0} {1}", prev, prev.Name));
-      Console.Out.WriteLine(String.Format("XXX m {0} m.RefinementBaseExpr {1}", m.Name, m.RefinementBaseExpr));
       List<string> processedDecl = new List<string>();
       foreach (var d in prev.TopLevelDecls) {
         int index;
         processedDecl.Add(d.Name);
         if (!declaredNames.TryGetValue(d.Name, out index)) {
-//          if (d is ModuleFacadeDecl) {
-//            Console.Out.WriteLine(String.Format("XXX PreResolveWorker-Facade ParameterIndex {0}", ((ModuleFacadeDecl) d).ParameterIndex));
-//            Console.Out.WriteLine(String.Format("XXX Sorely tempted to replace with {0}", m.RefinementBaseExpr.applications[0].moduleParams[0].applications[0].tok.val));
-//          }
-//          XXX jonh hacked this out because it's too late to do this lookup?
-//          if (d is ModuleFacadeDecl && ((ModuleFacadeDecl) d).ParameterIndex != ModuleFacadeDecl.NotParameter) {
-//            int idx = ((ModuleFacadeDecl) d).ParameterIndex;
-//            ModuleExpression paramI = m.RefinementBaseExpr.applications[0].moduleParams[idx];
-//            Contract.Assert(paramI.applications.Count == 1);  // Can't yet support nested application in refinement, I guess.
-//            Contract.Assert(paramI.applications[0].moduleParams.Count == 0);  // Can't yet support nested application in refinement, I guess.
-//            IToken replacementName = paramI.applications[0].tok;
-//            // Now how do we get to the declaration?
-//            TopLevelDecl replacementDecl = LookupSomehow(replacementName);
-//            Console.Out.WriteLine(String.Format("XXX PreResolveWorker Replaced {0} with {1}", d.Name, replacementDecl.Name));
-//            m.TopLevelDecls.Add(refinementCloner.CloneDeclaration(replacementDecl, m));
-//          } else
-          {
-            Console.Out.WriteLine(String.Format("XXX PreResolveWorker-A (!declared) d.Name {0}", d.Name));
-            // So if d is a paramaterized type of the target ("prev"?), and that parameter is supplied in the application,
-            // we should swap it out.
-            m.TopLevelDecls.Add(refinementCloner.CloneDeclaration(d, m));
-          }
+          // So if d is a paramaterized type of the target ("prev"?), and that parameter is supplied in the application,
+          // we should swap it out.
+          m.TopLevelDecls.Add(refinementCloner.CloneDeclaration(d, m));
         } else {
-          Console.Out.WriteLine(String.Format("XXX PreResolveWorker-B (merge) d.Name {0}", d.Name));
           var nw = m.TopLevelDecls[index];
           MergeTopLevelDecls(m, nw, d, index);
         }
@@ -294,15 +268,10 @@ namespace Microsoft.Dafny
 
     public bool CheckIsRefinement(ModuleDecl derived, ModuleFacadeDecl original) {
 
-      Console.Out.WriteLine("XXX-0 derived " + derived.Name);
-      Console.Out.WriteLine("XXX-0 original " + original.Name);
-
       // Check explicit refinement
       // TODO syntactic analysis of export sets is not quite right
       var derivedPointer = derived.Signature.ModuleDef;
       while (derivedPointer != null) {
-        Console.Out.WriteLine("XXX-1 considering " + derivedPointer.Name);
-        Console.Out.WriteLine("XXX-1 wishing it were " + original.OriginalSignature.ModuleDef.Name);
         if (derivedPointer == original.OriginalSignature.ModuleDef) {
           HashSet<string> exports;
           if (derived is AliasModuleDecl) {
@@ -311,19 +280,14 @@ namespace Microsoft.Dafny
             exports = new HashSet<string>(((ModuleFacadeDecl)derived).Exports.ConvertAll(t => t.val));
           } else {
             reporter.Error(MessageSource.RefinementTransformer, derived, "a module ({0}) can only be refined by an alias module or a module facade", original.Name);
-            Console.Out.WriteLine("XXX-A fail");
             return false;
           }
           var oexports = new HashSet<string>(original.Exports.ConvertAll(t => t.val));
           var rc = oexports.IsSubsetOf(exports);
-          Console.Out.WriteLine("XXX-B rc " + rc);
           return rc;
-        } else if (derivedPointer.IsFacade) {
-          Console.Out.WriteLine("We could totally do something awesome with " + derivedPointer.Name + " which is a facade");
         }
         derivedPointer = derivedPointer.RefinementBase;
       }
-      Console.Out.WriteLine("XXX-C fail");
       return false;
     }
 

@@ -20,19 +20,15 @@ namespace Microsoft.Dafny
       }
       foreach (var d in m.TopLevelDecls) {
         nw.TopLevelDecls.Add(CloneDeclaration(d, nw));
-        Console.Out.WriteLine(String.Format("XXX-F decl {0} now count {1}", d, nw.TopLevelDecls.Count));
       }
       foreach (var tup in m.PrefixNamedModules) {
-        Console.Out.WriteLine("XXX-F tup " + tup);
         var newTup = new Tuple<List<IToken>, LiteralModuleDecl>(tup.Item1, (LiteralModuleDecl)CloneDeclaration(tup.Item2, nw));
         nw.PrefixNamedModules.Add(newTup);
       }
       if (null != m.RefinementBase) {
         nw.RefinementBase = GetRefinementBase(m);
-        Console.Out.WriteLine("XXX-F refbase " + nw.RefinementBase);
       }
       nw.Height = m.Height;
-      Console.Out.WriteLine("returned "+nw);
       return nw;
     }
 
@@ -880,7 +876,6 @@ namespace Microsoft.Dafny
         }
         //result_decl.VisibilityScope = somethingsomethingmoduledef;
       }
-      Console.Out.WriteLine(String.Format("XXX CloneDeclaration looking at {0}, did {1}", d.Name, dbg_result));
       return result;
     }
   }
@@ -891,12 +886,9 @@ namespace Microsoft.Dafny
   class DeepModuleSignatureCloner : Cloner {
     public override TopLevelDecl CloneDeclaration(TopLevelDecl d, ModuleDefinition m) {
       var dd = base.CloneDeclaration(d, m);
-//XXX      Console.Out.WriteLine("Clonecase for " + m.Name);
       if (d is ModuleDecl) {
-//XXX        Console.Out.WriteLine("  ModuleDecl");
         ((ModuleDecl)dd).Signature = ((ModuleDecl)d).Signature;
         if (d is ModuleFacadeDecl) {
-//XXX          Console.Out.WriteLine("  ModuleFacadeDecl");
           var sourcefacade = (ModuleFacadeDecl)d;
 
           ((ModuleFacadeDecl)dd).OriginalSignature = sourcefacade.OriginalSignature;
@@ -904,7 +896,6 @@ namespace Microsoft.Dafny
             ((ModuleFacadeDecl)dd).Root = (ModuleDecl)CloneDeclaration(sourcefacade.Root, m);
           }
         } else if (d is AliasModuleDecl) {
-//XXX          Console.Out.WriteLine("  AliasModuleDecl");
           var sourcealias = (AliasModuleDecl)d;
 
           if (sourcealias.Root != null) {
@@ -912,7 +903,6 @@ namespace Microsoft.Dafny
           }
         }
       }
-//XXX        else { Console.Out.WriteLine("  not-ModuleDecl"); }
       return dd;
     }
   }
@@ -935,20 +925,14 @@ namespace Microsoft.Dafny
     }
 
     private bool RevealedInScope(Declaration d) {
-        Console.Out.WriteLine(String.Format("RevealedInScope(this {0}, d {1}) = {2}",
-            this, d, d.IsRevealedInScope(scope)));
       return d.IsRevealedInScope(scope);
     }
 
     private bool VisibleInScope(Declaration d) {
-        Console.Out.WriteLine(String.Format("VisibleInScope(this {0}, d {1}) = {2}",
-            this, d, d.IsRevealedInScope(scope)));
       return d.IsVisibleInScope(scope);
     }
 
     public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
-    Console.Out.WriteLine(String.Format("CloneModuleDefinition(this {0}, m {1}, name {2})",
-        this, m, name));
       var basem = base.CloneModuleDefinition(m, name);
 
 
@@ -988,21 +972,16 @@ namespace Microsoft.Dafny
         }
       }
 
-      Console.Out.WriteLine(String.Format("XXX-G basem.tld count {0}", basem.TopLevelDecls.Count));
       basem.TopLevelDecls.RemoveAll(t => t is AliasModuleDecl ?
         vismap[((AliasModuleDecl)t).Signature.ModuleDef].IsEmpty() : isInvisibleClone(t));
 
-      Console.Out.WriteLine(String.Format("XXX-H basem.tld count {0}", basem.TopLevelDecls.Count));
       basem.TopLevelDecls.FindAll(t => t is TopLevelDeclWithMembers).
         ForEach(t => ((TopLevelDeclWithMembers)t).Members.RemoveAll(isInvisibleClone));
-      Console.Out.WriteLine(String.Format("XXX-I basem.tld count {0}", basem.TopLevelDecls.Count));
 
       return basem;
     }
 
     public override TopLevelDecl CloneDeclaration(TopLevelDecl d, ModuleDefinition m) {
-    Console.Out.WriteLine(String.Format("CloneDeclaration(this {0}, d {1}, m {2})",
-        this, d, m));
       var based = base.CloneDeclaration(d, m);
       if ((d is RevealableTypeDecl || d is TopLevelDeclWithMembers) && !(d is ClassDecl cd && cd.NonNullTypeDecl == null) && !RevealedInScope(d)) {
         var tps = d.TypeArgs.ConvertAll(CloneTypeParam);

@@ -1348,7 +1348,6 @@ namespace Microsoft.Dafny {
       Contract.Requires(u != null);
       Contract.Requires(builtIns != null);
       if (FromSameHead(t, u, out a, out b)) {
-        Console.Out.WriteLine("XXX-FSH_S 1 true");
         return true;
       }
       t = t.NormalizeExpand();
@@ -1356,26 +1355,21 @@ namespace Microsoft.Dafny {
       if (t.IsRefType && u.IsRefType) {
         if (t.IsObjectQ) {
           a = b = t;
-          Console.Out.WriteLine("XXX-FSH_S 2 true");
           return true;
         } else if (u.IsObjectQ) {
           a = b = u;
-          Console.Out.WriteLine("XXX-FSH_S 3 true");
           return true;
         }
         var tt = ((UserDefinedType)t).ResolvedClass as ClassDecl;
         var uu = ((UserDefinedType)u).ResolvedClass as ClassDecl;
         if (uu.HeadDerivesFrom(tt)) {
           a = b = t;
-          Console.Out.WriteLine("XXX-FSH_S 4 true");
           return true;
         } else if (tt.HeadDerivesFrom(uu)) {
           a = b = u;
-          Console.Out.WriteLine("XXX-FSH_S 5 true");
           return true;
         }
       }
-      Console.Out.WriteLine("XXX-FSH_S 6 false");
       return false;
     }
 
@@ -1388,11 +1382,9 @@ namespace Microsoft.Dafny {
         a = towerA[n];
         b = towerB[n];
         if (SameHead(a, b)) {
-          Console.Out.WriteLine(System.String.Format("XXX-FSH true a {0} b {1}", a, b));
           return true;
         }
       }
-      Console.Out.WriteLine("XXX-FSH false");
       return false;
     }
 
@@ -1434,7 +1426,6 @@ namespace Microsoft.Dafny {
       super = super.NormalizeExpandKeepConstraints();  // expand type synonyms
       var origSub = sub;
       sub = sub.NormalizeExpand();  // expand type synonyms AND constraints
-      //Console.Out.WriteLine("XXX-J1 IsHeadSupertypeOf " + super.GetType().Name + " sub " + sub.GetType().Name);
       if (super is TypeProxy) {
         return super == sub;
       } else if (super is BoolType) {
@@ -1479,7 +1470,6 @@ namespace Microsoft.Dafny {
       } else if (super is UserDefinedType) {
         var udtSuper = (UserDefinedType)super;
         if (udtSuper.ResolvedParam != null) {
-          //Console.Out.WriteLine("XXX-J3 IsHeadSupertypeOf rp " + udtSuper.ResolvedParam + " sub.atp " + sub.AsTypeParameter);
           return udtSuper.ResolvedParam == sub.AsTypeParameter;
         } else {
           Contract.Assert(udtSuper.ResolvedClass != null);
@@ -1488,7 +1478,6 @@ namespace Microsoft.Dafny {
             sub = sub.NormalizeExpandKeepConstraints();  // skip past proxies and type synonyms
             var udtSub = sub as UserDefinedType;
             if (udtSub == null) {
-              //Console.Out.WriteLine("XXX-J2 IsHeadSupertypeOf false");
               return false;
             } else if (udtSuper.ResolvedClass == udtSub.ResolvedClass) {
               return true;
@@ -1506,7 +1495,6 @@ namespace Microsoft.Dafny {
               var cl = (ClassDecl)udtSub.ResolvedClass;
               return cl.HeadDerivesFrom(udtSuper.ResolvedClass);
             } else {
-              //Console.Out.WriteLine("XXX-J2 IsHeadSupertypeOf false");
               return false;
             }
           }
@@ -2768,7 +2756,6 @@ namespace Microsoft.Dafny {
       this.Name = tp.Name;
       this.TypeArgs = new List<Type>();
       this.ResolvedParam = tp;
-      //Console.Out.WriteLine("XXX-J1 UserDefinedType rp " + tp);
       var ns = new NameSegment(tok, tp.Name, null);
       var r = new Resolver_IdentifierExpr(tok, tp);
       ns.ResolvedExpression = r;
@@ -2786,7 +2773,6 @@ namespace Microsoft.Dafny {
       this.tok = tp.tok;
       this.Name = tp.Name;
       this.ResolvedParam = tp;
-      //Console.Out.WriteLine("XXX-J2 UserDefinedType rp " + tp);
       this.ResolvedClass = decl;
       this.TypeArgs = typeArgs;
       var ns = new NameSegment(tok, tp.Name, null);
@@ -5367,7 +5353,6 @@ namespace Microsoft.Dafny {
       var thisType = UserDefinedType.FromTopLevelDecl(d.tok, d);
       if (d is OpaqueTypeDecl) {
         thisType.ResolvedParam = ((OpaqueTypeDecl)d).TheType;
-        //Console.Out.WriteLine("XXX-J2 NewSelfSynonym rp " + thisType.ResolvedParam);
       }
 
       var tsd = new InternalTypeSynonymDecl(d.tok, d.Name, TypeParameter.GetExplicitCharacteristics(d), d.TypeArgs, d.Module, thisType, d.Attributes);

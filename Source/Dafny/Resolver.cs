@@ -349,7 +349,6 @@ namespace Microsoft.Dafny
       // is violated, so Processing dependencies will not succeed.
       var newDecls = new List<TopLevelDecl>();
       ProcessDependencies(prog.DefaultModule, b, dependencies, newDecls);
-      Console.Out.WriteLine("*** I definetely finished ProcessDependencies(program)!");
       Contract.Assert(newDecls.Count == 0);
       // check for cycles in the import graph
       foreach (var cycle in dependencies.AllCycles()) {
@@ -360,8 +359,6 @@ namespace Microsoft.Dafny
 
       // fill in module heights
       List<ModuleDecl> sortedDecls = dependencies.TopologicallySortedComponents();
-      Console.Out.WriteLine(String.Format("sortedDecls: {0}", String.Join(", ",
-        from d in sortedDecls select d.Name)));
       int h = 0;
       foreach (ModuleDecl md in sortedDecls) {
         md.Height = h;
@@ -980,7 +977,6 @@ namespace Microsoft.Dafny
       TopLevelDecl defaultClass;
 
       sig.TopLevels.TryGetValue("_default", out defaultClass);
-      Console.Out.WriteLine(String.Format("XXX-D decl {0} defaultClass {1}", literalDecl, defaultClass));
       Contract.Assert(defaultClass is ClassDecl);
       Contract.Assert(((ClassDecl)defaultClass).IsDefaultClass);
       defaultClass.AddVisibilityScope(m.VisibilityScope, true);
@@ -1142,9 +1138,6 @@ namespace Microsoft.Dafny
         foreach (var decl in s.TopLevels) {
           if (decl.Value is ModuleDecl && !(decl.Value is ModuleExportDecl)) {
             var modDecl = (ModuleDecl)decl.Value;
-            Console.Out.WriteLine("offending module is " + modDecl);
-            Console.Out.WriteLine("s.VisibilityScope " + s.VisibilityScope);
-            Console.Out.WriteLine("modDecl.AccessibleSignature() " + modDecl.AccessibleSignature());
             s.VisibilityScope.Augment(modDecl.AccessibleSignature().VisibilityScope);
           }
         }
@@ -1319,12 +1312,7 @@ namespace Microsoft.Dafny
 
       public bool TryLookupFilter(IToken name, out ModuleDecl m, Func<ModuleDecl, bool> filter) {
         Contract.Requires(name != null);
-        //XXX Console.Out.WriteLine(String.Format("Looking up {0} in {1}", name.val, Extn.ToDebugString(modules)));
-        //XXX bool rc1 = modules.TryGetValue(name.val, out m);
-        //XXX bool rc2 = rc1 && filter(m);
-        //XXX Console.Out.WriteLine("    modules says " + rc1 + " , " + rc2 + " m is " + m + " filter is " + filter);
         if (modules.TryGetValue(name.val, out m) && filter(m)) {
-          //XXX Console.Out.WriteLine("   true in modules");
           return true;
         } else if (parent != null) {
           return parent.TryLookupFilter(name, out m, filter);
@@ -1447,36 +1435,15 @@ namespace Microsoft.Dafny
       Contract.Assert(application.applications.Count == 1);
 
       ModuleDefinition def = ((LiteralModuleDecl) prototype).ModuleDef; // XXX why would I believe this is always feasible!?
-      Console.Out.WriteLine(String.Format("GetAppliedModule(proto={0}/defn {1} app {2}",
-        prototype, def.Name, application));
       if (ModuleApplications.ContainsKey(application)) {
         return ModuleApplications[application];
       }
 
-//      var appliedDef = new ModuleDefinition(def.tok,
-//        def.Name + "_applied",  /* XXX probably need to disambiguate which application! */
-//        /* prefixIds XXX? */ new List<IToken>(),
-//        false, false, null,
-//        /* parent */ def.Module,
-//        null, false, true, true);
-      
       Cloner cloner = new Cloner();
       var appliedDef = cloner.CloneModuleDefinition(def, def.Name + "_applied");  /* XXX probably need to disambiguate which application! */
 
-      Console.Out.WriteLine(String.Format("Got returned {0} with {1} tlds", appliedDef, appliedDef.TopLevelDecls.Count));
-      Console.Out.WriteLine("Decls in " + appliedDef.Name);
-      foreach (var d in appliedDef.TopLevelDecls) {
-        Console.Out.WriteLine("  " + d);
-      }
-      Console.Out.WriteLine("Cloned from " + def.Name);
-      foreach (var d in def.TopLevelDecls) {
-        Console.Out.WriteLine("  " + d);
-      }
-
       var appliedDecl = new LiteralModuleDecl(appliedDef, prototype.Module);
       appliedDecl.Signature = prototype.Signature; // XXX maybe?
-      Console.Out.WriteLine(String.Format("I'm so smart that I set {0}.Signature={1}", appliedDecl.Name,
-        appliedDecl.Signature==null ? "null" : appliedDecl.Signature.ToString()));
       // Memoize this application
       ModuleApplications[application] = appliedDecl;
       return appliedDecl;
@@ -1513,7 +1480,6 @@ namespace Microsoft.Dafny
               if (fooDecl is ModuleFacadeDecl) {
                 // XXX we've lost track of whether the Facades were declared as parameters or with "import :". Maybe that's okay.
                 formalBindings.BindName(fooDecl.Name, (ModuleDecl) fooDecl, null);
-                Console.Out.WriteLine(String.Format("XXX don't you wish I could see {0}?", fooDecl));
               }
             }
             if (!formalBindings.TryLookup(TempRefinementBaseName, out other)) {
@@ -1527,13 +1493,10 @@ namespace Microsoft.Dafny
               AddModExpDepsRecursive(formalBindings, dependencies, decl, m.RefinementBaseExpr);
               if (!m.RefinementBaseExpr.applications[0].IsSimple()) {
                 // XXX left off here: need to look up other to get its defn.
-                Console.Out.WriteLine(String.Format("Applying {0} as refinement for {1}", m.RefinementBaseExpr, decl));
-                Console.Out.WriteLine(String.Format("Supposedly {0} is the decl for {1}", other, TempRefinementBaseName.val));
                 other = GetAppliedModule(other, m.RefinementBaseExpr);
                 outNewDecls.Add(other); // add this new definition to the same scope that decl came from.
                 dependencies.AddEdge(decl, other);  // new definition needs to affect sort order so it gets a signature before we try to resolve decl
               }
-              Console.Out.WriteLine(String.Format("Decl now {0}; signature {1}", other, other.Signature==null ? "null" : other.Signature.ToString()));
               m.RefinementBaseRoot = other;
             }
         }
@@ -1541,12 +1504,8 @@ namespace Microsoft.Dafny
       var completedDecls = new List<TopLevelDecl>();  // Shenanigans to avoid changing the list while iterating it.
       var topLevelDecls = new List<TopLevelDecl>();
       topLevelDecls.AddRange(m.TopLevelDecls);
-      Console.Out.WriteLine(String.Format("while {0}; now m.TopLevelDecls.Count = {1}", decl.Name, m.TopLevelDecls.Count));
       while (topLevelDecls.Count > 0) {
         var newDecls = new List<TopLevelDecl>();
-        Console.Out.WriteLine(String.Format("Whoop whoop! Next loop iter processes {0} elts: {1}",
-          topLevelDecls.Count,
-          String.Join(", ", (from d in topLevelDecls select d.Name).ToArray())));
         foreach (var toplevel in topLevelDecls) {
           if (toplevel is ModuleDecl) {
             var d = (ModuleDecl)toplevel;
@@ -1561,13 +1520,10 @@ namespace Microsoft.Dafny
           }
           completedDecls.Add(toplevel);
         }
-        Console.Out.WriteLine(String.Format("Found {0} bonus decls", newDecls.Count));
         topLevelDecls = newDecls;
-        Console.Out.WriteLine(String.Format("Now topLevelDecls.Count = {0}", topLevelDecls.Count));
       }
       m.TopLevelDecls.Clear();
       m.TopLevelDecls.AddRange(completedDecls);
-      Console.Out.WriteLine(String.Format("endwhile {0}; now m.TopLevelDecls.Count = {1}", decl.Name, m.TopLevelDecls.Count));
     }
     
     private ModuleDecl ProcessDependenciesModExp(ModuleDecl outerModuleDecl, ModuleExpression modExp, ModuleBindings bindings,
@@ -2194,7 +2150,6 @@ namespace Microsoft.Dafny
       if (good && reporter.Count(ErrorLevel.Error) == errCount) {
         mod.SuccessfullyResolved = true;
       }
-      Console.Out.WriteLine(String.Format("XXX jonh just added {0} to {1}.RefinementBase", mod.Name, p.ModuleDef.Name));
       //mod.RefinementBase = p.ModuleDef;
       return sig;
     }
@@ -2243,8 +2198,8 @@ namespace Microsoft.Dafny
         }
         if (formals.Count != application.moduleParams.Count) {
             reporter.Error(MessageSource.Resolver, application.tok,
-              ModuleNotFoundErrorMessage(k, modexp.ToTokenList(),
-                $" because {decl.Name} expects {formals.Count} arguments but {application.moduleParams.Count} were applied"));
+              ModuleNotFoundErrorMessage(k, modexp.ToTokenList()) + 
+                $" because {decl.Name} expects {formals.Count} arguments but {application.moduleParams.Count} were applied");
             p = null;
             return false;
         }
@@ -4075,7 +4030,6 @@ namespace Microsoft.Dafny
       Contract.Requires(super != null);
       Contract.Requires(errMsg != null);
 
-      //Console.Out.WriteLine("XXX-J1 ConstrainSubtypeRelation super " + super + " sub " + sub);
       if (!keepConstraints && super is InferredTypeProxy) {
         var ip = (InferredTypeProxy)super;
         if (ip.KeepConstraints) {
@@ -4102,7 +4056,6 @@ namespace Microsoft.Dafny
       Contract.Requires(!(super is TypeProxy) || ((TypeProxy)super).T == null);  // caller is expected to have Normalized away proxies
       Contract.Requires(c != null);
 
-      //Console.Out.WriteLine("XXX-J1 ConstrainSubtypeRelation_Aux super " + super + " sub " + sub);
       if (object.ReferenceEquals(super, sub)) {
         return true;
       } else if (super is TypeProxy && sub is TypeProxy) {
@@ -4126,7 +4079,6 @@ namespace Microsoft.Dafny
         bool headSymbolsAgree = Type.IsHeadSupertypeOf(super.NormalizeExpand(keepConstraints), sub);
         if (!headSymbolsAgree) {
           c.FlagAsError();
-          //Console.Out.WriteLine("XXX-J2 ConstrainSubtypeRelation_Aux error super "+ super.NormalizeExpand(keepConstraints)+ " sub" + sub);
           return false;
         }
         // TODO: inspect type parameters in order to produce some error messages sooner
@@ -4599,11 +4551,6 @@ namespace Microsoft.Dafny
       /// </summary>
       public bool Confirm(Resolver resolver, bool fullstrength, out bool convertedIntoOtherTypeConstraints, out bool moreXConstraints) {
         var rc = Confirm_inner(resolver, fullstrength, out convertedIntoOtherTypeConstraints, out moreXConstraints);
-        Console.Out.WriteLine(String.Format("XXX-Confirm(this.tok={0}:{1} {2} types {3} fs={4} -> {5} conv {6} more {7}",
-          tok.line, tok.col, ConstraintName,
-          string.Join(",", Types.Select(t => t.ToString()).ToArray()),
-          fullstrength,
-          rc, convertedIntoOtherTypeConstraints, moreXConstraints));
         return rc;
       }
       public bool Confirm_inner(Resolver resolver, bool fullstrength, out bool convertedIntoOtherTypeConstraints, out bool moreXConstraints) {
@@ -4642,7 +4589,6 @@ namespace Microsoft.Dafny
                 return true;
               } else if (u.IsTypeParameter) {
                 // we need the constraint base(t) :> u, which for a type parameter t can happen iff t :> u
-                //Console.Out.WriteLine("XXX-J1 Confirm:ConstrainSubtypeRelation");
                 resolver.ConstrainSubtypeRelation(t, u, errorMsg);
                 convertedIntoOtherTypeConstraints = true;
                 return true;
@@ -4656,7 +4602,6 @@ namespace Microsoft.Dafny
                 return true;
               } else if (fullstrength && u is NonProxyType) {
                 // We're willing to change "base(t) :> u" to the stronger constraint "t :> u" for the sake of making progress.
-                //Console.Out.WriteLine("XXX-J2 Confirm:ConstrainSubtypeRelation");
                 resolver.ConstrainSubtypeRelation(t, u, errorMsg);
                 convertedIntoOtherTypeConstraints = true;
                 return true;
@@ -4852,7 +4797,6 @@ namespace Microsoft.Dafny
               return true;
             }
             // note, it's okay if "Types[1]" is a TypeProxy
-            //Console.Out.WriteLine("XXX-J3 Confirm:ConstrainSubtypeRelation");
             resolver.ConstrainSubtypeRelation(indexType, Types[1], errorMsg);  // use the same error message
             convertedIntoOtherTypeConstraints = true;
             return true;
@@ -4878,9 +4822,7 @@ namespace Microsoft.Dafny
           case "Equatable": {
               t = Types[0].NormalizeExpandKeepConstraints();
               var u = Types[1].NormalizeExpandKeepConstraints();
-              Console.Out.WriteLine(String.Format(" XXX-A t {0} u {1}", t, u));
               if (object.ReferenceEquals(t, u)) {
-                Console.Out.WriteLine(String.Format(" XXX-B refeq"));
                 return true;
               }
               if (t is TypeProxy && u is TypeProxy) {
@@ -4917,7 +4859,6 @@ namespace Microsoft.Dafny
               }
               Type a, b;
               satisfied = Type.FromSameHead_Subtype(t, u, resolver.builtIns, out a, out b);
-              Console.Out.WriteLine(String.Format(" XXX-B satisfied {0} a {1} b {1}", satisfied, a, b));
               if (satisfied) {
                 Contract.Assert(a.TypeArgs.Count == b.TypeArgs.Count);
                 var cl = a is UserDefinedType ? ((UserDefinedType)a).ResolvedClass : null;
@@ -14303,8 +14244,6 @@ namespace Microsoft.Dafny
 
           case BinaryExpr.Opcode.Eq:
           case BinaryExpr.Opcode.Neq:
-            Console.Out.WriteLine(String.Format("XXX-ResolveExpressionX {0} expr {1}.{2} adds constraints to {3}, {4}",
-              expr.GetType().Name, expr.tok.line, expr.tok.col, e.E0.Type, e.E1.Type));
             AddXConstraint(expr.tok, "Equatable", e.E0.Type, e.E1.Type, "arguments must have comparable types (got {0} and {1})");
             expr.Type = Type.Bool;
             break;
@@ -14661,8 +14600,6 @@ namespace Microsoft.Dafny
         // some resolution error occurred
         expr.Type = new InferredTypeProxy();
       }
-      Console.Out.WriteLine(String.Format("XXX-ResolveExpressionX {4} expr {1}.{2} resolves to type {3}",
-        expr.tok.filename, expr.tok.line, expr.tok.col, expr.Type, expr.GetType().Name));
     }
 
     private Expression VarDotFunction(IToken tok, string varname, string functionname) {
@@ -15216,8 +15153,6 @@ namespace Microsoft.Dafny
     /// a MemberSelectExpr whose .Member is a Method.</param>
     Expression ResolveNameSegment(NameSegment expr, bool isLastNameSegment, List<Expression> args, ResolveOpts opts, bool allowMethodCall, bool complain = true) {
       var rc = ResolveNameSegment_real(expr, isLastNameSegment, args, opts, allowMethodCall, complain);
-      Console.Out.WriteLine(String.Format("XXX-ResolveNameSegment {0} {1} {2} -> {3}", expr.Name, isLastNameSegment, args,
-        rc==null ? "null" : rc.ToString()));
       return rc;
     }
 
@@ -15313,10 +15248,6 @@ namespace Microsoft.Dafny
           }
           // If we get here and find that decl is a module, check to see if it has a synonym via requires.
           // XXX jonh left off here
-          Console.Out.WriteLine(String.Format("XXX-NameSegment tok {0} name {1}, decl {2}", expr.tok, name, decl));
-//          if (decl is ModuleDecl) {
-//            decl = Canonicalize(decl);
-//          }
           r = CreateResolver_IdentifierExpr(expr.tok, name, expr.OptTypeArguments, decl);
         }
 
@@ -15621,7 +15552,6 @@ namespace Microsoft.Dafny
                 reporter.Error(MessageSource.Resolver, expr.tok, "To access members of {0} '{1}', write '{1}', not '{2}'", decl.WhatKind, decl.Name, name);
               }
             }
-            Console.Out.WriteLine(String.Format("XXX-DotSuffix tok {0} name {1}, decl {2}", expr.tok, name, decl));
             // XXX jonh left off second entry point for decl canonicalization
             r = CreateResolver_IdentifierExpr(expr.tok, name, expr.OptTypeArguments, decl);
           }
