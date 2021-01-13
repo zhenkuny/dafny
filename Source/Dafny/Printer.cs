@@ -353,17 +353,19 @@ namespace Microsoft.Dafny {
         } else if (d is ModuleDecl) {
           wr.WriteLine();
           Indent(indent);
-          if (d is LiteralModuleDecl) {
-            LiteralModuleDecl modDecl = ((LiteralModuleDecl)d);
+          if (d is LiteralModuleDecl modDecl) {
             VisibilityScope scope = null;
-            if (modDecl.Signature != null){
+            if (modDecl.Signature != null) {
               scope = modDecl.Signature.VisibilityScope;
             }
             PrintModuleDefinition(modDecl.ModuleDef, scope, indent, prefixIds, fileBeingPrinted);
           } else if (d is AliasModuleDecl) {
             var dd = (AliasModuleDecl)d;
 
-            wr.Write("import"); if (dd.Opened) wr.Write(" opened");
+            wr.Write("import");
+            if (dd.Opened) {
+              wr.Write(" opened");
+            }
             if (dd.ResolvedHash.HasValue && this.printMode == DafnyOptions.PrintModes.DllEmbed) {
               wr.Write(" /*");
               wr.Write(dd.ResolvedHash);
@@ -371,14 +373,18 @@ namespace Microsoft.Dafny {
             }
             wr.Write(" {0} ", dd.Name);
             wr.Write("= {0}", dd.ModExp);
+            wr.Write("= {0}", dd.TargetQId.ToString()); // XXX Fine, have both. Have to sort this out eventually.
             if (dd.Exports.Count > 0) {
               wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
             }
             wr.WriteLine();
-          } else if (d is ModuleFacadeDecl) {
-            var dd = (ModuleFacadeDecl)d;
+          } else if (d is AbstractModuleDecl) {
+            var dd = (AbstractModuleDecl)d;
 
-            wr.Write("import"); if (dd.Opened) wr.Write(" opened");
+            wr.Write("import");
+            if (dd.Opened) {
+              wr.Write(" opened");
+            }
             if (dd.ResolvedHash.HasValue && this.printMode == DafnyOptions.PrintModes.DllEmbed) {
               wr.Write(" /*");
               wr.Write(dd.ResolvedHash);
@@ -386,26 +392,32 @@ namespace Microsoft.Dafny {
             }
             wr.Write(" {0} ", dd.Name);
             wr.Write(": {0}", dd.ModExp);
+            wr.Write(": {0}", dd.QId.ToString()); // XXX Fine, have both. Have to sort this out eventually.
             if (dd.Exports.Count > 0) {
               wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
             }
             wr.WriteLine();
 
           } else if (d is ModuleExportDecl) {
-            ModuleExportDecl e = (ModuleExportDecl)d;
+            ModuleExportDecl e = (ModuleExportDecl) d;
             if (!e.IsDefault) {
               wr.Write("export {0}", e.Name);
             } else {
-              wr.Write("export ");
+              wr.Write("export");
             }
-            if (e.Extends.Count > 0) wr.Write(" extends {0}", Util.Comma(e.Extends, id => id));
+
+            if (e.IsRefining) {
+              wr.Write(" ...");
+            }
+            if (e.Extends.Count > 0) wr.Write(" extends {0}", Util.Comma(e.Extends, id => id.val));
             wr.WriteLine();
             PrintModuleExportDecl(e, indent + IndentAmount, fileBeingPrinted);
             wr.WriteLine();
+          } else {
+            Contract.Assert(false); // unexpected ModuleDecl
           }
-
         } else {
-          Contract.Assert(false);  // unexpected TopLevelDecl
+          Contract.Assert(false); // unexpected TopLevelDecl
         }
       }
     }
@@ -530,8 +542,8 @@ namespace Microsoft.Dafny {
     void PrintIteratorSignature(IteratorDecl iter, int indent) {
       Indent(indent);
       PrintClassMethodHelper("iterator", iter.Attributes, iter.Name, iter.TypeArgs);
-      if (iter.SignatureIsOmitted) {
-        wr.WriteLine(" ...");
+      if (iter.IsRefining) {
+        wr.WriteLine(" ... ");
       } else {
         PrintFormals(iter.Ins, iter);
         if (iter.Outs.Count != 0) {
@@ -576,12 +588,17 @@ namespace Microsoft.Dafny {
 
       Indent(indent);
       PrintClassMethodHelper((c is TraitDecl) ? "trait" : "class", c.Attributes, c.Name, c.TypeArgs);
-      string sep = " extends ";
-      foreach (var trait in c.ParentTraits) {
-        wr.Write(sep);
-        PrintType(trait);
-        sep = ", ";
+      if (c.IsRefining) {
+        wr.Write(" ... ");
+      } else {
+        string sep = " extends ";
+        foreach (var trait in c.ParentTraits) {
+          wr.Write(sep);
+          PrintType(trait);
+          sep = ", ";
+        }
       }
+
       if (c.Members.Count == 0) {
         wr.WriteLine(" { }");
       } else {
@@ -1961,8 +1978,8 @@ namespace Microsoft.Dafny {
         } else if (e is StringLiteralExpr) {
           var str = (StringLiteralExpr)e;
           wr.Write("{0}\"{1}\"", str.IsVerbatim ? "@" : "", (string)e.Value);
-        } else if (e.Value is Basetypes.BigDec) {
-          Basetypes.BigDec dec = (Basetypes.BigDec)e.Value;
+        } else if (e.Value is BaseTypes.BigDec) {
+          BaseTypes.BigDec dec = (BaseTypes.BigDec)e.Value;
           wr.Write((dec.Mantissa >= 0) ? "" : "-");
           string s = BigInteger.Abs(dec.Mantissa).ToString();
           int digits = s.Length;

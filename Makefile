@@ -16,26 +16,26 @@ parser:
 	make -C ${DIR}/Source/Dafny -f Makefile.linux all
 
 runtime:
-	(cd ${DIR}/Source/DafnyRuntime/DafnyRuntimeJava; ./gradlew clean copyJarToBinaries)
+	(cd ${DIR}/Source/DafnyRuntime/DafnyRuntimeJava; ./gradlew -q clean copyJarToBinaries)
 
 refman:
-	make -C ${DIR}/docs/DafnyReferenceManual
+	make -C ${DIR}/docs/DafnyRef
 
 refman-release:
-	make -C ${DIR}/docs/DafnyReferenceManual release
+	make -C ${DIR}/docs/DafnyRef release
 
 z3-mac:
-	wget https://github.com/Z3Prover/z3/releases/download/z3-4.8.4/z3-4.8.4.d6df51951f4c-x64-osx-10.14.1.zip
-	unzip z3-4.8.4.d6df51951f4c-x64-osx-10.14.1.zip
-	mv z3-4.8.4.d6df51951f4c-x64-osx-10.14.1 ${DIR}/Binaries/z3
+	wget https://github.com/Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x64-osx-10.14.2.zip
+	unzip z3-4.8.5-x64-osx-10.14.2.zip
+	mv z3-4.8.5-x64-osx-10.14.2 ${DIR}/Binaries/z3
 
 z3-ubuntu:
-	wget https://github.com/Z3Prover/z3/releases/download/z3-4.8.4/z3-4.8.4.d6df51951f4c-x64-ubuntu-16.04.zip
-	unzip z3-4.8.4.d6df51951f4c-x64-ubuntu-16.04.zip
-	mv z3-4.8.4.d6df51951f4c-x64-ubuntu-16.04 ${DIR}/Binaries/z3
+	wget https://github.com/Z3Prover/z3/releases/download/Z3-4.8.5/z3-4.8.5-x64-ubuntu-16.04.zip
+	unzip z3-4.8.5-x64-ubuntu-16.04.zip
+	mv z3-4.8.5-x64-ubuntu-16.04 ${DIR}/Binaries/z3
 
 clean:
-	(cd ${DIR} ; dotnet build Source/Dafny.sln -target:clean )
+	(cd ${DIR} ; dotnet build Source/Dafny.sln -v:q --nologo -target:clean )
 	make -C ${DIR}/Source/Dafny -f Makefile.Linux clean
 	(cd ${DIR}/Source/DafnyRuntime/DafnyRuntimeJava; ./gradlew clean)
-	make -C ${DIR}/docs/DafnyReferenceManual clean
+	make -C ${DIR}/docs/DafnyRef clean
