@@ -923,6 +923,7 @@ ModuleFormal<ModuleDefinition parent, out ModuleFacadeDecl formal>
     List<IToken> idExports = new List<IToken>(); // will we want to allow specifying this!?
   .)
   ( NoUSIdent<out id> ":" ModuleExpressionProd<out moduleRefined> )
+  // XXX TODO jonh disallow?
   (. formal = new ModuleFacadeDecl(moduleRefined, id, parent, /*opened*/ false, idExports); .)
   .
 

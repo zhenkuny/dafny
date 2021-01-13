@@ -1348,6 +1348,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(u != null);
       Contract.Requires(builtIns != null);
       if (FromSameHead(t, u, out a, out b)) {
+        Console.Out.WriteLine("XXX-FSH_S 1 true");
         return true;
       }
       t = t.NormalizeExpand();
@@ -1355,21 +1356,26 @@ namespace Microsoft.Dafny {
       if (t.IsRefType && u.IsRefType) {
         if (t.IsObjectQ) {
           a = b = t;
+          Console.Out.WriteLine("XXX-FSH_S 2 true");
           return true;
         } else if (u.IsObjectQ) {
           a = b = u;
+          Console.Out.WriteLine("XXX-FSH_S 3 true");
           return true;
         }
         var tt = ((UserDefinedType)t).ResolvedClass as ClassDecl;
         var uu = ((UserDefinedType)u).ResolvedClass as ClassDecl;
         if (uu.HeadDerivesFrom(tt)) {
           a = b = t;
+          Console.Out.WriteLine("XXX-FSH_S 4 true");
           return true;
         } else if (tt.HeadDerivesFrom(uu)) {
           a = b = u;
+          Console.Out.WriteLine("XXX-FSH_S 5 true");
           return true;
         }
       }
+      Console.Out.WriteLine("XXX-FSH_S 6 false");
       return false;
     }
 
@@ -1382,9 +1388,11 @@ namespace Microsoft.Dafny {
         a = towerA[n];
         b = towerB[n];
         if (SameHead(a, b)) {
+          Console.Out.WriteLine(System.String.Format("XXX-FSH true a {0} b {1}", a, b));
           return true;
         }
       }
+      Console.Out.WriteLine("XXX-FSH false");
       return false;
     }
 
@@ -3567,10 +3575,13 @@ namespace Microsoft.Dafny {
   }
 
   // Represents "module name as path [ = compilePath];", where name is a identifier and path is a possibly qualified name.
+  // ^ that comment is at least two language definitions old now.
   public class ModuleFacadeDecl : ModuleDecl
   {
+    public static readonly int NotParameter = -1;
     public ModuleDecl Root;
     public readonly ModuleExpression ModExp;
+//    public readonly int ParameterIndex; // Position in a parameterized-module parameter list, or -1.
     public readonly List<IToken> Exports; // list of exports sets
     public ModuleDecl CompileRoot;
     public ModuleSignature OriginalSignature;
@@ -3620,7 +3631,7 @@ namespace Microsoft.Dafny {
       sig.VisibilityScope = new VisibilityScope();
       sig.VisibilityScope.Augment(ThisScope);
       this.Signature = sig;
-    }
+   }
 
     public override object Dereference() { return this; }
     public override bool CanBeExported() {
@@ -3705,10 +3716,12 @@ namespace Microsoft.Dafny {
   {
     public readonly IToken tok;
     public readonly List<ModuleExpression> moduleParams;
+    public readonly List<ModuleDecl> moduleParamRoots;
 
     public ModuleApplication(IToken tok, List<ModuleExpression> moduleParams) {
         this.tok = tok;
         this.moduleParams = moduleParams;
+        this.moduleParamRoots = new List<ModuleDecl>(); // Contents supplied in Resolver.ProcessDependencies
     }
 
     public bool IsSimple() {
@@ -12260,6 +12273,7 @@ namespace Microsoft.Dafny {
   {
     public readonly string Name;
     public readonly List<Type> OptTypeArguments;
+    public override string ToString() { return Name; }
     public NameSegment(IToken tok, string name, List<Type> optTypeArguments)
       : base(tok) {
       Contract.Requires(tok != null);
