@@ -3882,7 +3882,6 @@ namespace Microsoft.Dafny {
     public List<ModuleExpressionPair> ModuleRequiresConstraints;
 
     public readonly IToken RefinementBaseName;  // null if no refinement base
-    public ModuleDecl RefinementBaseRoot; // filled in early during resolution, corresponds to RefinementBaseName[0]
     public bool SuccessfullyResolved;  // set to true upon successful resolution; modules that import an unsuccessfully resolved module are not themselves resolved
 
     public List<Include> Includes;

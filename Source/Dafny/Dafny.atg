@@ -917,7 +917,7 @@ ModuleExpressionProd<out ModuleExpression modexp>
   (. modexp = new ModuleExpression(modapps); .)
   ) .
 
-ModuleFormal<ModuleDefinition parent, out ModuleFacadeDecl formal>
+ModuleFormal<ModuleDefinition parent, out AbstractModuleDecl formal>
 = (.
     IToken id;
     ModuleExpression moduleRefined = null;
@@ -925,13 +925,13 @@ ModuleFormal<ModuleDefinition parent, out ModuleFacadeDecl formal>
   .)
   ( NoUSIdent<out id> ":" ModuleExpressionProd<out moduleRefined> )
   // XXX TODO jonh disallow?
-  (. formal = new ModuleFacadeDecl(moduleRefined, id, parent, /*opened*/ false, idExports); .)
+  (. formal = new AbstractModuleDecl(moduleRefined, id, parent, /*opened*/ false, idExports); .)
   .
 
-ModuleFormals<. ModuleDefinition parent, out List<ModuleFacadeDecl> formals .>
+ModuleFormals<. ModuleDefinition parent, out List<AbstractModuleDecl> formals .>
 = (.
-    ModuleFacadeDecl formal = null;
-    formals = new List<ModuleFacadeDecl>();
+    AbstractModuleDecl formal = null;
+    formals = new List<AbstractModuleDecl>();
   .)
   ( "(" ModuleFormal<parent, out formal>    (. formals.Add(formal); .)
     { "," ModuleFormal<parent, out formal> (. formals.Add(formal); .) }
@@ -942,7 +942,7 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
 = (. Attributes attrs = null;  IToken/*!*/ id, iderr; var prefixIds = new List<IToken>();
      List<MemberDecl/*!*/> namedModuleDefaultClassMembers = new List<MemberDecl>();;
      List<IToken> idExports = null;
-     List<ModuleFacadeDecl> formals = new List<ModuleFacadeDecl>();
+     List<AbstractModuleDecl> formals = new List<AbstractModuleDecl>();
      ModuleExpression modexp = null;
      ModuleExpression moduleRefined = null;
      ModuleDefinition module;
