@@ -228,7 +228,6 @@ namespace Microsoft.Dafny
 
     readonly ValuetypeDecl[] valuetypeDecls;
     private Dictionary<TypeParameter, Type> SelfTypeSubstitution;
-    private Dictionary<ModuleExpression, ModuleDecl> ModuleApplications = new Dictionary<ModuleExpression, ModuleDecl>();
     readonly Graph<ModuleDecl> dependencies = new Graph<ModuleDecl>();
     private ModuleSignature systemNameInfo = null;
     private bool useCompileSignatures = false;
@@ -389,9 +388,7 @@ namespace Microsoft.Dafny
       } // if there were errors, then the implict ModuleBindings data structure invariant
 
       // is violated, so Processing dependencies will not succeed.
-      var newDecls = new List<TopLevelDecl>();
-      ProcessDependencies(prog.DefaultModule, b, dependencies, newDecls);
-      Contract.Assert(newDecls.Count == 0);
+      ProcessDependencies(prog.DefaultModule, b, dependencies);
       // check for cycles in the import graph
       foreach (var cycle in dependencies.AllCycles()) {
         var cy = Util.Comma(" -> ", cycle, m => m.Name);
@@ -536,24 +533,20 @@ namespace Microsoft.Dafny
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
           ModuleSignature p;
-          if (alias.Signature == null) {
-            if (ResolveExport(alias.EnclosingModuleDefinition, alias.TargetQId, alias.ModExp, alias.Exports, out p, reporter)) {
-              if (alias.Signature == null) {
-                alias.Signature = p;
-              }
-            } else {
-              alias.Signature = new ModuleSignature(); // there was an error, give it a valid but empty signature
+          if (ResolveExport(alias, alias.EnclosingModuleDefinition, alias.TargetQId, alias.Exports, out p, reporter)) {
+            if (alias.Signature == null) {
+              alias.Signature = p;
             }
-          } // else this decl was synthesized from a module application and we already know the Signature.
-        } else if (decl is AbstractModuleDecl) {
-          var abs = (ModuleFacadeDecl)decl;
+          } else {
+            alias.Signature = new ModuleSignature(); // there was an error, give it a valid but empty signature
+          }
+        } else if (decl is AbstractModuleDecl abs) {
           ModuleSignature p;
-          if (ResolveExport(abs.EnclosingModuleDefinition, abs.Qid, abs.ModExp, abs.Exports, out p, reporter)) {
+          if (ResolveExport(abs, abs.EnclosingModuleDefinition, abs.QId, abs.Exports, out p, reporter)) {
             abs.OriginalSignature = p;
             abs.Signature = MakeAbstractSignature(p, abs.FullCompileName, abs.Height, prog.ModuleSigs, compilationModuleClones);
           } else {
             abs.Signature = new ModuleSignature(); // there was an error, give it a valid but empty signature
-            abs.OriginalSignature = abs.Signature;  // Avoid a null ptr exception long enough to emit errors.
           }
         } else if (decl is ModuleExportDecl) {
           ((ModuleExportDecl)decl).SetupDefaultSignature();
@@ -824,7 +817,7 @@ namespace Microsoft.Dafny
             // prefix: decreases 0,
             clbl.Decreases.Expressions.Insert(0, Expression.CreateIntLiteral(fn.tok, 0));
             anyChangeToDecreases = true;
-          break;
+            break;
           case Function.CoCallClusterInvolvement.CoRecursiveTargetAllTheWay:
             // prefix: decreases 1,
             clbl.Decreases.Expressions.Insert(0, Expression.CreateIntLiteral(fn.tok, 1));
@@ -1447,9 +1440,7 @@ namespace Microsoft.Dafny
           return true;
         } else if (parent != null) {
           return parent.TryLookupFilter(name, out m, filter);
-        } else {
-          return false;
-        }
+        } else return false;
       }
 
       public IEnumerable<ModuleDecl> ModuleList {
@@ -1530,7 +1521,8 @@ namespace Microsoft.Dafny
             Contract.Assert(yes);
             if (prevDecl is AbstractModuleDecl || prevDecl is AliasModuleDecl) {
               reporter.Error(MessageSource.Resolver, subdecl.tok, "Duplicate name of import: {0}", subdecl.Name);
-            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened && importDecl.ModExp.IsSimpleSingleton(importDecl.Name)) {
+            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened && importDecl.TargetQId.Path.Count == 1 &&
+                       importDecl.Name == importDecl.TargetQId.rootName()) {
               importDecl.ShadowsLiteralModule = true;
             } else {
               reporter.Error(MessageSource.Resolver, subdecl.tok,
@@ -1611,136 +1603,45 @@ namespace Microsoft.Dafny
       return res;
     }
 
-    private ModuleDecl GetAppliedModule(ModuleDecl prototype, ModuleExpression application) {
-      Contract.Assert(application.applications.Count == 1);
-
-      ModuleDefinition def = ((LiteralModuleDecl) prototype).ModuleDef; // XXX why would I believe this is always feasible!?
-      if (ModuleApplications.ContainsKey(application)) {
-        return ModuleApplications[application];
-      }
-
-      Cloner cloner = new Cloner();
-      var appliedDef = cloner.CloneModuleDefinition(def, def.Name + "_applied");  /* XXX probably need to disambiguate which application! */
-
-      var appliedDecl = new LiteralModuleDecl(appliedDef, prototype.Module);
-      appliedDecl.Signature = prototype.Signature; // XXX maybe?
-      // Memoize this application
-      ModuleApplications[application] = appliedDecl;
-      return appliedDecl;
-    }
-
-    private void AddModExpDepsRecursive(ModuleBindings bindings, Graph<ModuleDecl> dependencies, ModuleDecl fromDecl, ModuleExpression mExpr) {
-        foreach (var application in mExpr.applications) {
-            ModuleDecl referencedMod;
-            if (!bindings.TryLookup(application.tok, out referencedMod)) {  // XXX what filter makes sense here?
-              List<IToken> tokens = new List<IToken>();
-              tokens.Add(application.tok);  // TODO this ain't right.
-              reporter.Error(MessageSource.Resolver, application.tok, ModuleNotFoundErrorMessage(0, tokens));
-            } else {
-              dependencies.AddEdge(fromDecl, referencedMod);
-            }
-
-            foreach (var moduleParam in application.moduleParams) {
-                AddModExpDepsRecursive(bindings, dependencies, fromDecl, moduleParam);
-            }
-        }
-    }
-
     private void ProcessDependenciesDefinition(ModuleDecl decl, ModuleDefinition m, ModuleBindings bindings,
-      Graph<ModuleDecl> dependencies, List<TopLevelDecl> outNewDecls) {
+      Graph<ModuleDecl> dependencies) {
       Contract.Assert(decl is LiteralModuleDecl);
-      if (m.RefinementBaseExpr != null) {
-        if (m.RefinementBaseExpr.applications.Count > 1) {
-          reporter.Error(MessageSource.Resolver, m.RefinementBaseExpr.FirstToken(), "Refinement base {0} may not be a dotted expression.", m.RefinementBaseExpr.ToString());
+      if (m.RefinementQId != null) {
+        ModuleDecl other;
+        bool res = ResolveQualifiedModuleIdRootRefines(((LiteralModuleDecl)decl).ModuleDef, bindings, m.RefinementQId, out other);
+        if (!res) {
+          reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(),
+            $"module {m.RefinementQId.ToString()} named as refinement base does not exist");
+        } else if (other is LiteralModuleDecl && ((LiteralModuleDecl)other).ModuleDef == m) {
+          reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(), "module cannot refine itself: {0}",
+            m.RefinementQId.ToString());
         } else {
-          ModuleDecl other;
-          IToken TempRefinementBaseName = m.RefinementBaseExpr.FirstToken();  // Look up the module being applied
-          // XXX Now we arrive at the circularity -- we're constructing a new module, and I want its ModuleBindings. I need
-          // something to search through that includes the module formals but not the body.
-          var formalBindings = new ModuleBindings(bindings);
-          foreach (var fooDecl in m.TopLevelDecls) {
-            if (fooDecl is ModuleFacadeDecl) {
-              // XXX we've lost track of whether the Facades were declared as parameters or with "import :". Maybe that's okay.
-              formalBindings.BindName(fooDecl.Name, (ModuleDecl) fooDecl, null);
-            }
-          }
-          if (!formalBindings.TryLookup(TempRefinementBaseName, out other)) {
-            reporter.Error(MessageSource.Resolver, TempRefinementBaseName, "module {0} named as refinement base does not exist", TempRefinementBaseName.val);
-          } else if (other is LiteralModuleDecl && ((LiteralModuleDecl)other).ModuleDef == m) {
-            reporter.Error(MessageSource.Resolver, TempRefinementBaseName, "module cannot refine itself: {0}", TempRefinementBaseName.val);
-          } else {
-            Contract.Assert(other != null);  // follows from postcondition of TryGetValue
-
-            // Add all modules mentioned in refinement expression to dependencies
-            AddModExpDepsRecursive(formalBindings, dependencies, decl, m.RefinementBaseExpr);
-            if (!m.RefinementBaseExpr.applications[0].IsSimple()) {
-              // XXX left off here: need to look up other to get its defn.
-              other = GetAppliedModule(other, m.RefinementBaseExpr);
-              outNewDecls.Add(other); // add this new definition to the same scope that decl came from.
-              dependencies.AddEdge(decl, other);  // new definition needs to affect sort order so it gets a signature before we try to resolve decl
-            }
-            dependencies.AddEdge(decl, other);
-            m.RefinementBaseRoot = other;
-          }
+          Contract.Assert(other != null); // follows from postcondition of TryGetValue
+          dependencies.AddEdge(decl, other);
         }
       }
 
-      var completedDecls = new List<TopLevelDecl>();  // Shenanigans to avoid changing the list while iterating it.
-      var topLevelDecls = new List<TopLevelDecl>();
-      topLevelDecls.AddRange(m.TopLevelDecls);
-      while (topLevelDecls.Count > 0) {
-        var newDecls = new List<TopLevelDecl>();
-        foreach (var toplevel in topLevelDecls) {
-          if (toplevel is ModuleDecl) {
-            var d = (ModuleDecl)toplevel;
-            dependencies.AddEdge(decl, d);
-            var subbindings = bindings.SubBindings(d.Name);
-            ProcessDependencies(d, subbindings ?? bindings, dependencies, newDecls);
-            if (!m.IsAbstract && d is AbstractModuleDecl && ((AbstractModuleDecl)d).QId.Root != null) {
-              reporter.Error(MessageSource.Resolver, d.tok,
-                "The abstract import named {0} (using :) may only be used in an abstract module declaration",
-                d.Name);
-            }
+      foreach (var toplevel in m.TopLevelDecls) {
+        if (toplevel is ModuleDecl) {
+          var d = (ModuleDecl)toplevel;
+          dependencies.AddEdge(decl, d);
+          var subbindings = bindings.SubBindings(d.Name);
+          ProcessDependencies(d, subbindings ?? bindings, dependencies);
+          if (!m.IsAbstract && d is AbstractModuleDecl && ((AbstractModuleDecl)d).QId.Root != null) {
+            reporter.Error(MessageSource.Resolver, d.tok,
+              "The abstract import named {0} (using :) may only be used in an abstract module declaration",
+              d.Name);
           }
-          completedDecls.Add(toplevel);
         }
-        topLevelDecls = newDecls;
       }
-      m.TopLevelDecls.Clear();
-      m.TopLevelDecls.AddRange(completedDecls);
     }
-    
-    private ModuleDecl ProcessDependenciesModExp(ModuleDecl outerModuleDecl, ModuleExpression modExp, ModuleBindings bindings,
-          Graph<ModuleDecl> dependencies, Func<ModuleDecl, bool> filter) {
-        ModuleDecl root;
-        if (!bindings.TryLookupFilter(modExp.FirstToken(), out root, filter)) {
-          reporter.Error(MessageSource.Resolver, modExp.FirstToken(), ModuleNotFoundErrorMessage(0, modExp.ToTokenList()));
-          return null;
-        }
-        dependencies.AddEdge(outerModuleDecl, root);
-        
-        // For every dotted part in the path, look inside and resolve the root of each of its ModuleExpressions.
-        // A(B,E).C(D) assigns application to A(B,E) and C(D) in the outer loop;
-        //  in the inner loop param will visit B and E, and then D.
-        foreach (var application in modExp.applications) {
-          foreach (var param in application.moduleParams) {
-            ModuleDecl paramRoot = ProcessDependenciesModExp(outerModuleDecl, param, bindings, dependencies, filter);
-            application.moduleParamRoots.Add(paramRoot);
-          }
-        }
-        return root;
-    }
-    
-    private void ProcessDependencies(ModuleDecl moduleDecl, ModuleBindings bindings, Graph<ModuleDecl> dependencies, List<TopLevelDecl> outNewDecls) {
+
+    private void ProcessDependencies(ModuleDecl moduleDecl, ModuleBindings bindings, Graph<ModuleDecl> dependencies) {
       dependencies.AddVertex(moduleDecl);
       if (moduleDecl is LiteralModuleDecl) {
-        ProcessDependenciesDefinition(moduleDecl, ((LiteralModuleDecl)moduleDecl).ModuleDef, bindings, dependencies, outNewDecls);
+        ProcessDependenciesDefinition(moduleDecl, ((LiteralModuleDecl)moduleDecl).ModuleDef, bindings, dependencies);
       } else if (moduleDecl is AliasModuleDecl) {
         var alias = moduleDecl as AliasModuleDecl;
-        alias.Root = ProcessDependenciesModExp(moduleDecl, alias.ModExp, bindings, dependencies,
-          m => alias != m && (((alias.Module == m.Module) && (alias.Exports.Count == 0)) || m is LiteralModuleDecl));
-
-        // XXX merge unclear here. Did we just do this twice?
         ModuleDecl root;
         // TryLookupFilter works outward, looking for a match to the filter for
         // each enclosing module.
@@ -1752,10 +1653,6 @@ namespace Microsoft.Dafny
         }
       } else if (moduleDecl is AbstractModuleDecl) {
         var abs = moduleDecl as AbstractModuleDecl;
-        abs.Root = ProcessDependenciesModExp(moduleDecl, abs.ModExp, bindings, dependencies,
-          m => abs != m && (((abs.Module == m.Module) && (abs.Exports.Count == 0)) || m is LiteralModuleDecl));
-
-        // XXX ditto above
         ModuleDecl root;
         if (!ResolveQualifiedModuleIdRootAbstract(abs, bindings, abs.QId, out root)) {
           //if (!bindings.TryLookupFilter(abs.QId.rootToken(), out root,
@@ -2466,7 +2363,7 @@ namespace Microsoft.Dafny
         var abs = (AbstractModuleDecl)d;
         var sig = MakeAbstractSignature(abs.OriginalSignature, Name + "." + abs.Name, abs.Height, mods,
           compilationModuleClones);
-        var a = new AbstractModuleDecl(abs.ModExp, abs.tok, m, abs.Opened, abs.Exports);
+        var a = new AbstractModuleDecl(abs.QId, abs.tok, m, abs.Opened, abs.Exports);
         a.Signature = sig;
         a.OriginalSignature = abs.OriginalSignature;
         return a;
@@ -2483,85 +2380,28 @@ namespace Microsoft.Dafny
       Contract.Requires(qid != null);
       Contract.Requires(qid.Path.Count > 0);
 
-      // Loop invariant: decl is resolved, but its module parameters have not.
       List<IToken> Path = qid.Path;
       ModuleDecl decl = root;
       ModuleSignature p;
-      for (int k = 0; k < modexp.applications.Count; k++)
-      {
-        ModuleApplication application = modexp.applications[k];
-        List<ModuleFacadeDecl> formals;
-        LiteralModuleDecl literalDecl = null;
-        if (decl is LiteralModuleDecl)
-        {
-          literalDecl = (LiteralModuleDecl) decl;
-          formals = literalDecl.ModuleDef.TopLevelDecls.Where(m => m is ModuleFacadeDecl).Select(m => (ModuleFacadeDecl) m).ToList();
-        } else
-        {
-          formals = new List<ModuleFacadeDecl>();
-        }
-        if (formals.Count != application.moduleParams.Count) {
-            reporter.Error(MessageSource.Resolver, application.tok,
-              ModuleNotFoundErrorMessage(k, modexp.ToTokenList()) + 
-                $" because {decl.Name} expects {formals.Count} arguments but {application.moduleParams.Count} were applied");
-            p = null;
-            return false;
-        }
-        
-        if (literalDecl != null && formals.Count > 0) {
-          // Resolve each argument in the application (J, K), and create the dictionary that drives the ModuleApplicationCloner
-          Dictionary<string, ModuleSignature> transformation = new Dictionary<string, ModuleSignature>();
-          for (int i=0; i<formals.Count; i++)
-          {
-            ModuleFacadeDecl formal = formals[i];
-            ModuleDecl rootForFormal = application.moduleParamRoots[i];
-            transformation.Add(formal.Name, rootForFormal.AccessibleSignature());
-          }
-
-          decl = (ModuleDecl) new ModuleApplicationCloner(transformation).CloneDeclaration(literalDecl, parent);
-          // THIS IS THE BUG. The Signature is how we navigate down the tree from P1 to A in P1.A.Key, but
-          // we're just copying the signature that points at ModuleFacade A, not the one we carefully cloned and
-          // replaced using the transformation. Whose job is it to construct Signatures?
-          // LEFT OFF transformation never actually gets used in the cloning process! We clone P, which
-          // makes a new LiteralModuleDecl, but simply copies over its ModuleDef. The transform dict
-          // never actually gets used.
-          // decl.Signature = literalDecl.Signature;  // XXX Rustan surely this is wrong. I'm trying to duct-tape over a null pointer exception.
-          /*
-          CompilationCloner cc = new CompilationCloner(new Dictionary<ModuleDefinition, ModuleDefinition>());
-          decl.Signature = cc.CloneModuleSignature(literalDecl.Signature, literalDecl.Signature);
-          foreach (var name in literalDecl.Signature.TopLevels) {
-            //TopLevelDecl correctedTopLevel = cc
-            //decl.Signature.TopLevels.Add(name, correctedTopLevel);
-          }
-          */
-          ((LiteralModuleDecl) decl).DefaultExport = decl.Signature; // XXX no more idea if this makes sense.
-        }
-
-        // Beyond here, we set p to look up the next application in the module path.
-        // If the module path is done, we should halt now and return the current p.
-        if (k == modexp.applications.Count - 1)
-        {
-          break;
-        }
-        
+      for (int k = 1; k < Path.Count; k++) {
         if (decl is LiteralModuleDecl) {
           p = ((LiteralModuleDecl)decl).DefaultExport;
           if (p == null) {
-            reporter.Error(MessageSource.Resolver, application.tok,
-              ModuleNotFoundErrorMessage(k, modexp.ToTokenList(), $" because {decl.Name} does not have a default export"));
+            reporter.Error(MessageSource.Resolver, Path[k],
+              ModuleNotFoundErrorMessage(k, Path, $" because {decl.Name} does not have a default export"));
             return null;
           }
         } else {
           p = decl.Signature;
         }
 
-        var tld = p.TopLevels.GetValueOrDefault(application.tok.val, null);
+        var tld = p.TopLevels.GetValueOrDefault(Path[k].val, null);
         if (!(tld is ModuleDecl dd)) {
           if (decl.Signature.ModuleDef == null) {
-            reporter.Error(MessageSource.Resolver, application.tok,
-              ModuleNotFoundErrorMessage(k, modexp.ToTokenList(), " because of previous error"));
+            reporter.Error(MessageSource.Resolver, Path[k],
+              ModuleNotFoundErrorMessage(k, Path, " because of previous error"));
           } else {
-            reporter.Error(MessageSource.Resolver, application.tok, ModuleNotFoundErrorMessage(k, modexp.ToTokenList()));
+            reporter.Error(MessageSource.Resolver, Path[k], ModuleNotFoundErrorMessage(k, Path));
           }
           return null;
         }
@@ -2578,9 +2418,8 @@ namespace Microsoft.Dafny
     }
 
 
-    public bool ResolveExport(ModuleDefinition parent, ModuleQualifiedId qid, ModuleExpression modexp,
+    public bool ResolveExport(ModuleDecl alias, ModuleDefinition parent, ModuleQualifiedId qid,
       List<IToken> Exports, out ModuleSignature p, ErrorReporter reporter) {
-      Contract.Requires(modexp != null && !modexp.IsDegenerate());
       Contract.Requires(qid != null);
       Contract.Requires(qid.Path.Count > 0);
       Contract.Requires(Exports != null);
@@ -2603,7 +2442,7 @@ namespace Microsoft.Dafny
           var m = p.ExportSets.GetValueOrDefault(decl.Name, null);
           if (m == null) {
             // no default view is specified.
-            reporter.Error(MessageSource.Resolver, modexp.applications[0].tok, "no default export set declared in module: {0}", decl.Name);
+            reporter.Error(MessageSource.Resolver, qid.rootToken(), "no default export set declared in module: {0}", decl.Name);
             return false;
           }
           p = m.AccessibleSignature();
@@ -2706,7 +2545,7 @@ namespace Microsoft.Dafny
         } else if (d is ModuleDecl) {
           var decl = (ModuleDecl)d;
           if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract) {
-            reporter.Error(MessageSource.Resolver, am.ModExp.FirstToken(), "a compiled module ({0}) is not allowed to import an abstract module ({1})", def.Name, am.ModExp.ToString());
+            reporter.Error(MessageSource.Resolver, am.TargetQId.rootToken(), "a compiled module ({0}) is not allowed to import an abstract module ({1})", def.Name, am.TargetQId.ToString());
           }
         } else if (d is DatatypeDecl) {
           var dd = (DatatypeDecl)d;
@@ -4869,10 +4708,6 @@ namespace Microsoft.Dafny
       /// If there's not enough information to confirm or refute the XConstraint, then "false" is returned.
       /// </summary>
       public bool Confirm(Resolver resolver, bool fullstrength, out bool convertedIntoOtherTypeConstraints, out bool moreXConstraints) {
-        var rc = Confirm_inner(resolver, fullstrength, out convertedIntoOtherTypeConstraints, out moreXConstraints);
-        return rc;
-      }
-      public bool Confirm_inner(Resolver resolver, bool fullstrength, out bool convertedIntoOtherTypeConstraints, out bool moreXConstraints) {
         Contract.Requires(resolver != null);
         convertedIntoOtherTypeConstraints = false;
         moreXConstraints = false;
@@ -14430,7 +14265,7 @@ namespace Microsoft.Dafny
         } else {
           for (var i = 0; i < fnType.Arity; i++) {
             AddAssignableConstraint(e.Args[i].tok, fnType.Args[i], e.Args[i].Type,
-              "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects XXX-B {0}, got {1})");
+              "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects {0}, got {1})");
           }
         }
 
@@ -15473,11 +15308,6 @@ namespace Microsoft.Dafny
     /// <param name="allowMethodCall">If false, generates an error if the name denotes a method. If true and the name denotes a method, returns
     /// a MemberSelectExpr whose .Member is a Method.</param>
     Expression ResolveNameSegment(NameSegment expr, bool isLastNameSegment, List<Expression> args, ResolveOpts opts, bool allowMethodCall, bool complain = true) {
-      var rc = ResolveNameSegment_real(expr, isLastNameSegment, args, opts, allowMethodCall, complain);
-      return rc;
-    }
-
-    Expression ResolveNameSegment_real(NameSegment expr, bool isLastNameSegment, List<Expression> args, ResolveOpts opts, bool allowMethodCall, bool complain = true) {
       Contract.Requires(expr != null);
       Contract.Requires(!expr.WasResolved());
       Contract.Requires(opts != null);
@@ -15567,8 +15397,6 @@ namespace Microsoft.Dafny
               }
             }
           }
-          // If we get here and find that decl is a module, check to see if it has a synonym via requires.
-          // XXX jonh left off here
           r = CreateResolver_IdentifierExpr(expr.tok, name, expr.OptTypeArguments, decl);
         }
 
@@ -15873,7 +15701,6 @@ namespace Microsoft.Dafny
                 reporter.Error(MessageSource.Resolver, expr.tok, "To access members of {0} '{1}', write '{1}', not '{2}'", decl.WhatKind, decl.Name, name);
               }
             }
-            // XXX jonh left off second entry point for decl canonicalization
             r = CreateResolver_IdentifierExpr(expr.tok, name, expr.OptTypeArguments, decl);
           }
         } else if (sig.StaticMembers.TryGetValue(name, out member)) {
@@ -16269,7 +16096,7 @@ namespace Microsoft.Dafny
             reporter.Error(MessageSource.Resolver, e.tok, "wrong number of arguments to function application ({0} expects {1}, got {2})", what, fnType.Arity, e.Args.Count);
           } else {
             for (var i = 0; i < fnType.Arity; i++) {
-              AddAssignableConstraint(e.Args[i].tok, fnType.Args[i], e.Args[i].Type, "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects XXX-A {0}, got {1})");
+              AddAssignableConstraint(e.Args[i].tok, fnType.Args[i], e.Args[i].Type, "type mismatch for argument" + (fnType.Arity == 1 ? "" : " " + i) + " (function expects {0}, got {1})");
             }
             if (errorCount != reporter.Count(ErrorLevel.Error)) {
               // do nothing else; error has been reported

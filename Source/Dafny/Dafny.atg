@@ -920,12 +920,11 @@ ModuleExpressionProd<out ModuleExpression modexp>
 ModuleFormal<ModuleDefinition parent, out AbstractModuleDecl formal>
 = (.
     IToken id;
-    ModuleExpression moduleRefined = null;
-    List<IToken> idExports = new List<IToken>(); // will we want to allow specifying this!?
+    List<IToken> originalIdPath;
   .)
-  ( NoUSIdent<out id> ":" ModuleExpressionProd<out moduleRefined> )
-  // XXX TODO jonh disallow?
-  (. formal = new AbstractModuleDecl(moduleRefined, id, parent, /*opened*/ false, idExports); .)
+
+  ( NoUSIdent<out id> ":" QualifiedModuleId<out originalIdPath> )
+  (. formal = new FormalModuleDecl(new ModuleQualifiedId(originalIdPath), id, parent); .)
   .
 
 ModuleFormals<. ModuleDefinition parent, out List<AbstractModuleDecl> formals .>
@@ -943,6 +942,7 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
      List<MemberDecl/*!*/> namedModuleDefaultClassMembers = new List<MemberDecl>();;
      List<IToken> idExports = null;
      List<AbstractModuleDecl> formals = new List<AbstractModuleDecl>();
+     List<IToken> idPath = null;    // For forms that don't take ModuleExpression, until ModuleExpression has a variant that handles Exports. Hrmm. XXX
      ModuleExpression modexp = null;
      ModuleExpression moduleRefined = null;
      ModuleDefinition module;
@@ -957,14 +957,15 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
     { (. prefixIds.Add(id); .)  // XXX what the bleep is this thing?
       "." NoUSIdent<out id>
     }
-    [ ModuleFormals<parent, out formals> ]
+    (. module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false, /*moduleRefined*/ null,
+                                     parent, attrs, false, theVerifyThisFile, theCompileThisFile);
+    .)
+    [ ModuleFormals<module, out formals> ]
     [ "refines" ModuleExpressionProd<out moduleRefined> /* dots disallowed at Resolve time */
+      (. module.RefinementBaseModExp = moduleRefined; .)
     |  Ident<out iderr> (. SemErr(la, $"expected either a '{{' or a 'refines' keyword here, found {iderr.val}"); .)
     ]
-    (. module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false, moduleRefined, parent, attrs,
-                                      false, theVerifyThisFile, theCompileThisFile);
-       module.TopLevelDecls.AddRange(formals);
-    .)
+    (.  module.TopLevelDecls.AddRange(formals); .)
     {
       "requires" ModuleExpressionProd<out var moduleRequiresLeft> "==" ModuleExpressionProd<out var moduleRequiresRight>
         (. module.AddModuleRequiresConstraint(moduleRequiresLeft, moduleRequiresRight); .)
@@ -985,26 +986,22 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
     (
       "."
       QualifiedModuleExport<out idPath, out idExports>
-      (.
-        // Construct singleton simple module expression
-        ModuleApplication application = new ModuleApplication(id, new List<ModuleExpression>());
-        List<ModuleApplication> applications = new List<ModuleApplication>();
-        applications.Add(application);
-        ModuleExpression nameExpr = new ModuleExpression(applications);
-         submodule = new AliasModuleDecl(nameExpr, id, parent, opened, idExports);
+      (. idPath.Insert(0, id);
+         submodule = new AliasModuleDecl(ModuleExpression.From(idPath), id, parent, opened, idExports);
       .)
 
-    | "=" QualifiedModuleExport<out modexp, out idExports>
-          (. submodule = new AliasModuleDecl(new ModuleQualifiedId(idPath),
+    | "=" ModuleExpressionProd<out modexp>
+          (. submodule = new AliasModuleDecl(modexp,
                                          id, parent, opened, idExports); .)
 
-    | ":" QualifiedModuleExport<out modexp, out idExports>
+    | ":" QualifiedModuleExport<out idPath, out idExports>
           (. submodule = new AbstractModuleDecl(new ModuleQualifiedId(idPath),
                                          id, parent, opened, idExports); .)
 
     | [ "`" ModuleExportSuffix<idExports> ]
-          (. idPath.Add(id);
-             submodule = new AliasModuleDecl(new ModuleQualifiedId(idPath),
+          (. idPath = new List<IToken>();
+             idPath.Add(id);
+             submodule = new AliasModuleDecl(ModuleExpression.From(idPath),
                                          id, parent, opened, idExports);
           .)
     )

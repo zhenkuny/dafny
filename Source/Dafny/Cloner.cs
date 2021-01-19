@@ -16,7 +16,7 @@ namespace Microsoft.Dafny
         nw = new DefaultModuleDecl();
       } else {
         nw = new ModuleDefinition(Tok(m.tok), name, m.PrefixIds, m.IsAbstract, m.IsFacade,
-                                  m.RefinementBaseExpr, m.EnclosingModule, CloneAttributes(m.Attributes),
+                                  m.RefinementQId, m.EnclosingModule, CloneAttributes(m.Attributes),
                                   true, m.IsToBeVerified, m.IsToBeCompiled);
       }
       foreach (var d in m.TopLevelDecls) {
@@ -107,10 +107,10 @@ namespace Microsoft.Dafny
           return new LiteralModuleDecl(((LiteralModuleDecl)d).ModuleDef, m);
         } else if (d is AliasModuleDecl) {
           var a = (AliasModuleDecl)d;
-          return new AliasModuleDecl(a.ModExp, a.tok, m, a.Opened, a.Exports);
+          return new AliasModuleDecl(a.TargetQId ?? a.TargetQId.Clone(false), a.tok, m, a.Opened, a.Exports);
         } else if (d is AbstractModuleDecl) {
           var a = (AbstractModuleDecl)d;
-          return new AbstractModuleDecl(a.ModExp, a.tok, m, a.Opened, a.Exports);
+          return new AbstractModuleDecl(a.QId ?? a.QId.Clone(false), a.tok, m, a.Opened, a.Exports);
         } else if (d is ModuleExportDecl) {
           var a = (ModuleExportDecl)d;
           return new ModuleExportDecl(a.tok, a.Name, m, a.Exports, a.Extends, a.ProvideAll, a.RevealAll, a.IsDefault, a.IsRefining);
@@ -816,62 +816,6 @@ namespace Microsoft.Dafny
     }
   }
 
-  // Clone a module and apply module parameters to its free parameters
-  class ModuleApplicationCloner : Cloner
-  {
-    private readonly Dictionary<string, ModuleSignature> transformation;
-    public ModuleApplicationCloner(Dictionary<string, ModuleSignature> transformation) {
-      this.transformation = transformation;
-    }
-
-    public override TopLevelDecl CloneDeclaration(TopLevelDecl d, ModuleDefinition m)
-    {
-      TopLevelDecl result;
-      String dbg_result = "...";
-      ModuleSignature appliedSignature;
-      if (d is ModuleFacadeDecl && transformation.TryGetValue(d.Name, out appliedSignature))
-      {
-          // import d.Name = appliedSignature (which has no params)
-          AliasModuleDecl decl = new AliasModuleDecl(
-            new ModuleExpression(new List<ModuleApplication>()),
-            d.tok,
-            m,
-            false,
-            new List<IToken>());
-          //decl.Signature = MakeAbstractSignature(p, abs.FullCompileName, abs.Height, prog.ModuleSigs, compilationModuleClones);
-          result = decl;
-          dbg_result = "Replaced with new Alias and its appliedSignature.";
-      } else
-      {
-        result = base.CloneDeclaration(d, m);
-          dbg_result = "Absosmurfly nothing.";
-      }
-      if (d is ModuleDecl) {
-        // Make replacements in its signature.
-        ModuleDecl mod_decl = (ModuleDecl) d;
-        ModuleDecl result_decl = (ModuleDecl) result;
-        result_decl.Signature = new ModuleSignature();
-        result_decl.Signature.VisibilityScope = mod_decl.Signature.VisibilityScope;
-        foreach (var keyValue in transformation) {
-            // XXX TODO This is certainly wrong. We should be extending scopes based on how deeply the substitutions are nested.
-            result_decl.Signature.VisibilityScope.Augment(keyValue.Value.VisibilityScope);
-        }
-        foreach (var tl in mod_decl.Signature.TopLevels.Keys) {
-          if (transformation.TryGetValue(tl, out appliedSignature)) {
-            // Gotta clone the decl, lest we break the original...
-            ModuleDecl sub_decl = (ModuleDecl) CloneDeclaration(mod_decl.Signature.TopLevels[tl], m/*XXX wrong! */);
-            sub_decl.Signature = appliedSignature;
-            result_decl.Signature.TopLevels[tl] = sub_decl;
-            dbg_result += " Applied "+tl+";";
-          } else {
-            result_decl.Signature.TopLevels[tl] = mod_decl.Signature.TopLevels[tl];
-          }
-        }
-        //result_decl.VisibilityScope = somethingsomethingmoduledef;
-      }
-      return result;
-    }
-  }
 
   /// <summary>
   /// This cloner copies the origin module signatures to their cloned declarations

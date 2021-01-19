@@ -139,8 +139,6 @@ namespace Microsoft.Dafny
         int index;
         processedDecl.Add(d.Name);
         if (!declaredNames.TryGetValue(d.Name, out index)) {
-          // So if d is a paramaterized type of the target ("prev"?), and that parameter is supplied in the application,
-          // we should swap it out.
           m.TopLevelDecls.Add(refinementCloner.CloneDeclaration(d, m));
         } else {
           var nw = m.TopLevelDecls[index];
@@ -272,6 +270,7 @@ namespace Microsoft.Dafny
 
     public bool CheckIsRefinement(ModuleDecl derived, AbstractModuleDecl original) {
 
+
       // Check explicit refinement
       // TODO syntactic analysis of export sets is not quite right
       var derivedPointer = derived.Signature.ModuleDef;
@@ -287,8 +286,7 @@ namespace Microsoft.Dafny
             return false;
           }
           var oexports = new HashSet<string>(original.Exports.ConvertAll(t => t.val));
-          var rc = oexports.IsSubsetOf(exports);
-          return rc;
+          return oexports.IsSubsetOf(exports);
         }
         derivedPointer = derivedPointer.RefinementQId.Def;
       }

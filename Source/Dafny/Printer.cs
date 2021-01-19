@@ -372,8 +372,7 @@ namespace Microsoft.Dafny {
               wr.Write("*/");
             }
             wr.Write(" {0} ", dd.Name);
-            wr.Write("= {0}", dd.ModExp);
-            wr.Write("= {0}", dd.TargetQId.ToString()); // XXX Fine, have both. Have to sort this out eventually.
+            wr.Write("= {0}", dd.TargetModExp.ToString());
             if (dd.Exports.Count > 0) {
               wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
             }
@@ -391,8 +390,7 @@ namespace Microsoft.Dafny {
               wr.Write("*/");
             }
             wr.Write(" {0} ", dd.Name);
-            wr.Write(": {0}", dd.ModExp);
-            wr.Write(": {0}", dd.QId.ToString()); // XXX Fine, have both. Have to sort this out eventually.
+            wr.Write(": {0}", dd.OriginalQId.ToString());
             if (dd.Exports.Count > 0) {
               wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
             }
@@ -504,8 +502,8 @@ namespace Microsoft.Dafny {
         }
       }
       wr.Write("{0} ", module.Name);
-      if (module.RefinementBaseExpr != null) {
-        wr.Write("refines {0} ", module.RefinementBaseExpr.ToString());
+      if (module.RefinementBaseModExp != null) {
+        wr.Write("refines {0} ", module.RefinementBaseModExp.ToString());
       }
       if (module.TopLevelDecls.Count == 0) {
         wr.WriteLine("{ }");
