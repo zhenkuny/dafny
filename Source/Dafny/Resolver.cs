@@ -8318,12 +8318,15 @@ namespace Microsoft.Dafny
             if (s.Rhs is ExprRhs) {
               var rhs = (ExprRhs)s.Rhs;
               Usage expectedUsage = x != null ? x.Var.Usage : Usage.Ordinary;
+              bool madeGhost = false;
               if (isAutoGhost) {
                 if (resolver.UsesSpecFeatures(rhs.Expr)) {
                   // TODO: Is this the proper way to determine if an expression is ghost?
                   ((lhs as AutoGhostIdentifierExpr).Var as LocalVariable).MakeGhost();
+                  madeGhost = true;
                 }
-              } else {
+              }
+              if (!madeGhost && !assumeRhsCompilable) {
                 resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
               }
               if (x != null && x.Var.IsLinear) {
