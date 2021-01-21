@@ -11,6 +11,7 @@ using System.Numerics;
 using System.Diagnostics.Contracts;
 using System.Linq.Expressions;
 using Microsoft.Boogie;
+using System.Diagnostics;
 
 namespace Microsoft.Dafny
 {
@@ -8259,8 +8260,10 @@ namespace Microsoft.Dafny
                 local.MakeGhost();
               }
             }
-            if (!spec) resolver.CheckIsCompilable(s.RHS);
             s.IsGhost = spec;
+          }
+          if (!s.IsGhost) {
+            resolver.CheckIsCompilable(s.RHS, usageContext, s.Usage);
           }
           if (s.Usage == Usage.Shared && usageContext.Borrows()) {
             Error(s.RHS, "cannot borrow variable because expression returns a shared result");
