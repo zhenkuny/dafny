@@ -8163,7 +8163,9 @@ namespace Microsoft.Dafny
             UsageContext uc = UsageContext.Copy(usageContext);
             resolver.PopUsageContext(stmt.EndTok, outer, uc);
             resolver.MergeUsageContexts(s.Tok, outer, uc, true);
-            usageContext.unreachable = true;
+            if (usageContext != null) {
+              usageContext.unreachable = true;
+            }
           } else if (method != null) {
             bool linearInOut = method.Ins.Concat(method.Outs).ToList().Exists(x => x.IsLinear);
             bool linearHere = usageContext != null && usageContext.available.Count > 0;
@@ -8458,6 +8460,8 @@ namespace Microsoft.Dafny
                   usageContext.available[x.Var] = Available.Available;
                 }
               } else if (jUsage == Usage.Ordinary && xUsage == Usage.Ignore) {
+                // ok
+              } else if (xUsage == Usage.Ghost) {
                 // ok
               } else if (xUsage != jUsage) {
                 Error(x, "expected {0} variable, found {1} variable", UsageName(jUsage), UsageName(xUsage));

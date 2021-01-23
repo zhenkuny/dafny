@@ -383,7 +383,7 @@ method GoNil() {
   var aa := {a, null};
   var bb := {b, null};
   var cc := aa * bb;
-  var dd := aa + bb;
+  var dd: set<ICell?> := aa + bb;
   print "the intersection is ", cc, "\n";  // {null}
   print "there are ", |dd|, " elements in the union\n";  // 3
 }
