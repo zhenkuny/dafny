@@ -917,7 +917,7 @@ ModuleExpressionProd<out ModuleExpression modexp>
   (. modexp = new ModuleExpression(modapps); .)
   ) .
 
-ModuleFormal<ModuleDefinition parent, out AbstractModuleDecl formal>
+ModuleFormal<ModuleDefinition parent, out FormalModuleDecl formal>
 = (.
     IToken id;
     List<IToken> originalIdPath;
@@ -927,10 +927,10 @@ ModuleFormal<ModuleDefinition parent, out AbstractModuleDecl formal>
   (. formal = new FormalModuleDecl(new ModuleQualifiedId(originalIdPath), id, parent); .)
   .
 
-ModuleFormals<. ModuleDefinition parent, out List<AbstractModuleDecl> formals .>
+ModuleFormals<. ModuleDefinition parent, out List<FormalModuleDecl> formals .>
 = (.
-    AbstractModuleDecl formal = null;
-    formals = new List<AbstractModuleDecl>();
+    FormalModuleDecl formal = null;
+    formals = new List<FormalModuleDecl>();
   .)
   ( "(" ModuleFormal<parent, out formal>    (. formals.Add(formal); .)
     { "," ModuleFormal<parent, out formal> (. formals.Add(formal); .) }
@@ -941,7 +941,7 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
 = (. Attributes attrs = null;  IToken/*!*/ id, iderr; var prefixIds = new List<IToken>();
      List<MemberDecl/*!*/> namedModuleDefaultClassMembers = new List<MemberDecl>();;
      List<IToken> idExports = null;
-     List<AbstractModuleDecl> formals = new List<AbstractModuleDecl>();
+     List<FormalModuleDecl> formals = new List<FormalModuleDecl>();
      List<IToken> idPath = null;    // For forms that don't take ModuleExpression, until ModuleExpression has a variant that handles Exports. Hrmm. XXX
      ModuleExpression modexp = null;
      ModuleExpression moduleRefined = null;
@@ -965,7 +965,7 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
       (. module.RefinementBaseModExp = moduleRefined; .)
     |  Ident<out iderr> (. SemErr(la, $"expected either a '{{' or a 'refines' keyword here, found {iderr.val}"); .)
     ]
-    (.  module.TopLevelDecls.AddRange(formals); .)
+    (.  /* XXX need to store this module.TopLevelDecls.AddRange(formals); */ .)
     {
       "requires" ModuleExpressionProd<out var moduleRequiresLeft> "==" ModuleExpressionProd<out var moduleRequiresRight>
         (. module.AddModuleRequiresConstraint(moduleRequiresLeft, moduleRequiresRight); .)
@@ -992,10 +992,6 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
 
     | "=" ModuleExpressionProd<out modexp>
           (. submodule = new AliasModuleDecl(modexp,
-                                         id, parent, opened, idExports); .)
-
-    | ":" QualifiedModuleExport<out idPath, out idExports>
-          (. submodule = new AbstractModuleDecl(new ModuleQualifiedId(idPath),
                                          id, parent, opened, idExports); .)
 
     | [ "`" ModuleExportSuffix<idExports> ]

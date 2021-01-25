@@ -377,25 +377,6 @@ namespace Microsoft.Dafny {
               wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
             }
             wr.WriteLine();
-          } else if (d is AbstractModuleDecl) {
-            var dd = (AbstractModuleDecl)d;
-
-            wr.Write("import");
-            if (dd.Opened) {
-              wr.Write(" opened");
-            }
-            if (dd.ResolvedHash.HasValue && this.printMode == DafnyOptions.PrintModes.DllEmbed) {
-              wr.Write(" /*");
-              wr.Write(dd.ResolvedHash);
-              wr.Write("*/");
-            }
-            wr.Write(" {0} ", dd.Name);
-            wr.Write(": {0}", dd.OriginalQId.ToString());
-            if (dd.Exports.Count > 0) {
-              wr.Write("`{{{0}}}", Util.Comma(dd.Exports, id => id.val));
-            }
-            wr.WriteLine();
-
           } else if (d is ModuleExportDecl) {
             ModuleExportDecl e = (ModuleExportDecl) d;
             if (!e.IsDefault) {

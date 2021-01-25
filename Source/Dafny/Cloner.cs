@@ -16,7 +16,7 @@ namespace Microsoft.Dafny
         nw = new DefaultModuleDecl();
       } else {
         nw = new ModuleDefinition(Tok(m.tok), name, m.PrefixIds, m.IsAbstract, m.IsFacade,
-                                  m.RefinementQId, m.EnclosingModule, CloneAttributes(m.Attributes),
+                                  m.RefinementBaseModExp, m.EnclosingModule, CloneAttributes(m.Attributes),
                                   true, m.IsToBeVerified, m.IsToBeCompiled);
       }
       foreach (var d in m.TopLevelDecls) {
@@ -105,12 +105,6 @@ namespace Microsoft.Dafny
         if (d is LiteralModuleDecl) {
           // TODO: Does not clone any details; is still resolved
           return new LiteralModuleDecl(((LiteralModuleDecl)d).ModuleDef, m);
-        } else if (d is AliasModuleDecl) {
-          var a = (AliasModuleDecl)d;
-          return new AliasModuleDecl(a.TargetQId ?? a.TargetQId.Clone(false), a.tok, m, a.Opened, a.Exports);
-        } else if (d is AbstractModuleDecl) {
-          var a = (AbstractModuleDecl)d;
-          return new AbstractModuleDecl(a.QId ?? a.QId.Clone(false), a.tok, m, a.Opened, a.Exports);
         } else if (d is ModuleExportDecl) {
           var a = (ModuleExportDecl)d;
           return new ModuleExportDecl(a.tok, a.Name, m, a.Exports, a.Extends, a.ProvideAll, a.RevealAll, a.IsDefault, a.IsRefining);
@@ -825,18 +819,11 @@ namespace Microsoft.Dafny
       var dd = base.CloneDeclaration(d, m);
       if (d is ModuleDecl) {
         ((ModuleDecl)dd).Signature = ((ModuleDecl)d).Signature;
-        if (d is AbstractModuleDecl) {
-          var sourcefacade = (AbstractModuleDecl)d;
-
-          ((AbstractModuleDecl)dd).OriginalSignature = sourcefacade.OriginalSignature;
-          if (sourcefacade.QId.Root != null) {
-            ((AbstractModuleDecl)dd).QId.SetRoot((ModuleDecl)CloneDeclaration(sourcefacade.QId.Root, m));
-          }
-        } else if (d is AliasModuleDecl) {
+        if (d is AliasModuleDecl) {
           var sourcealias = (AliasModuleDecl)d;
 
-          if (sourcealias.TargetQId.Root != null) {
-            ((AliasModuleDecl)dd).TargetQId.SetRoot((ModuleDecl)CloneDeclaration(sourcealias.TargetQId.Root, m));
+          if (sourcealias.TargetModExp.Root != null) {
+            ((AliasModuleDecl)dd).TargetModExp.SetRoot((ModuleDecl)CloneDeclaration(sourcealias.TargetModExp.Root, m));
           }
         }
       }

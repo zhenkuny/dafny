@@ -3571,31 +3571,16 @@ namespace Microsoft.Dafny {
     public override object Dereference() { return Signature.ModuleDef; }
   }
 
-  // Represents A in `module X(A: B) {}` and `module X { import A: B }`
-  // Used to be called ModuleFacadeDecl -- renamed to be like LiteralModuleDecl, AliasModuleDecl
-  public class AbstractModuleDecl : ModuleDecl
+  public class FormalModuleDecl
   {
+    public readonly IToken Name;
     public readonly ModuleQualifiedId OriginalQId;
-    public readonly List<IToken> Exports; // list of exports sets
-    public ModuleDecl CompileRoot;
-    public ModuleSignature OriginalSignature;
+    public readonly ModuleDefinition Parent;
 
-    public AbstractModuleDecl(ModuleQualifiedId originalQId, IToken name, ModuleDefinition parent, bool opened, List<IToken> exports)
-      : base(name, name.val, parent, opened, false) {
-      Contract.Requires(originalQId != null && originalQId.Path.Count > 0);
-      Contract.Requires(exports != null);
-
-      OriginalQId = originalQId;
-      Exports = exports;
-    }
-    public override object Dereference() { return this; }
-  }
-
-  public class FormalModuleDecl : AbstractModuleDecl
-  {
-    public FormalModuleDecl(ModuleQualifiedId originalQId, IToken name, ModuleDefinition parent)
-      : base(originalQId, name, parent, false, new List<IToken>()) {
-      this.IsRefining = true;
+    public FormalModuleDecl(ModuleQualifiedId originalQId, IToken name, ModuleDefinition parent) {
+      this.Name = name;
+      this.OriginalQId = originalQId;
+      this.Parent = parent;
     }
   }
 

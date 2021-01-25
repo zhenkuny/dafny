@@ -77,14 +77,14 @@ namespace Microsoft.Dafny
     private ModuleSignature refinedSigOpened;
 
     internal override void PreResolve(ModuleDefinition m) {
-      if (m.RefinementQId?.Decl != null) { // There is a refinement parent and it resolved OK
-        RefinedSig = m.RefinementQId.Sig;
+      if (m.RefinementBaseModExp?.Decl != null) { // There is a refinement parent and it resolved OK
+        RefinedSig = m.RefinementBaseModExp.Sig;
 
         Contract.Assert(RefinedSig.ModuleDef != null);
-        Contract.Assert(m.RefinementQId.Def == RefinedSig.ModuleDef);
+        Contract.Assert(m.RefinementBaseModExp.Def == RefinedSig.ModuleDef);
         // check that the openess in the imports between refinement and its base matches
         List<TopLevelDecl> declarations = m.TopLevelDecls;
-        List<TopLevelDecl> baseDeclarations = m.RefinementQId.Def.TopLevelDecls;
+        List<TopLevelDecl> baseDeclarations = m.RefinementBaseModExp.Def.TopLevelDecls;
         foreach (var im in declarations) {
           // TODO: this is a terribly slow algorithm; use the symbol table instead
           foreach (var bim in baseDeclarations) {
@@ -96,7 +96,7 @@ namespace Microsoft.Dafny
                       ? "{0} in {1} cannot be imported with \"opened\" because it does not match the corresponding import in the refinement base {2}."
                       : "{0} in {1} must be imported with \"opened\"  to match the corresponding import in its refinement base {2}.";
                     reporter.Error(MessageSource.RefinementTransformer, m.tok, message, im.Name, m.Name,
-                      m.RefinementQId.ToString());
+                      m.RefinementBaseModExp.ToString());
                   }
                 }
               }
@@ -111,18 +111,18 @@ namespace Microsoft.Dafny
     void PreResolveWorker(ModuleDefinition m) {
       Contract.Requires(m != null);
 
-      if (m.RefinementQId?.Def == null) return;
+      if (m.RefinementBaseModExp?.Def == null) return;
 
       if (moduleUnderConstruction != null) {
         postTasks.Clear();
       }
       moduleUnderConstruction = m;
       refinementCloner = new RefinementCloner(moduleUnderConstruction);
-      var prev = m.RefinementQId.Def;
+      var prev = m.RefinementBaseModExp.Def;
 
       //copy the signature, including its opened imports
       refinedSigOpened = Resolver.MergeSignature(new ModuleSignature(), RefinedSig);
-      Resolver.ResolveOpenedImports(refinedSigOpened, m.RefinementQId.Def, false, null);
+      Resolver.ResolveOpenedImports(refinedSigOpened, m.RefinementBaseModExp.Def, false, null);
 
       // Create a simple name-to-decl dictionary.  Ignore any duplicates at this time.
       var declaredNames = new Dictionary<string, int>();
@@ -146,9 +146,7 @@ namespace Microsoft.Dafny
                                    || d is OpaqueTypeDecl) {
             MergeTopLevelDecls(m, nw, d, index);
           } else if (d is TypeSynonymDecl) {
-            reporter.Error(MessageSource.RefinementTransformer, nw.tok, $"module {m.Name} may not redeclare a non-opaque type name {d.Name} from module {m.RefinementQId.ToString()}, even with the same type, unless refining (...)");
-          } else if (!(d is AbstractModuleDecl)) {
-            reporter.Error(MessageSource.RefinementTransformer, nw.tok, $"module {m.Name} redeclares a name {d.Name} from module {m.RefinementQId.ToString()} without indicating refining");
+            reporter.Error(MessageSource.RefinementTransformer, nw.tok, $"module {m.Name} may not redeclare a non-opaque type name {d.Name} from module {m.RefinementBaseModExp.ToString()}, even with the same type, unless refining (...)");
           }
         }
       }
@@ -163,7 +161,7 @@ namespace Microsoft.Dafny
           MergeTopLevelDecls(m, nw, d, index);
         }
       }
-      m.RefinementQId.Sig = RefinedSig;
+      m.RefinementBaseModExp.Sig = RefinedSig;
 
       Contract.Assert(moduleUnderConstruction == m);  // this should be as it was set earlier in this method
     }
@@ -187,12 +185,6 @@ namespace Microsoft.Dafny
           } else {
             MergeModuleExports((ModuleExportDecl)nw,(ModuleExportDecl)d);
           }
-        } else if (!(d is AbstractModuleDecl)) {
-          reporter.Error(MessageSource.RefinementTransformer, nw, "a module ({0}) can only refine a module facade", nw.Name);
-        } else {
-          // check that the new module refines the previous declaration
-          if (!CheckIsRefinement((ModuleDecl)nw, (AbstractModuleDecl)d))
-            reporter.Error(MessageSource.RefinementTransformer, nw.tok, "a module ({0}) can only be replaced by a refinement of the original module", d.Name);
         }
       } else if (d is OpaqueTypeDecl) {
         if (nw is ModuleDecl) {
@@ -266,31 +258,6 @@ namespace Microsoft.Dafny
       } else {
         Contract.Assert(false);
       }
-    }
-
-    public bool CheckIsRefinement(ModuleDecl derived, AbstractModuleDecl original) {
-
-
-      // Check explicit refinement
-      // TODO syntactic analysis of export sets is not quite right
-      var derivedPointer = derived.Signature.ModuleDef;
-      while (derivedPointer != null) {
-        if (derivedPointer == original.OriginalSignature.ModuleDef) {
-          HashSet<string> exports;
-          if (derived is AliasModuleDecl) {
-            exports = new HashSet<string>(((AliasModuleDecl)derived).Exports.ConvertAll(t => t.val));
-          } else if (derived is AbstractModuleDecl) {
-            exports = new HashSet<string>(((AbstractModuleDecl)derived).Exports.ConvertAll(t => t.val));
-          } else {
-            reporter.Error(MessageSource.RefinementTransformer, derived, "a module ({0}) can only be refined by an alias module or a module facade", original.Name);
-            return false;
-          }
-          var oexports = new HashSet<string>(original.Exports.ConvertAll(t => t.val));
-          return oexports.IsSubsetOf(exports);
-        }
-        derivedPointer = derivedPointer.RefinementQId.Def;
-      }
-      return false;
     }
 
     // Check that two resolved types are the same in a similar context (the same type parameters, method, class, etc.)
@@ -1499,9 +1466,6 @@ namespace Microsoft.Dafny
         dd = ddex;
       } else if (d is ModuleDecl) {
         ((ModuleDecl)dd).Signature = ((ModuleDecl)d).Signature;
-        if (d is AbstractModuleDecl) {
-          ((AbstractModuleDecl)dd).OriginalSignature = ((AbstractModuleDecl)d).OriginalSignature;
-        }
       }
       return dd;
     }
