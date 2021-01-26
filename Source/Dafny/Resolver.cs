@@ -18122,7 +18122,7 @@ namespace Microsoft.Dafny
         var apply = new ApplySuffix(e.tok, f, args);
         ResolveApplySuffix(apply, opts, false);
         if (apply.ResolvedExpression != null) {
-          e.PlaceholderReplacement = apply.ResolvedExpression;
+          e.PlaceholderReplacement = apply;
           e.Type = apply.ResolvedExpression.Type;
           return true;
         }
