@@ -909,22 +909,23 @@ ModuleApplicationProd<out ModuleApplication modapp>
 ModuleExpressionProd<out ModuleExpression modexp>
 = (.
         ModuleApplication modapp = null;
-        List<ModuleApplication> modapps = new List<ModuleApplication>();
+        IToken id;
+        List<IToken> path = new List<IToken>();
   .)
   (
-  ModuleApplicationProd<out modapp> (. modapps.Add(modapp); .)
-  { "." ModuleApplicationProd<out modapp> (. modapps.Add(modapp); .) }
-  (. modexp = new ModuleExpression(modapps); .)
+  ModuleApplicationProd<out modapp>
+  { "." NoUSIdent<out id> (. path.Add(id); .) }
+  (. modexp = new ModuleExpression(modapp, path); .)
   ) .
 
 ModuleFormal<ModuleDefinition parent, out FormalModuleDecl formal>
 = (.
     IToken id;
-    List<IToken> originalIdPath;
+    ModuleExpression modexp;
   .)
 
-  ( NoUSIdent<out id> ":" QualifiedModuleId<out originalIdPath> )
-  (. formal = new FormalModuleDecl(new ModuleQualifiedId(originalIdPath), id, parent); .)
+  ( NoUSIdent<out id> ":" ModuleExpressionProd<out modexp> )
+  (. formal = new FormalModuleDecl(modexp, id, parent); .)
   .
 
 ModuleFormals<. ModuleDefinition parent, out List<FormalModuleDecl> formals .>
@@ -965,7 +966,7 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
       (. module.RefinementBaseModExp = moduleRefined; .)
     |  Ident<out iderr> (. SemErr(la, $"expected either a '{{' or a 'refines' keyword here, found {iderr.val}"); .)
     ]
-    (.  /* XXX need to store this module.TopLevelDecls.AddRange(formals); */ .)
+    (.  module.SetFunctorFormals(formals); .)
     {
       "requires" ModuleExpressionProd<out var moduleRequiresLeft> "==" ModuleExpressionProd<out var moduleRequiresRight>
         (. module.AddModuleRequiresConstraint(moduleRequiresLeft, moduleRequiresRight); .)

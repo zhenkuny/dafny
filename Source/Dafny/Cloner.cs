@@ -102,12 +102,13 @@ namespace Microsoft.Dafny
           return new ClassDecl(Tok(dd.tok), dd.Name, m, tps, mm, CloneAttributes(dd.Attributes), dd.IsRefining, dd.ParentTraits.ConvertAll(CloneType));
         }
       } else if (d is ModuleDecl) {
-        if (d is LiteralModuleDecl) {
+        if (d is LiteralModuleDecl l) {
           // TODO: Does not clone any details; is still resolved
-          return new LiteralModuleDecl(((LiteralModuleDecl)d).ModuleDef, m);
-        } else if (d is ModuleExportDecl) {
-          var a = (ModuleExportDecl)d;
-          return new ModuleExportDecl(a.tok, a.Name, m, a.Exports, a.Extends, a.ProvideAll, a.RevealAll, a.IsDefault, a.IsRefining);
+          return new LiteralModuleDecl(l.ModuleDef, m);
+        } else if (d is ModuleExportDecl expt) {
+          return new ModuleExportDecl(expt.tok, expt.Name, m, expt.Exports, expt.Extends, expt.ProvideAll, expt.RevealAll, expt.IsDefault, expt.IsRefining);
+        } else if (d is AliasModuleDecl alias) {
+          return new AliasModuleDecl(alias.TargetModExp?.Clone(false), alias.tok, m, alias.Opened, alias.Exports);
         } else {
           Contract.Assert(false);  // unexpected declaration
           return null;  // to please compiler

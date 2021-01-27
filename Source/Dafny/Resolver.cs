@@ -380,39 +380,49 @@ namespace Microsoft.Dafny
 
       Type.EnableScopes();
       var origErrorCount = reporter.Count(ErrorLevel.Error); //TODO: This is used further below, but not in the >0 comparisons in the next few lines. Is that right?
-      var bindings = new ModuleBindings(null);
-      var b = BindModuleNames(prog.DefaultModuleDef, bindings);
-      bindings.BindName(prog.DefaultModule.Name, prog.DefaultModule, b);
-      if (reporter.Count(ErrorLevel.Error) > 0) {
-        return;
-      } // if there were errors, then the implict ModuleBindings data structure invariant
 
-      // is violated, so Processing dependencies will not succeed.
-      ProcessDependencies(prog.DefaultModule, b, dependencies);
-      // check for cycles in the import graph
-      foreach (var cycle in dependencies.AllCycles()) {
-        var cy = Util.Comma(" -> ", cycle, m => m.Name);
-        reporter.Error(MessageSource.Resolver, cycle[0],
-          "module definition contains a cycle (note: parent modules implicitly depend on submodules): {0}", cy);
-      }
+      ModuleResolver moduleResolver = new ModuleResolver(reporter);
+      ParameterizedModule pm = moduleResolver.resolve((LiteralModuleDecl) prog.DefaultModule);
 
-      if (reporter.Count(ErrorLevel.Error) > 0) {
-        return;
-      } // give up on trying to resolve anything else
+////////////////////////////////////////////////////////////////////////////////
+/////Begin paving
+//      var bindings = new ModuleBindings(null);
+//      var b = BindModuleNames(prog.DefaultModuleDef, bindings);
+//      bindings.BindName(prog.DefaultModule.Name, prog.DefaultModule, b);
+//      if (reporter.Count(ErrorLevel.Error) > 0) {
+//        return;
+//      } // if there were errors, then the implict ModuleBindings data structure invariant
+//
+//      // is violated, so Processing dependencies will not succeed.
+//      ProcessDependencies(prog.DefaultModule, b, dependencies);
+//      // check for cycles in the import graph
+//      foreach (var cycle in dependencies.AllCycles()) {
+//        var cy = Util.Comma(" -> ", cycle, m => m.Name);
+//        reporter.Error(MessageSource.Resolver, cycle[0],
+//          "module definition contains a cycle (note: parent modules implicitly depend on submodules): {0}", cy);
+//      }
+//
+//      if (reporter.Count(ErrorLevel.Error) > 0) {
+//        return;
+//      } // give up on trying to resolve anything else
+//
+//      // fill in module heights
+//      List<ModuleDecl> sortedDecls = dependencies.TopologicallySortedComponents();
+//      int h = 0;
+//      foreach (ModuleDecl md in sortedDecls) {
+//        md.Height = h;
+//        if (md is LiteralModuleDecl) {
+//          var mdef = ((LiteralModuleDecl)md).ModuleDef;
+//          mdef.Height = h;
+//          prog.ModuleSigs.Add(mdef, null);
+//        }
+//        h++;
+//      }
+//// done paving
+////////////////////////////////////////////////////////////////////////////////
 
-      // fill in module heights
-      List<ModuleDecl> sortedDecls = dependencies.TopologicallySortedComponents();
-      int h = 0;
-      foreach (ModuleDecl md in sortedDecls) {
-        md.Height = h;
-        if (md is LiteralModuleDecl) {
-          var mdef = ((LiteralModuleDecl)md).ModuleDef;
-          mdef.Height = h;
-          prog.ModuleSigs.Add(mdef, null);
-        }
-        h++;
-      }
-
+      List<ModuleDecl> sortedDecls = null;
+      
       rewriters = new List<IRewriter>();
       refinementTransformer = new RefinementTransformer(prog);
       rewriters.Add(refinementTransformer);
@@ -1512,7 +1522,7 @@ namespace Microsoft.Dafny
             Contract.Assert(yes);
             if (prevDecl is AliasModuleDecl) {
               reporter.Error(MessageSource.Resolver, subdecl.tok, "Duplicate name of import: {0}", subdecl.Name);
-            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened && importDecl.TargetModExp.applications.Count == 1 &&
+            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened &&
                        importDecl.Name == importDecl.TargetModExp.FirstToken().val) {
               importDecl.ShadowsLiteralModule = true;
             } else {
@@ -1617,8 +1627,8 @@ namespace Microsoft.Dafny
       if (moduleDecl is LiteralModuleDecl) {
         ProcessDependenciesDefinition(moduleDecl, ((LiteralModuleDecl)moduleDecl).ModuleDef, bindings, dependencies);
       } else if (moduleDecl is AliasModuleDecl) {
-        var alias = moduleDecl as AliasModuleDecl;
-        ModuleDecl root;
+//        var alias = moduleDecl as AliasModuleDecl;
+//        ModuleDecl root;
         // TryLookupFilter works outward, looking for a match to the filter for
         // each enclosing module.
 // broken, but getting paved so who cares!?

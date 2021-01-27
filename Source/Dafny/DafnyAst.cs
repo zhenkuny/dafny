@@ -3574,12 +3574,12 @@ namespace Microsoft.Dafny {
   public class FormalModuleDecl
   {
     public readonly IToken Name;
-    public readonly ModuleQualifiedId OriginalQId;
+    public readonly ModuleExpression ConstraintModExp;
     public readonly ModuleDefinition Parent;
 
-    public FormalModuleDecl(ModuleQualifiedId originalQId, IToken name, ModuleDefinition parent) {
+    public FormalModuleDecl(ModuleExpression constraintModExp, IToken name, ModuleDefinition parent) {
       this.Name = name;
-      this.OriginalQId = originalQId;
+      this.ConstraintModExp = constraintModExp;
       this.Parent = parent;
     }
   }
@@ -3780,6 +3780,15 @@ namespace Microsoft.Dafny {
 
   public class ModuleExpression : ModuleResolutionInfo
   {
+    // To represent A(B.C, D(E)).F.G:
+    public readonly ModuleApplication application;  // A(B.C, D(E)) goes here
+    public readonly List<IToken> path;              // .F.G goes here.
+
+    public ModuleExpression(ModuleApplication application, List<IToken> path) {
+        this.application = application;
+        this.path = path;
+    }
+
     public static ModuleExpression From(ModuleQualifiedId qId) {
       ModuleExpression result = From(qId.Path);
       if (qId.Root!=null) {
@@ -3791,42 +3800,45 @@ namespace Microsoft.Dafny {
 
     public static ModuleExpression From(List<IToken> idPath)
     {
-      List<ModuleApplication> applications = new List<ModuleApplication>();
-      foreach (var tok in idPath) {
-        applications.Add(new ModuleApplication(tok, new List<ModuleExpression>()));
-      }
-      ModuleExpression result = new ModuleExpression(applications);
-      return result;
-    }
-
-    public readonly List<ModuleApplication> applications;
-    public ModuleExpression(List<ModuleApplication> applications) {
-        this.applications = applications;
+      ModuleApplication application = new ModuleApplication(idPath[0], new List<ModuleExpression>());
+      List<IToken> path = idPath.GetRange(1, idPath.Count);
+      return new ModuleExpression(application, path);
     }
 
     public bool IsDegenerate() {
-        return applications.Count == 0;
+        return false; //XXX delete
     }
 
     public bool IsSimpleName() {
-        return applications.Count == 1 && applications[0].IsSimple();
+        return path.Count == 0 && application.IsSimple();
     }
 
     public bool IsSimpleSingleton(string name) {
-        return IsSimpleName() && applications[0].tok.val == name;
+        return IsSimpleName() && application.tok.val == name;
     }
 
     public override string ToString() {
-        return Util.Comma(".", applications, app => app.ToString());
+        return application.ToString() +
+          ((path.Count>0) ?  Util.Comma(".", path, tok => tok.val) : "");
     }
 
     public IToken FirstToken() {
-        return applications[0].tok;
+        return application.tok;
     }
 
     // Used in ModuleNotFoundErrorMessage.
     public List<IToken> ToTokenList() {
-        return new List<IToken>(from app in applications select app.tok);
+      List<IToken> result = new List<IToken>();
+      result.Add(FirstToken());
+      result.AddRange(path);
+      return result;
+    }
+
+    public ModuleExpression Clone(bool includeResInfo)
+    {
+      ModuleExpression cl = new ModuleExpression(application, path);
+      CloneInto(cl, includeResInfo);
+      return cl;
     }
   }
 
@@ -3910,6 +3922,7 @@ namespace Microsoft.Dafny {
 
     public List<ModuleExpressionPair> ModuleRequiresConstraints;
 
+    public List<FormalModuleDecl> Formals; // null if not a functor module
     public readonly IToken RefinementBaseName;  // null if no refinement base
     public bool SuccessfullyResolved;  // set to true upon successful resolution; modules that import an unsuccessfully resolved module are not themselves resolved
 
@@ -4174,6 +4187,11 @@ namespace Microsoft.Dafny {
         return false;
       }
       return true;
+    }
+
+    public void SetFunctorFormals(List<FormalModuleDecl> formals) {
+      Contract.Assert(this.Formals == null);  // You can only do this so many times, buddy.
+      this.Formals = formals;
     }
   }
 
