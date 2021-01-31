@@ -1,6 +1,7 @@
 //-----------------------------------------------------------------------------
 //
-// Copyright (C) Amazon.  All Rights Reserved.
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 //
 //-----------------------------------------------------------------------------
 using System;
@@ -48,7 +49,7 @@ namespace Microsoft.Dafny {
     protected override void EmitHeader(Program program, TargetWriter wr) {
       wr.WriteLine("// Dafny program {0} compiled into Go", program.Name);
 
-      ModuleName = MainModuleName = HasMain(program, out _) ? "main" : Path.GetFileNameWithoutExtension(program.Name);
+      ModuleName = MainModuleName = program.MainMethod != null ? "main" : Path.GetFileNameWithoutExtension(program.Name);
 
       wr.WriteLine("package {0}", ModuleName);
       wr.WriteLine();
@@ -87,13 +88,13 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public override void EmitCallToMain(Method mainMethod, TargetWriter wr) {
+    public override void EmitCallToMain(Method mainMethod, string baseName, TargetWriter wr) {
       var companion = TypeName_Companion(mainMethod.EnclosingClass as ClassDecl, wr, mainMethod.tok);
 
       var wBody = wr.NewNamedBlock("func main()");
       wBody.WriteLine("defer _dafny.CatchHalt()");
       Coverage.EmitSetup(wBody);
-      wBody.WriteLine("{0}.{1}()", companion, IdName(mainMethod));
+      wBody.WriteLine("{0}.{1}()", companion, mainMethod.IsStatic ? IdName(mainMethod) : "Main");
       Coverage.EmitTearDown(wBody);
     }
 
@@ -1357,12 +1358,6 @@ namespace Microsoft.Dafny {
         bool isHandle = true;
         if (cl != null && Attributes.ContainsBool(cl.Attributes, "handle", ref isHandle) && isHandle) {
           return "ulong";
-        } else if (DafnyOptions.O.IronDafny &&
-            !(xType is ArrowType) &&
-            cl != null &&
-            cl.EnclosingModuleDefinition != null &&
-            !cl.EnclosingModuleDefinition.IsDefaultModule) {
-          s = cl.FullCompileName;
         } else if (xType is ArrowType at) {
           return string.Format("func ({0}) {1}", Util.Comma(at.Args, arg => TypeName(arg, wr, tok)), TypeName(at.Result, wr, tok));
         } else if (cl is TupleTypeDecl) {
@@ -1399,7 +1394,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public override string TypeInitializationValue(Type type, TextWriter wr /*?*/, Bpl.IToken tok /*?*/, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors) {
+    protected override string TypeInitializationValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors) {
       // When returning nil, explicitly cast the nil so that type assertions work
       string nil() {
         return string.Format("({0})(nil)", TypeName(type, wr, tok));
@@ -1429,7 +1424,7 @@ namespace Microsoft.Dafny {
 
       var udt = (UserDefinedType)xType;
       if (udt.ResolvedParam != null) {
-        if (usePlaceboValue && !udt.ResolvedParam.Characteristics.MustSupportZeroInitialization) {
+        if (usePlaceboValue && !udt.ResolvedParam.Characteristics.HasCompiledValue) {
           return nil();
         } else if (constructTypeParameterDefaultsFromTypeDescriptors) {
           var w = new TargetWriter(0, true);
@@ -1945,7 +1940,7 @@ namespace Microsoft.Dafny {
         wr.Write("{0}({1})", GetNativeTypeName(nt), (BigInteger)e.Value);
       } else if (e.Value is BigInteger i) {
         EmitIntegerLiteral(i, wr);
-      } else if (e.Value is Basetypes.BigDec n) {
+      } else if (e.Value is BaseTypes.BigDec n) {
         var zeros = Util.Repeat("0", Math.Abs(n.Exponent));
         string str;
         if (n.Exponent >= 0) {
@@ -3009,12 +3004,16 @@ namespace Microsoft.Dafny {
         case BinaryExpr.ResolvedOpcode.Union:
         case BinaryExpr.ResolvedOpcode.MultiSetUnion:
           callString = "Union"; break;
+        case BinaryExpr.ResolvedOpcode.MapMerge:
+          callString = "Merge"; break;
         case BinaryExpr.ResolvedOpcode.Intersection:
         case BinaryExpr.ResolvedOpcode.MultiSetIntersection:
           callString = "Intersection"; break;
         case BinaryExpr.ResolvedOpcode.SetDifference:
         case BinaryExpr.ResolvedOpcode.MultiSetDifference:
           callString = "Difference"; break;
+        case BinaryExpr.ResolvedOpcode.MapSubtraction:
+          callString = "Subtract"; break;
 
         case BinaryExpr.ResolvedOpcode.ProperPrefix:
           callString = "IsProperPrefixOf"; break;
@@ -3348,16 +3347,17 @@ namespace Microsoft.Dafny {
     public override bool SupportsInMemoryCompilation => false;
 
     public override bool CompileTargetProgram(string dafnyProgramName, string targetProgramText, string/*?*/ callToMain, string/*?*/ targetFilename, ReadOnlyCollection<string> otherFileNames,
-      bool hasMain, bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
+      bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
       compilationResult = null;
-      if (!DafnyOptions.O.RunAfterCompile || callToMain == null) {
-        // compile now
-        return SendToNewGoProcess(dafnyProgramName, targetFilename, otherFileNames, outputWriter, hasMain, run:false);
-      } else {
+      if (runAfterCompile) {
+        Contract.Assert(callToMain != null);  // this is part of the contract of CompileTargetProgram
         // Since the program is to be run soon, nothing further is done here. Any compilation errors (that is, any errors
         // in the emitted program--this should never happen if the compiler itself is correct) will be reported as 'go run'
         // will run the program.
         return true;
+      } else {
+        // compile now
+        return SendToNewGoProcess(dafnyProgramName, targetFilename, otherFileNames, outputWriter, callToMain != null, run:false);
       }
     }
 

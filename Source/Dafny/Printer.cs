@@ -1,8 +1,11 @@
 //-----------------------------------------------------------------------------
 //
 // Copyright (C) Microsoft Corporation.  All Rights Reserved.
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 //
 //-----------------------------------------------------------------------------
+
 using System;
 using System.IO;
 using System.Collections.Generic;
@@ -252,7 +255,7 @@ namespace Microsoft.Dafny {
             wr.Write("| ");
             PrintExpression(dd.Constraint, true);
             wr.WriteLine();
-            if (dd.WitnessKind != SubsetTypeDecl.WKind.None) {
+            if (dd.WitnessKind != SubsetTypeDecl.WKind.CompiledZero) {
               Indent(indent + IndentAmount);
               PrintWitnessClause(dd);
               wr.WriteLine();
@@ -283,7 +286,7 @@ namespace Microsoft.Dafny {
           }
           wr.Write("| ");
           PrintExpression(dd.Constraint, true);
-          if (dd.WitnessKind != SubsetTypeDecl.WKind.None) {
+          if (dd.WitnessKind != SubsetTypeDecl.WKind.CompiledZero) {
             if (dd is NonNullTypeDecl) {
               wr.Write(" ");
             } else {
@@ -422,7 +425,7 @@ namespace Microsoft.Dafny {
 
     private void PrintWitnessClause(RedirectingTypeDecl dd) {
       Contract.Requires(dd != null);
-      Contract.Requires(dd.WitnessKind != SubsetTypeDecl.WKind.None);
+      Contract.Requires(dd.WitnessKind != SubsetTypeDecl.WKind.CompiledZero);
 
       switch (dd.WitnessKind) {
         case SubsetTypeDecl.WKind.Ghost:
@@ -432,10 +435,13 @@ namespace Microsoft.Dafny {
           wr.Write("witness ");
           PrintExpression(dd.Witness, true);
           break;
+        case SubsetTypeDecl.WKind.OptOut:
+          wr.Write("witness *");
+          break;
         case SubsetTypeDecl.WKind.Special:
           wr.Write("/*special witness*/");
           break;
-        case SubsetTypeDecl.WKind.None:
+        case SubsetTypeDecl.WKind.CompiledZero:
         default:
           Contract.Assert(false);  // unexpected WKind
           break;
@@ -1113,11 +1119,14 @@ namespace Microsoft.Dafny {
         (characteristics.EqualitySupport == TypeParameter.EqualitySupportValue.InferredRequired && DafnyOptions.O.DafnyPrintResolvedFile != null)) {
         s = "==";
       }
-      if (characteristics.MustSupportZeroInitialization) {
+      if (characteristics.HasCompiledValue) {
         var prefix = s == null ? "" : s + ",";
         s = prefix + "0";
+      } else if (characteristics.IsNonempty) {
+        var prefix = s == null ? "" : s + ",";
+        s = prefix + "00";
       }
-      if (characteristics.DisallowReferenceTypes) {
+      if (characteristics.ContainsNoReferenceTypes) {
         var prefix = s == null ? "" : s + ",";
         s = prefix + "!new";
       }
@@ -1886,6 +1895,7 @@ namespace Microsoft.Dafny {
       } else if (expr is LetExpr) {
         var e = (LetExpr)expr;
         Indent(indent);
+        if (e.LHSs.Exists(lhs => lhs != null && lhs.Var != null && lhs.Var.IsGhost)) { wr.Write("ghost "); }
         wr.Write("var ");
         string sep = "";
         foreach (var lhs in e.LHSs) {
@@ -1990,8 +2000,8 @@ namespace Microsoft.Dafny {
         } else if (e is StringLiteralExpr) {
           var str = (StringLiteralExpr)e;
           wr.Write("{0}\"{1}\"", str.IsVerbatim ? "@" : "", (string)e.Value);
-        } else if (e.Value is Basetypes.BigDec) {
-          Basetypes.BigDec dec = (Basetypes.BigDec)e.Value;
+        } else if (e.Value is BaseTypes.BigDec) {
+          BaseTypes.BigDec dec = (BaseTypes.BigDec)e.Value;
           wr.Write((dec.Mantissa >= 0) ? "" : "-");
           string s = BigInteger.Abs(dec.Mantissa).ToString();
           int digits = s.Length;
@@ -2544,11 +2554,6 @@ namespace Microsoft.Dafny {
           PrintExpression(e.Term, !parensNeeded && isFollowedBySemicolon);
         }
         if (parensNeeded) { wr.Write(")"); }
-
-      } else if (expr is NamedExpr) {
-        var e = (NamedExpr)expr;
-        wr.Write("expr {0}: ", e.Name);
-        PrintExpression(e.Body, isFollowedBySemicolon);
 
       } else if (expr is SetComprehension) {
         var e = (SetComprehension)expr;

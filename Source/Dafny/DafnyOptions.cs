@@ -1,3 +1,6 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,16 +18,11 @@ namespace Microsoft.Dafny
     public DafnyOptions(ErrorReporter errorReporter = null)
       : base("Dafny", "Dafny program verifier") {
         this.errorReporter = errorReporter;
-        SetZ3ExecutableName();
     }
 
     public override string VersionNumber {
       get {
-        return System.Diagnostics.FileVersionInfo.GetVersionInfo(System.Reflection.Assembly.GetExecutingAssembly().Location).FileVersion
-#if ENABLE_IRONDAFNY
-          + "[IronDafny]"
-#endif
-          ;
+        return System.Diagnostics.FileVersionInfo.GetVersionInfo(System.Reflection.Assembly.GetExecutingAssembly().Location).FileVersion;
       }
     }
     public override string Version {
@@ -51,8 +49,7 @@ namespace Microsoft.Dafny
 
     public bool UnicodeOutput = false;
     public bool DisallowSoundnessCheating = false;
-    public bool Dafnycc = false;
-    public int Induction = 3;
+    public int Induction = 4;
     public int InductionHeuristic = 6;
     public bool TypeInferenceDebug = false;
     public bool MatchCompilerDebug = false;
@@ -70,6 +67,7 @@ namespace Microsoft.Dafny
     public bool CompileVerbose = true;
     public string DafnyPrintCompiledFile = null;
     public string CoverageLegendFile = null;
+    public string MainMethod = null;
     public bool ForceCompile = false;
     public bool RunAfterCompile = false;
     public int SpillTargetCode = 0;  // [0..4]
@@ -101,14 +99,6 @@ namespace Microsoft.Dafny
     public bool UseRuntimeLib = false;
     public bool DisableScopes = false;
     public int Allocated = 3;
-    public bool IronDafny =
-#if ENABLE_IRONDAFNY
-      true
-#else
-      false
-#endif
-    ;
-    public bool PrintVersionAndExit = false;
     public bool OxideDebug = false;
 
     protected override bool ParseOption(string name, Bpl.CommandLineOptionEngine.CommandLineParseState ps) {
@@ -194,12 +184,19 @@ namespace Microsoft.Dafny
           return true;
 
         case "compileVerbose": {
-            int verbosity = 0;
-            if (ps.GetNumericArgument(ref verbosity, 2)) {
-              CompileVerbose = verbosity == 1;
-            }
-            return true;
+          int verbosity = 0;
+          if (ps.GetNumericArgument(ref verbosity, 2)) {
+            CompileVerbose = verbosity == 1;
           }
+          return true;
+        }
+
+        case "Main": case "main": {
+          if (ps.ConfirmArgumentCount(1)) {
+            MainMethod = args[ps.i];
+          }
+          return true;
+        }
 
         case "dafnyVerify":
             {
@@ -231,13 +228,6 @@ namespace Microsoft.Dafny
           return true;
         }
 
-        case "dafnycc":
-          Dafnycc = true;
-          Induction = 0;
-          Compile = false;
-          UseAbstractInterpretation = false; // /noinfer
-          return true;
-
         case "noCheating": {
             int cheat = 0; // 0 is default, allows cheating
             if (ps.GetNumericArgument(ref cheat, 2)) {
@@ -255,7 +245,7 @@ namespace Microsoft.Dafny
           return true;
 
         case "induction":
-          ps.GetNumericArgument(ref Induction, 4);
+          ps.GetNumericArgument(ref Induction, 5);
           return true;
 
         case "inductionHeuristic":
@@ -362,16 +352,6 @@ namespace Microsoft.Dafny
             return true;
         }
 
-        case "noIronDafny": {
-            IronDafny = false;
-            return true;
-        }
-
-        case "ironDafny": {
-            IronDafny = true;
-            return true;
-        }
-
         case "optimizeResolution": {
             int d = 2;
             if (ps.GetNumericArgument(ref d, 3)) {
@@ -412,7 +392,6 @@ namespace Microsoft.Dafny
 
             if (PrintIncludesMode == IncludesModes.Immediate || PrintIncludesMode == IncludesModes.Transitive) {
               Compile = false;
-              DontShowLogo = true;
               DafnyVerify = false;
             }
           }
@@ -422,10 +401,6 @@ namespace Microsoft.Dafny
             OxideDebug = true;
             return true;
           }
-
-        case "version":
-          PrintVersionAndExit = true;
-          return true;
 
         default:
           break;
@@ -440,14 +415,17 @@ namespace Microsoft.Dafny
       // expand macros in filenames, now that LogPrefix is fully determined
       ExpandFilename(ref DafnyPrelude, LogPrefix, FileTimestamp);
       ExpandFilename(ref DafnyPrintFile, LogPrefix, FileTimestamp);
-      if (DisableNLarith || 3 <= ArithMode) {
-        this.AddZ3Option("smt.arith.nl=false");
-      }
+
+      SetZ3ExecutablePath();
+      SetZ3Options();
+
+      // Ask Boogie to perform abstract interpretation
+      UseAbstractInterpretation = true;
+      Ai.J_Intervals = true;
     }
 
-    public override void AttributeUsage() {
-            Console.WriteLine(
-@"Dafny: The following attributes are supported by this implementation.
+    public override string AttributeHelp =>
+@"Dafny: The following attributes are supported by this version.
 
     {:extern}
     {:extern <s1:string>}
@@ -594,41 +572,76 @@ namespace Microsoft.Dafny
       TODO
 
     {:trigger}
-      TODO
-");
-    }
-
+      TODO";
 
     /// <summary>
-    /// Dafny comes with it's own copy of z3, to save new users the trouble of having to install extra dependency.
-    /// For this to work, Dafny makes the Z3ExecutablePath point to the path were Z3 is put by our release script.
-    /// For developers though (and people getting this from source), it's convenient to be able to run right away,
-    /// so we vendor a Windows version.  This is the default value; it may be overwritten by command-line arguments
+    /// Dafny releases come with their own copy of Z3, to save users the trouble of having to install extra dependencies.
+    /// For this to work, Dafny looks for Z3 at the location where it is put by our release script (i.e., z3/bin/z3[.exe]).
+    /// If Z3 is not found there, Dafny relies on Boogie to locate Z3 (which also supports setting a path explicitly on the command line).
+    /// Developers (and people getting Dafny from source) need to install an appropriate version of Z3 themselves.
     /// </summary>
-    public void SetZ3ExecutableName() {
-      var platform = (int)System.Environment.OSVersion.Platform;
+    private void SetZ3ExecutablePath() {
+      var pp = "PROVER_PATH=";
+      var proverPathOption = ProverOptions.Find(o => o.StartsWith(pp));
+      if (proverPathOption != null) {
+        var proverPath = proverPathOption.Substring(pp.Length);
+        // Boogie will perform the ultimate test to see if "proverPath" is real--it will attempt to run it.
+        // However, by at least checking if the file exists, we can produce a better error message in common scenarios.
+        if (!File.Exists(proverPath)) {
+          throw new Bpl.ProverException($"Requested prover not found: '{proverPath}'");
+        }
+      } else {
+        var platform = (int)System.Environment.OSVersion.Platform;
 
-      // http://www.mono-project.com/docs/faq/technical/
-      var isUnix = platform == 4 || platform == 6 || platform == 128;
+        var isUnix = platform == 4 || platform == 6 || platform == 128;
 
-      var z3binName = isUnix ? "z3" : "z3.exe";
-      var dafnyBinDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-      var z3BinDir = System.IO.Path.Combine(dafnyBinDir, "z3", "bin");
-      var z3BinPath = System.IO.Path.Combine(z3BinDir, z3binName);
+        var z3binName = isUnix ? "z3" : "z3.exe";
+        var dafnyBinDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        var z3BinDir = System.IO.Path.Combine(dafnyBinDir, "z3", "bin");
+        var z3BinPath = System.IO.Path.Combine(z3BinDir, z3binName);
 
-      if (!System.IO.File.Exists(z3BinPath) && !isUnix) {
-        // This is most likely a Windows user running from source without downloading z3
-        // separately; this is ok, since we vendor z3.exe.
-        z3BinPath = System.IO.Path.Combine(dafnyBinDir, z3binName);
+        if (System.IO.File.Exists(z3BinPath)) {
+          // Let's use z3BinPath
+          ProverOptions.Add($"{pp}{z3BinPath}");
+        }
       }
-
-      // Only the default value is set here. Command-line arguments are processed later,
-      // so no checking of whether the path exists is done.
-      Z3ExecutablePath = z3BinPath;
     }
 
-    public override void Usage() {
-      Console.WriteLine(@"  ---- Dafny options ---------------------------------------------------------
+    // Set a Z3 option, but only if it is not overwriting an existing option.
+    private void SetZ3Option(string name, string value)
+    {
+      if (!ProverOptions.Any(o => o.StartsWith($"O:{name}=")))
+      {
+        ProverOptions.Add($"O:{name}={value}");
+      }
+    }
+
+    private void SetZ3Options()
+    {
+      // Boogie sets the following Z3 options by default:
+      // smt.mbqi = false
+      // model.compact = false
+      // model.v2 = true
+      // pp.bv_literals = false
+
+      // Boogie also used to set the following options, but does not anymore.
+      SetZ3Option("auto_config", "false");
+      SetZ3Option("type_check", "true");
+      SetZ3Option("smt.case_split", "3");  // TODO: try removing
+      SetZ3Option("smt.qi.eager_threshold", "100");  // TODO: try lowering
+      SetZ3Option("smt.delay_units", "true");
+      SetZ3Option("smt.arith.solver", "2");
+
+      if (DisableNLarith || 3 <= ArithMode) {
+        SetZ3Option("smt.arith.nl", "false");
+      }
+    }
+
+    public override string Help =>
+      base.Help +
+@"
+
+  ---- Dafny options ---------------------------------------------------------
 
  All the .dfy files supplied on the command line along with files recursively
  included by 'include' directives are considered a single Dafny program;
@@ -685,24 +698,27 @@ namespace Microsoft.Dafny
     Note that the C++ backend has various limitations (see Docs/Compilation/Cpp.md).
     This includes lack of support for BigIntegers (aka int), most higher order
     functions, and advanced features like traits or co-inductive types.
+/Main:<name>
+    The (fully-qualified) name of the method to use as the executable entry point.
+    Default is the method with the {:main} atrribute, or else the method named 'Main'.
 /compileVerbose:<n>
     0 - don't print status of compilation to the console
     1 (default) - print information such as files being written by
         the compiler to the console
 /spillTargetCode:<n>
-    0 (default) - don't write the compiled Dafny program (but
-        still compile it, if /compile indicates to do so)
-    1 - write the compiled Dafny program in the target language,
-        if it is being compiled
-    2 - write the compiled Dafny program in the target language,
-        provided it passes the verifier (and /noVerify is NOT used),
-        regardless of /compile setting
-    3 - write the compiled Dafny program in the target language,
-        regardless of verification outcome and /compile setting
-    NOTE: If there are .cs or .dll files on the command line, then
-    the compiled Dafny program will also be written. More precisely,
-    such files on the command line implies /spillTargetCode:1 (or
-    higher, if manually specified).
+    This option concerns the textual representation of the target program.
+    This representation is of no interest when working with only Dafny code,
+    but may be of interest in cross-language situations.
+    0 (default) - Don't make any extra effort to write the textual target program
+        (but still compile it, if /compile indicates to do so).
+    1 - Write the textual target program, if it is being compiled.
+    2 - Write the textual target program, provided it passes the verifier (and
+        /noVerify is NOT used), regardless of /compile setting.
+    3 - Write the textual target program, regardless of verification outcome
+        and /compile setting.
+    Note, some compiler targets may (always or in some situations) write out the
+    textual target program as part of compilation, in which case /spillTargetCode:0
+    behaves the same way as /spillTargetCode:1.
 /out:<file>
     filename and location for the generated target language files
 /coverage:<file>
@@ -710,7 +726,6 @@ namespace Microsoft.Dafny
     <file> a legend that gives a description of each
     source-location identifier used in the branch-coverage calls.
     (use - as <file> to print to console)
-/dafnycc      Disable features not supported by DafnyCC
 /noCheating:<n>
     0 (default) - allow assume statements and free invariants
     1 - treat all assumptions as asserts, and drop free.
@@ -719,8 +734,9 @@ namespace Microsoft.Dafny
     1 - only apply induction when attributes request it
     2 - apply induction as requested (by attributes) and also
         for heuristically chosen quantifiers
-    3 (default) - apply induction as requested, and for
+    3 - apply induction as requested, and for
         heuristically chosen quantifiers and lemmas
+    4 (default) - apply induction as requested, and for lemmas
 /inductionHeuristic:<n>
     0 - least discriminating induction heuristic (that is, lean
         toward applying induction more often)
@@ -782,10 +798,10 @@ namespace Microsoft.Dafny
     to be shadowed
 /definiteAssignment:<n>
     0 - ignores definite-assignment rules; this mode is for testing only--it is
-        not sound to be used with compilation
+        not sound
     1 (default) - enforces definite-assignment rules for variables and fields
         of types that do not support auto-initialization
-    2 - enforces definite-assignment for all non-ghost non-yield-parameter
+    2 - enforces definite-assignment for all non-yield-parameter
         variables and fields, regardless of their types
     3 - like 2, but also performs checks in the compiler that no nondeterministic
         statements are used; thus, a program that passes at this level 3 is one
@@ -824,10 +840,6 @@ namespace Microsoft.Dafny
     3 - (default) Frugal use of heap parameters.
     4 - mode 3 but with alloc antecedents when ranges don't imply
         allocatedness.
-/ironDafny    Enable experimental features needed to support Ironclad/Ironfleet. Use of
-    these features may cause your code to become incompatible with future
-    releases of Dafny.
-/noIronDafny  Disable Ironclad/Ironfleet features, if enabled by default.
 /printTooltips
     Dump additional positional information (displayed as mouse-over tooltips by
     the VS plugin) to stdout as 'Info' messages.
@@ -838,10 +850,6 @@ namespace Microsoft.Dafny
     Immediate and Transitive will exit after printing.
 /disableScopes
     Treat all export sets as 'export reveal *'. i.e. don't hide function bodies
-    or type definitions during translation.
-/version      Print the Dafny version number and exit.
-");
-      base.Usage();  // also print the Boogie options
-    }
+    or type definitions during translation.";
   }
 }

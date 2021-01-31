@@ -1,3 +1,6 @@
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
+
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -108,10 +111,10 @@ namespace Microsoft.Dafny
           return new LiteralModuleDecl(((LiteralModuleDecl)d).ModuleDef, m);
         } else if (d is AliasModuleDecl) {
           var a = (AliasModuleDecl)d;
-          return new AliasModuleDecl(a.TargetQId ?? a.TargetQId.Clone(false), a.tok, m, a.Opened, a.Exports);
+          return new AliasModuleDecl(a.TargetQId?.Clone(false), a.tok, m, a.Opened, a.Exports);
         } else if (d is AbstractModuleDecl) {
           var a = (AbstractModuleDecl)d;
-          return new AbstractModuleDecl(a.QId ?? a.QId.Clone(false), a.tok, m, a.Opened, a.Exports);
+          return new AbstractModuleDecl(a.QId?.Clone(false), a.tok, m, a.Opened, a.Exports);
         } else if (d is ModuleExportDecl) {
           var a = (ModuleExportDecl)d;
           return new ModuleExportDecl(a.tok, a.Name, m, a.Exports, a.Extends, a.ProvideAll, a.RevealAll, a.IsDefault, a.IsRefining);
@@ -132,7 +135,7 @@ namespace Microsoft.Dafny
       } else {
         eqSupport = characteristics.EqualitySupport;
       }
-      return new TypeParameter.TypeParameterCharacteristics(eqSupport, characteristics.MustSupportZeroInitialization, characteristics.DisallowReferenceTypes);
+      return new TypeParameter.TypeParameterCharacteristics(eqSupport, characteristics.AutoInit, characteristics.ContainsNoReferenceTypes);
     }
 
     public DatatypeCtor CloneCtor(DatatypeCtor ct) {
@@ -274,8 +277,8 @@ namespace Microsoft.Dafny
         } else if (e is StringLiteralExpr) {
           var str = (StringLiteralExpr)e;
           return new StringLiteralExpr(Tok(e.tok), (string)e.Value, str.IsVerbatim);
-        } else if (e.Value is Basetypes.BigDec) {
-          return new LiteralExpr(Tok(e.tok), (Basetypes.BigDec)e.Value);
+        } else if (e.Value is BaseTypes.BigDec) {
+          return new LiteralExpr(Tok(e.tok), (BaseTypes.BigDec)e.Value);
         } else {
           return new LiteralExpr(Tok(e.tok), (BigInteger)e.Value);
         }
@@ -401,9 +404,6 @@ namespace Microsoft.Dafny
         var e = (LetOrFailExpr)expr;
         return new LetOrFailExpr(Tok(e.tok), e.Lhs == null ? null : CloneCasePattern(e.Lhs), CloneExpr(e.Rhs), CloneExpr(e.Body));
 
-      } else if (expr is NamedExpr) {
-        var e = (NamedExpr)expr;
-        return new NamedExpr(Tok(e.tok), e.Name, CloneExpr(e.Body));
       } else if (expr is ComprehensionExpr) {
         var e = (ComprehensionExpr)expr;
         var tk = Tok(e.tok);

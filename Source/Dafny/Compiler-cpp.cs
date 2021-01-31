@@ -1,8 +1,10 @@
 //-----------------------------------------------------------------------------
 //
-// Copyright (C) Amazon.  All Rights Reserved.
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 //
 //-----------------------------------------------------------------------------
+
 using System;
 using System.CodeDom;
 using System.Collections.Generic;
@@ -57,6 +59,8 @@ namespace Microsoft.Dafny {
     protected override string ModuleSeparator => "::";
     protected override string ClassAccessor => "->";
 
+    public override bool SupportsInMemoryCompilation => false;
+
     protected override void EmitHeader(Program program, TargetWriter wr) {
       wr.WriteLine("// Dafny program {0} compiled into Cpp", program.Name);
       wr.WriteLine("#include \"DafnyRuntime.h\"");
@@ -100,7 +104,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public override void EmitCallToMain(Method mainMethod, TargetWriter wr) {
+    public override void EmitCallToMain(Method mainMethod, string baseName, TargetWriter wr) {
       var w = wr.NewBlock("int main()");
       var tryWr = w.NewBlock("try");
       tryWr.WriteLine(string.Format("{0}::{1}::{2}();", mainMethod.EnclosingClass.EnclosingModuleDefinition.CompileName, mainMethod.EnclosingClass.CompileName, mainMethod.Name));
@@ -920,12 +924,6 @@ wmethodDecl = ws;
         bool isHandle = true;
         if (cl != null && Attributes.ContainsBool(cl.Attributes, "handle", ref isHandle) && isHandle) {
           return "ulong";
-        } else if (DafnyOptions.O.IronDafny &&
-            !(xType is ArrowType) &&
-            cl != null &&
-            cl.EnclosingModuleDefinition != null &&
-            !cl.EnclosingModuleDefinition.IsDefaultModule) {
-          s = cl.FullCompileName;
         }
         if (class_name || xType.IsTypeParameter || xType.IsDatatype) {  // Don't add pointer decorations to class names or type parameters
           return IdProtect(s) + ActualTypeArgs(xType.TypeArgs);
@@ -975,7 +973,7 @@ wmethodDecl = ws;
       return TypeName(type, wr, tok, member, false);
     }
 
-    public override string TypeInitializationValue(Type type, TextWriter wr /*?*/, Bpl.IToken tok /*?*/, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors) {
+    protected override string TypeInitializationValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors) {
       var xType = type.NormalizeExpandKeepConstraints();
       if (xType is BoolType) {
         return "false";
@@ -1018,7 +1016,7 @@ wmethodDecl = ws;
         if (udt.ResolvedClass != null && Attributes.Contains(udt.ResolvedClass.Attributes, "extern")) {
           // Assume the external definition includes a default value
           return String.Format("{1}::get_{0}_default{2}()", IdProtect(udt.Name), udt.ResolvedClass.EnclosingModuleDefinition.CompileName, InstantiateTemplate(udt.TypeArgs));
-        } else if (usePlaceboValue && !udt.ResolvedParam.Characteristics.MustSupportZeroInitialization) {
+        } else if (usePlaceboValue && !udt.ResolvedParam.Characteristics.HasCompiledValue) {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
         } else {
           return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
@@ -1418,8 +1416,8 @@ wmethodDecl = ws;
         }
       } else if (e.Value is BigInteger i) {
         EmitIntegerLiteral(i, wr);
-      } else if (e.Value is Basetypes.BigDec) {
-        throw NotSupported("EmitLiteralExpr of Basetypes.BigDec");
+      } else if (e.Value is BaseTypes.BigDec) {
+        throw NotSupported("EmitLiteralExpr of BaseTypes.BigDec");
       } else {
         Contract.Assert(false); throw new cce.UnreachableException();  // unexpected literal
       }
@@ -2191,12 +2189,16 @@ wmethodDecl = ws;
         case BinaryExpr.ResolvedOpcode.Union:
         case BinaryExpr.ResolvedOpcode.MultiSetUnion:
           callString = "Union"; break;
+        case BinaryExpr.ResolvedOpcode.MapMerge:
+          callString = "Merge"; break;
         case BinaryExpr.ResolvedOpcode.Intersection:
         case BinaryExpr.ResolvedOpcode.MultiSetIntersection:
           callString = "Intersection"; break;
         case BinaryExpr.ResolvedOpcode.SetDifference:
         case BinaryExpr.ResolvedOpcode.MultiSetDifference:
           callString = "Difference"; break;
+        case BinaryExpr.ResolvedOpcode.MapSubtraction:
+          callString = "Subtract"; break;
 
         case BinaryExpr.ResolvedOpcode.ProperPrefix:
           callString = "IsProperPrefixOf"; break;
@@ -2384,11 +2386,11 @@ wmethodDecl = ws;
 
     // ----- Target compilation and execution -------------------------------------------------------------
     private string ComputeExeName(string targetFilename) {
-      return Path.GetFileNameWithoutExtension(targetFilename);
+      return Path.GetFileNameWithoutExtension(targetFilename) + ".exe";
     }
 
     public override bool CompileTargetProgram(string dafnyProgramName, string targetProgramText, string/*?*/ callToMain, string/*?*/ targetFilename, ReadOnlyCollection<string> otherFileNames,
-      bool hasMain, bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
+      bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
       var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
       Contract.Assert(assemblyLocation != null);
       var codebase = System.IO.Path.GetDirectoryName(assemblyLocation);

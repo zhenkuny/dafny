@@ -1,8 +1,10 @@
 //-----------------------------------------------------------------------------
 //
-// Copyright (C) Amazon.  All Rights Reserved.
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 //
 //-----------------------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,9 +35,9 @@ namespace Microsoft.Dafny {
       ReadRuntimeSystem("DafnyRuntime.js", wr);
     }
 
-    public override void EmitCallToMain(Method mainMethod, TargetWriter wr) {
+    public override void EmitCallToMain(Method mainMethod, string baseName, TargetWriter wr) {
       Coverage.EmitSetup(wr);
-      wr.WriteLine("_dafny.HandleHaltExceptions({0}.{1});", mainMethod.EnclosingClass.FullCompileName, IdName(mainMethod));
+      wr.WriteLine("_dafny.HandleHaltExceptions({0}.{1});", mainMethod.EnclosingClass.FullCompileName, mainMethod.IsStatic ? IdName(mainMethod) : "Main");
       Coverage.EmitTearDown(wr);
     }
 
@@ -856,7 +858,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public override string TypeInitializationValue(Type type, TextWriter wr /*?*/, Bpl.IToken tok /*?*/, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors) {
+    protected override string TypeInitializationValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors) {
       var xType = type.NormalizeExpandKeepConstraints();
 
       if (usePlaceboValue) {
@@ -1223,8 +1225,8 @@ namespace Microsoft.Dafny {
       } else if (e.Value is BigInteger) {
         var i = (BigInteger)e.Value;
         wr.Write(IntegerLiteral(i));
-      } else if (e.Value is Basetypes.BigDec) {
-        var n = (Basetypes.BigDec)e.Value;
+      } else if (e.Value is BaseTypes.BigDec) {
+        var n = (BaseTypes.BigDec)e.Value;
         if (0 <= n.Exponent) {
           wr.Write("new _dafny.BigRational(new BigNumber(\"{0}", n.Mantissa);
           for (int i = 0; i < n.Exponent; i++) {
@@ -2033,12 +2035,16 @@ namespace Microsoft.Dafny {
         case BinaryExpr.ResolvedOpcode.Union:
         case BinaryExpr.ResolvedOpcode.MultiSetUnion:
           callString = "Union"; break;
+        case BinaryExpr.ResolvedOpcode.MapMerge:
+          callString = "Merge"; break;
         case BinaryExpr.ResolvedOpcode.Intersection:
         case BinaryExpr.ResolvedOpcode.MultiSetIntersection:
           callString = "Intersect"; break;
         case BinaryExpr.ResolvedOpcode.SetDifference:
         case BinaryExpr.ResolvedOpcode.MultiSetDifference:
           callString = "Difference"; break;
+        case BinaryExpr.ResolvedOpcode.MapSubtraction:
+          callString = "Subtract"; break;
 
         case BinaryExpr.ResolvedOpcode.ProperPrefix:
           staticCallString = $"{DafnySeqClass}.IsProperPrefixOf"; break;
@@ -2242,17 +2248,20 @@ namespace Microsoft.Dafny {
 
     // ----- Target compilation and execution -------------------------------------------------------------
 
+    public override bool TextualTargetIsExecutable => true;
+
     public override bool CompileTargetProgram(string dafnyProgramName, string targetProgramText, string/*?*/ callToMain, string/*?*/ targetFilename, ReadOnlyCollection<string> otherFileNames,
-      bool hasMain, bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
+      bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
       compilationResult = null;
-      if (!DafnyOptions.O.RunAfterCompile || callToMain == null) {
-        // compile now
-        return SendToNewNodeProcess(dafnyProgramName, targetProgramText, null, targetFilename, otherFileNames, outputWriter);
-      } else {
+      if (runAfterCompile) {
+        Contract.Assert(callToMain != null);  // this is part of the contract of CompileTargetProgram
         // Since the program is to be run soon, nothing further is done here. Any compilation errors (that is, any errors
         // in the emitted program--this should never happen if the compiler itself is correct) will be reported as 'node'
         // will run the program.
         return true;
+      } else {
+        // compile now
+        return SendToNewNodeProcess(dafnyProgramName, targetProgramText, null, targetFilename, otherFileNames, outputWriter);
       }
     }
 
@@ -2266,8 +2275,7 @@ namespace Microsoft.Dafny {
       TextWriter outputWriter) {
       Contract.Requires(targetFilename != null || otherFileNames.Count == 0);
 
-      var args = targetFilename != null && otherFileNames.Count == 0 ? targetFilename : "";
-      var psi = new ProcessStartInfo("node", args) {
+      var psi = new ProcessStartInfo("node", "") {
         CreateNoWindow = true,
         UseShellExecute = false,
         RedirectStandardInput = true,
@@ -2277,17 +2285,15 @@ namespace Microsoft.Dafny {
 
       try {
         using (var nodeProcess = Process.Start(psi)) {
-          if (args == "") {
-            foreach (var filename in otherFileNames) {
-              WriteFromFile(filename, nodeProcess.StandardInput);
-            }
-            nodeProcess.StandardInput.Write(targetProgramText);
-            if (callToMain != null) {
-              nodeProcess.StandardInput.Write(callToMain);
-            }
-            nodeProcess.StandardInput.Flush();
-            nodeProcess.StandardInput.Close();
+          foreach (var filename in otherFileNames) {
+            WriteFromFile(filename, nodeProcess.StandardInput);
           }
+          nodeProcess.StandardInput.Write(targetProgramText);
+          if (callToMain != null && DafnyOptions.O.RunAfterCompile) {
+            nodeProcess.StandardInput.Write(callToMain);
+          }
+          nodeProcess.StandardInput.Flush();
+          nodeProcess.StandardInput.Close();
           nodeProcess.WaitForExit();
           return nodeProcess.ExitCode == 0;
         }

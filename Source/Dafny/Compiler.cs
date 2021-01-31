@@ -1,6 +1,8 @@
 //-----------------------------------------------------------------------------
 //
 // Copyright (C) Microsoft Corporation.  All Rights Reserved.
+// Copyright by the contributors to the Dafny Project
+// SPDX-License-Identifier: MIT
 //
 //-----------------------------------------------------------------------------
 using System;
@@ -16,7 +18,7 @@ using System.Diagnostics.SymbolStore;
 using System.Net.Security;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
-using Microsoft.Basetypes;
+using Microsoft.BaseTypes;
 
 
 namespace Microsoft.Dafny {
@@ -25,6 +27,8 @@ namespace Microsoft.Dafny {
       Reporter = reporter;
       Coverage = new CoverageInstrumenter(this);
     }
+
+    public static string DefaultNameMain = "Main";
 
     public abstract string TargetLanguage { get; }
     protected virtual string ModuleSeparator { get => "."; }
@@ -82,7 +86,7 @@ namespace Microsoft.Dafny {
     /// Emits a call to "mainMethod" as the program's entry point, if such an explicit call is
     /// required in the target language.
     /// </summary>
-    public virtual void EmitCallToMain(Method mainMethod, TargetWriter wr) { }
+    public virtual void EmitCallToMain(Method mainMethod, string baseName, TargetWriter wr) { }
     /// <summary>
     /// Creates a static Main method. The caller will fill the body of this static Main with a
     /// call to the instance Main method in the enclosing class.
@@ -197,7 +201,7 @@ namespace Microsoft.Dafny {
 
     protected virtual bool NeedsTypeDescriptor(TypeParameter tp) {
       Contract.Requires(tp != null);
-      return tp.Characteristics.MustSupportZeroInitialization;
+      return tp.Characteristics.HasCompiledValue;
     }
 
     protected abstract string TypeDescriptor(Type type, TextWriter wr, Bpl.IToken tok);
@@ -234,7 +238,16 @@ namespace Microsoft.Dafny {
     protected virtual string TypeArgumentName(Type type, TextWriter wr, Bpl.IToken tok) {
       return TypeName(type, wr, tok);
     }
-    public abstract string TypeInitializationValue(Type type, TextWriter wr /*?*/, Bpl.IToken tok /*?*/, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors);
+    /// <summary>
+    /// This method returns the target representation of one possible value of the type.
+    /// Requires: usePlaceboValue || type.HasCompilableValue
+    ///
+    ///   usePlaceboValue - If "true", the default value produced is one that the target language accepts as a value
+    ///                  of the type, but which may not correspond to a Dafny value. This option is used when it is known
+    ///                  that the Dafny program will not use the value (for example, when a field is automatically initialized
+    ///                  but the Dafny program will soon assign a new value).
+    /// </summary>
+    protected abstract string TypeInitializationValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors);
 
     protected string TypeName_UDT(string fullCompileName, UserDefinedType udt, TextWriter wr, Bpl.IToken tok) {
       Contract.Requires(fullCompileName != null);
@@ -1154,7 +1167,7 @@ namespace Microsoft.Dafny {
             var nt = (NewtypeDecl)d;
             var w = DeclareNewtype(nt, wr);
             v.Visit(nt);
-            CompileClassMembers(nt, w);
+            CompileClassMembers(program, nt, w);
           } else if (d is DatatypeDecl) {
             var dt = (DatatypeDecl)d;
             CheckForCapitalizationConflicts(dt.Ctors);
@@ -1163,7 +1176,7 @@ namespace Microsoft.Dafny {
             }
             var w = DeclareDatatype(dt, wr);
             if (w != null) {
-              CompileClassMembers(dt, w);
+              CompileClassMembers(program, dt, w);
             }
           } else if (d is IteratorDecl) {
             var iter = (IteratorDecl)d;
@@ -1181,7 +1194,7 @@ namespace Microsoft.Dafny {
           } else if (d is TraitDecl trait) {
             // writing the trait
             var w = CreateTrait(trait.CompileName, trait.IsExtern(out _, out _), trait.TypeArgs, trait.ParentTypeInformation.UniqueParentTraits(), trait.tok, wr);
-            CompileClassMembers(trait, w);
+            CompileClassMembers(program, trait, w);
           } else if (d is ClassDecl cl) {
             var include = true;
             if (cl.IsDefaultClass) {
@@ -1199,12 +1212,12 @@ namespace Microsoft.Dafny {
             if (include) {
               var cw = CreateClass(IdProtect(d.EnclosingModuleDefinition.CompileName), IdName(cl), classIsExtern, cl.FullName,
                 cl.TypeArgs, cl, cl.ParentTypeInformation.UniqueParentTraits(), cl.tok, wr);
-              CompileClassMembers(cl, cw);
+              CompileClassMembers(program, cl, cw);
               cw.Finish();
             } else {
               // still check that given members satisfy compilation rules
               var abyss = new NullClassWriter();
-              CompileClassMembers(cl, abyss);
+              CompileClassMembers(program, cl, abyss);
             }
           } else if (d is ValuetypeDecl) {
             // nop
@@ -1330,25 +1343,57 @@ namespace Microsoft.Dafny {
     }
 
     public bool HasMain(Program program, out Method mainMethod) {
+      Contract.Ensures(Contract.Result<bool>() == (Contract.ValueAtReturn(out mainMethod) != null));
       mainMethod = null;
       bool hasMain = false;
+      string name = DafnyOptions.O.MainMethod;
+      if (name != null && name == "-") return false;
+      if (name != null && name != "") {
+        foreach (var module in program.CompileModules) {
+          if (module.IsAbstract) {
+            // the purpose of an abstract module is to skip compilation
+            continue;
+          }
+          foreach (var decl in module.TopLevelDecls) {
+            var c = decl as TopLevelDeclWithMembers;
+            if (c != null) {
+              foreach (MemberDecl member in c.Members) {
+                var m = member as Method;
+                if (m == null) continue;
+                if (member.FullDafnyName == name) {
+                  mainMethod = m;
+                  if (!IsPermittedAsMain(mainMethod, out string reason)) {
+                    Error(mainMethod.tok, "The method \"{0}\" is not permitted as a main method ({1}).", null, name, reason);
+                    mainMethod = null;
+                    return false;
+                  } else {
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        }
+        Error(program.DefaultModule.tok, "Could not find the method named by the -Main option: {0}", null, name);
+      }
       foreach (var module in program.CompileModules) {
         if (module.IsAbstract) {
           // the purpose of an abstract module is to skip compilation
           continue;
         }
         foreach (var decl in module.TopLevelDecls) {
-          var c = decl as ClassDecl;
+          var c = decl as TopLevelDeclWithMembers;
           if (c != null) {
             foreach (var member in c.Members) {
               var m = member as Method;
-              if (m != null && IsMain(m)) {
+              if (m != null && Attributes.Contains(m.Attributes, "main")) {
                 if (mainMethod == null) {
                   mainMethod = m;
                   hasMain = true;
                 } else {
                   // more than one main in the program
-                  Error(m.tok, "More than one method is declared as \"main\". First declaration appeared at {0}.", null, ErrorReporter.TokenToString(mainMethod.tok));
+                  Error(m.tok, "More than one method is marked \"{{:main}}\". First declaration appeared at {0}.", null,
+                    ErrorReporter.TokenToString(mainMethod.tok));
                   hasMain = false;
                 }
               }
@@ -1356,14 +1401,62 @@ namespace Microsoft.Dafny {
           }
         }
       }
-      if (!hasMain) {
+      if (hasMain) {
+        if (!IsPermittedAsMain(mainMethod, out string reason)) {
+          Error(mainMethod.tok, "This method marked \"{{:main}}\" is not permitted as a main method ({0}).", null, reason);
+          mainMethod = null;
+          return false;
+        } else {
+          return true;
+        }
+      }
+      if (mainMethod != null) {
+        mainMethod = null;
+        return false;
+      }
+
+      mainMethod = null;
+      foreach (var module in program.CompileModules) {
+        if (module.IsAbstract) {
+          // the purpose of an abstract module is to skip compilation
+          continue;
+        }
+        foreach (var decl in module.TopLevelDecls) {
+          var c = decl as TopLevelDeclWithMembers;
+          if (c != null) {
+            foreach (var member in c.Members) {
+              var m = member as Method;
+              if (m != null && m.Name == DefaultNameMain) {
+                if (mainMethod == null) {
+                  mainMethod = m;
+                  hasMain = true;
+                } else {
+                  // more than one main in the program
+                  Error(m.tok, "More than one method is declared as \"{0}\". First declaration appeared at {1}.", null,
+                    DefaultNameMain, ErrorReporter.TokenToString(mainMethod.tok));
+                  hasMain = false;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (hasMain) {
+        if (!IsPermittedAsMain(mainMethod, out string reason)) {
+          Error(mainMethod.tok, "This method \"Main\" is not permitted as a main method ({0}).", null, reason);
+          return false;
+        } else {
+          return true;
+        }
+      } else {
         // make sure "mainMethod" returns as null
         mainMethod = null;
+        return false;
       }
-      return hasMain;
     }
 
-    public static bool IsMain(Method m) {
+    public static bool IsPermittedAsMain(Method m, out String reason) {
       Contract.Requires(m.EnclosingClass is TopLevelDeclWithMembers);
       // In order to be a legal Main() method, the following must be true:
       //    The method is not a ghost method
@@ -1379,18 +1472,45 @@ namespace Microsoft.Dafny {
       // Note, in the case where the method is annotated with {:main}, the method is allowed to have preconditions and modifies clauses.
       // This lets the programmer add some explicit assumptions about the outside world, modeled, for example, via ghost parameters.
       var cl = (TopLevelDeclWithMembers)m.EnclosingClass;
-      if (!m.IsGhost && m.TypeArgs.Count == 0 && cl.TypeArgs.Count == 0) {
-        if (m.Ins.TrueForAll(f => f.IsGhost) && m.Outs.TrueForAll(f => f.IsGhost)) {
-          if (m.IsStatic || (cl is ClassDecl klass && !(klass is TraitDecl) && !klass.HasConstructor)) {
-            if (m.Name == "Main" && m.Req.Count == 0 && m.Mod.Expressions.Count == 0) {
-              return true;
-            } else if (Attributes.Contains(m.Attributes, "main")) {
-              return true;
-            }
-          }
-        }
+      if (m.IsGhost) {
+        reason = "the method is ghost";
+        return false;
       }
-      return false;
+      if (m.TypeArgs.Count != 0) {
+        reason = "the method has type parameters";
+        return false;
+      }
+      if (cl.TypeArgs.Count != 0) {
+        reason = "the enclosing class has type parameters";
+        return false;
+      }
+      if (!m.IsStatic && !cl.Members.TrueForAll(f => !(f is Constructor))) {
+        reason = "the method is not static and the enclosing class has constructors";
+        return false;
+      }
+      if (!m.Ins.TrueForAll(f => f.IsGhost)) {
+        reason = "the method has non-ghost parameters";
+        return false;
+      }
+      if (!m.Outs.TrueForAll(f => f.IsGhost)) {
+        reason = "the method has non-ghost out parameters";
+        return false;
+      }
+      if (Attributes.Contains(m.Attributes, "main")) {
+        reason = "";
+        return true;
+      }
+      if (m.Req.Count != 0)
+      {
+        reason = "the method has requires clauses";
+        return false;
+      }
+      if (m.Mod.Expressions.Count != 0) {
+        reason = "the method has modifies clauses";
+        return false;
+      }
+      reason = "";
+      return true;
     }
 
     void OrderedBySCC(List<MemberDecl> decls, TopLevelDeclWithMembers c) {
@@ -1423,7 +1543,7 @@ namespace Microsoft.Dafny {
       return false;
     }
 
-    void CompileClassMembers(TopLevelDeclWithMembers c, IClassWriter classWriter) {
+    void CompileClassMembers(Program program, TopLevelDeclWithMembers c, IClassWriter classWriter) {
       Contract.Requires(c != null);
       Contract.Requires(classWriter != null);
       Contract.Requires(thisContext == null);
@@ -1638,10 +1758,10 @@ namespace Microsoft.Dafny {
               RedeclareInheritedMember(m, classWriter);
             }
             if (m.Body != null) {
-              CompileMethod(m, classWriter, true);
+              CompileMethod(program, m, classWriter, true);
             }
           } else {
-            CompileMethod(m, classWriter, false);
+            CompileMethod(program, m, classWriter, false);
           }
           v.Visit(m);
         } else {
@@ -2049,7 +2169,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    private void CompileMethod(Method m, IClassWriter cw, bool lookasideBody) {
+    private void CompileMethod(Program program, Method m, IClassWriter cw, bool lookasideBody) {
       Contract.Requires(cw != null);
       Contract.Requires(m != null);
       Contract.Requires(m.Body != null || Attributes.Contains(m.Attributes, "dllimport") || (IncludeExternMembers && Attributes.Contains(m.Attributes, "extern")));
@@ -2083,8 +2203,7 @@ namespace Microsoft.Dafny {
         }
       }
 
-      // allow the Main method to be an instance method
-      if (IsMain(m) && (!m.IsStatic || m.CompileName != "Main")) {
+      if (m == program.MainMethod && IssueCreateStaticMain(m)) {
         w = CreateStaticMain(cw);
         if (!m.IsStatic) {
           var c = m.EnclosingClass;
@@ -2098,6 +2217,11 @@ namespace Microsoft.Dafny {
         }
       }
     }
+
+    protected virtual bool IssueCreateStaticMain(Method m) {
+      return !m.IsStatic;
+    }
+
 
     void TrCasePatternOpt<VT>(CasePattern<VT> pat, Expression rhs, TargetWriter wr, bool inLetExprBody) where VT: IVariable {
       TrCasePatternOpt(pat, rhs, null, rhs.Type, rhs.tok, wr, inLetExprBody);
@@ -2147,6 +2271,8 @@ namespace Microsoft.Dafny {
           DeclareLocalVar(tmp_name, rhsType, rhsTok, usage, false, rhs_string, wr);
         }
 
+        var dtv = (DatatypeValue)pat.Expr;
+        var substMap = Resolver.TypeSubstitutionMap(ctor.EnclosingDatatype.TypeArgs, dtv.InferredTypeArgs);
         var k = 0;  // number of non-ghost formals processed
         for (int i = 0; i < pat.Arguments.Count; i++) {
           var arg = pat.Arguments[i];
@@ -2156,9 +2282,8 @@ namespace Microsoft.Dafny {
             Contract.Assert(Contract.ForAll(arg.Vars, bv => bv.IsGhost));
           } else {
             var sw = new TargetWriter(wr.IndentLevel, true);
-            EmitDestructor(tmp_name, formal, k, ctor, ((DatatypeValue)pat.Expr).InferredTypeArgs, arg.Expr.Type, sw);
-            Type targetType = formal.Type;
-            if (targetType.IsTypeParameter) targetType = ((DatatypeValue) pat.Expr).InferredTypeArgs[0];
+            EmitDestructor(tmp_name, formal, k, ctor, dtv.InferredTypeArgs, arg.Expr.Type, sw);
+            Type targetType = Resolver.SubstType(formal.Type, substMap);
             TrCasePatternOpt(arg, null, sw.ToString(), targetType, pat.Expr.tok, wr, inLetExprBody);
             k++;
           }
@@ -2418,251 +2543,28 @@ namespace Microsoft.Dafny {
       return Util.Comma(types, ty => TypeName(ty, wr, tok));
     }
 
-    /// <summary>
-    /// Returns "true" if a value of type "type" can be initialized with the all-zero bit pattern.
-    /// </summary>
-    public static bool HasSimpleZeroInitializer(Type type) {
-      Contract.Requires(type != null);
-
-      bool hs, hz, ik;
-      string dv;
-      TypeInitialization(type, null, null, null, Usage.Ordinary, out hs, out hz, out ik, out dv);
-      return hs;
-    }
-
-    /// <summary>
-    /// Returns "true" if a value of type "type" can be initialized with the all-zero bit pattern or by calling the type's _DafnyDefaultValue method.
-    /// </summary>
-    public static bool HasZeroInitializer(Type type) {
-      Contract.Requires(type != null);
-
-      bool hs, hz, ik;
-      string dv;
-      TypeInitialization(type, null, null, null, Usage.Ordinary, out hs, out hz, out ik, out dv);
-      return hz;
-    }
-
-    /// <summary>
-    /// Returns "true" if "type" denotes a type for which a specific compiled value (non-ghost witness) is known.
-    /// </summary>
-    public static bool InitializerIsKnown(Type type) {
-      Contract.Requires(type != null);
-
-      bool hs, hz, ik;
-      string dv;
-      TypeInitialization(type, null, null, null, Usage.Ordinary, out hs, out hz, out ik, out dv);
-      return ik;
-    }
-
     protected string PlaceboValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool constructTypeParameterDefaultsFromTypeDescriptors = false) {
       Contract.Requires(type != null);
       Contract.Requires(wr != null);
       Contract.Requires(tok != null);
       Contract.Ensures(Contract.Result<string>() != null);
 
-      bool usePlaceboValue = !InitializerIsKnown(type);
-      bool hs, hz, ik;
-      string dv;
-      TypeInitialization(type, this, wr, tok, usage, out hs, out hz, out ik, out dv, usePlaceboValue, constructTypeParameterDefaultsFromTypeDescriptors);
-      return dv;
+      type = type.NormalizeExpandKeepConstraints();
+      Contract.Assert(type is NonProxyType);  // this should never happen, since all types should have been successfully resolved
+      bool usePlaceboValue = !type.HasCompilableValue;
+      return TypeInitializationValue(type, wr, tok, usage, usePlaceboValue, constructTypeParameterDefaultsFromTypeDescriptors);
     }
 
     protected string DefaultValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool constructTypeParameterDefaultsFromTypeDescriptors = false) {
       Contract.Requires(type != null);
+      Contract.Requires(type.HasCompilableValue);
       Contract.Requires(wr != null);
       Contract.Requires(tok != null);
       Contract.Ensures(Contract.Result<string>() != null);
 
-      bool hs, hz, ik;
-      string dv;
-      TypeInitialization(type, this, wr, tok, usage, out hs, out hz, out ik, out dv, false, constructTypeParameterDefaultsFromTypeDescriptors);
-      return dv;
-    }
-
-    /// <summary>
-    /// This method returns three things about the given type. Since the three things are related,
-    /// it makes sense to compute them side by side.
-    ///   hasZeroInitializer - "true" if a value of type "type" can be initialized with the all-zero bit pattern or
-    ///                        by calling the type's _DafnyDefaultValue method.
-    ///   hasSimpleZeroInitializer - "true" if a value of type "type" can be initialized with the all-zero bit pattern.
-    ///   initializerIsKnown - "true" if "type" denotes a type for which a specific value (witness) is known.
-    ///   defaultValue - If "compiler" is non-null, "defaultValue" is the C# representation of one possible value of the
-    ///                  type (not necessarily the same value as the zero initializer, if any, may give).
-    ///                  If "compiler" is null, then "defaultValue" can return as anything.
-    ///   usePlaceboValue - If "true", the default value produced is one that the target language accepts as a value
-    ///                  of the type, but which may not correspond to a Dafny value. This option is used when it is known
-    ///                  that the Dafny program will not use the value (for example, when a field is automatically initialized
-    ///                  but the Dafny program will soon assign a new value)
-    /// </summary>
-    static void TypeInitialization(Type type, Compiler/*?*/ compiler, TextWriter/*?*/ wr, Bpl.IToken/*?*/ tok, Usage usage,
-        out bool hasSimpleZeroInitializer, out bool hasZeroInitializer, out bool initializerIsKnown, out string defaultValue,
-        bool usePlaceboValue = false, bool constructTypeParameterDefaultsFromTypeDescriptors = false) {
-      Contract.Requires(type != null);
-      Contract.Requires(compiler == null || (wr != null && tok != null));
-      Contract.Ensures(!Contract.ValueAtReturn(out hasSimpleZeroInitializer) || Contract.ValueAtReturn(out hasZeroInitializer));  // hasSimpleZeroInitializer ==> hasZeroInitializer
-      Contract.Ensures(!Contract.ValueAtReturn(out hasZeroInitializer) || Contract.ValueAtReturn(out initializerIsKnown));  // hasZeroInitializer ==> initializerIsKnown
-      Contract.Ensures(compiler == null || Contract.ValueAtReturn(out defaultValue) != null);
-
-      var xType = type.NormalizeExpandKeepConstraints();
-      if (xType is TypeProxy) {
-        // unresolved proxy; just treat as bool, since no particular type information is apparently needed for this type
-        xType = new BoolType();
-      }
-
-      defaultValue = compiler?.TypeInitializationValue(xType, wr, tok, usage, usePlaceboValue, constructTypeParameterDefaultsFromTypeDescriptors);
-      if (xType is BoolType) {
-        hasSimpleZeroInitializer = true;
-        hasZeroInitializer = true;
-        initializerIsKnown = true;
-        return;
-      } else if (xType is CharType) {
-        hasSimpleZeroInitializer = false;
-        hasZeroInitializer = true;
-        initializerIsKnown = true;
-        return;
-      } else if (xType is IntType || xType is BigOrdinalType) {
-        hasSimpleZeroInitializer = true;
-        hasZeroInitializer = true;
-        initializerIsKnown = true;
-        return;
-      } else if (xType is RealType) {
-        hasSimpleZeroInitializer = true;
-        hasZeroInitializer = true;
-        initializerIsKnown = true;
-        return;
-      } else if (xType is BitvectorType) {
-        var t = (BitvectorType)xType;
-        hasSimpleZeroInitializer = true;
-        hasZeroInitializer = true;
-        initializerIsKnown = true;
-        return;
-      } else if (xType is CollectionType) {
-        hasSimpleZeroInitializer = false;
-        hasZeroInitializer = true;
-        initializerIsKnown = true;
-        return;
-      }
-
-      var udt = (UserDefinedType)xType;
-      if (udt.ResolvedParam != null) {
-        hasSimpleZeroInitializer = false;
-        hasZeroInitializer = udt.ResolvedParam.Characteristics.MustSupportZeroInitialization;
-        initializerIsKnown = hasZeroInitializer;
-        // If the module is complete, we expect "udt.ResolvedClass == null" at this time. However, it could be that
-        // the compiler has already generated an error about this type not being compilable, in which case
-        // "udt.ResolvedClass" might be non-null here.
-        return;
-      }
-      var cl = udt.ResolvedClass;
-      Contract.Assert(cl != null);
-      if (cl is OpaqueTypeDecl) {
-        hasSimpleZeroInitializer = false;
-        hasZeroInitializer = ((OpaqueTypeDecl)cl).TheType.Characteristics.MustSupportZeroInitialization;
-        initializerIsKnown = hasZeroInitializer;
-        // The compiler should never need to know a "defaultValue" for an opaque type, but this routine may
-        // be asked from outside the compiler about one of the other output booleans.
-        Contract.Assume(compiler == null);
-        return;
-      } else if (cl is NewtypeDecl) {
-        var td = (NewtypeDecl)cl;
-        if (td.Witness != null) {
-          hasSimpleZeroInitializer = false;
-          hasZeroInitializer = false;
-          initializerIsKnown = td.WitnessKind != SubsetTypeDecl.WKind.Ghost;
-          return;
-        } else if (td.NativeType != null) {
-          bool ik;
-          string dv;
-          TypeInitialization(td.BaseType, null, null, null, Usage.Ordinary, out hasSimpleZeroInitializer, out hasZeroInitializer, out ik, out dv);
-          initializerIsKnown = true;
-          return;
-        } else {
-          Contract.Assert(td.WitnessKind != SubsetTypeDecl.WKind.Special);  // this value is never used with NewtypeDecl
-          string dv;
-          TypeInitialization(td.BaseType, compiler, wr, udt.tok, Usage.Ordinary, out hasSimpleZeroInitializer, out hasZeroInitializer, out initializerIsKnown, out dv);
-          Contract.Assert(compiler == null || string.Equals(dv, defaultValue));
-          return;
-        }
-      } else if (cl is SubsetTypeDecl) {
-        var td = (SubsetTypeDecl)cl;
-        if (td.Witness != null) {
-          hasSimpleZeroInitializer = false;
-          hasZeroInitializer = false;
-          initializerIsKnown = td.WitnessKind != SubsetTypeDecl.WKind.Ghost;
-          return;
-        } else if (td.WitnessKind == SubsetTypeDecl.WKind.Special) {
-          // WKind.Special is only used with -->, ->, and non-null types:
-          Contract.Assert(ArrowType.IsPartialArrowTypeName(td.Name) || ArrowType.IsTotalArrowTypeName(td.Name) || td is NonNullTypeDecl);
-          if (ArrowType.IsPartialArrowTypeName(td.Name)) {
-            // partial arrow
-            hasSimpleZeroInitializer = true;
-            hasZeroInitializer = true;
-            initializerIsKnown = true;
-            return;
-          } else if (ArrowType.IsTotalArrowTypeName(td.Name)) {
-            // total arrow
-            Contract.Assert(udt.TypeArgs.Count == td.TypeArgs.Count);
-            Contract.Assert(1 <= udt.TypeArgs.Count);  // the return type is one of the type arguments
-            hasSimpleZeroInitializer = false;
-            hasZeroInitializer = false;
-            bool hs, hz;
-            string dv;
-            TypeInitialization(udt.TypeArgs.Last(), compiler, wr, udt.tok, Usage.Ordinary, out hs, out hz, out initializerIsKnown, out dv);
-            return;
-          } else if (((NonNullTypeDecl)td).Class is ArrayClassDecl) {
-            // non-null array type; we know how to initialize them
-            hasSimpleZeroInitializer = false;
-            hasZeroInitializer = false;
-            initializerIsKnown = true;
-            Contract.Assert(udt.TypeArgs.Count == 1);
-          } else {
-            // non-null (non-array) type
-            hasSimpleZeroInitializer = false;
-            hasZeroInitializer = false;
-            initializerIsKnown = false;  // (this could be improved in some cases)
-            return;
-          }
-        } else {
-          string dv;
-          TypeInitialization(td.RhsWithArgument(udt.TypeArgs), compiler, wr, udt.tok, Usage.Ordinary, out hasSimpleZeroInitializer, out hasZeroInitializer, out initializerIsKnown, out dv);
-          Contract.Assert(compiler == null || string.Equals(dv, defaultValue));
-          return;
-        }
-      } else if (cl is TypeSynonymDeclBase) {
-        hasSimpleZeroInitializer = false;
-        hasZeroInitializer = ((TypeSynonymDeclBase)cl).Characteristics.MustSupportZeroInitialization;
-        initializerIsKnown = hasZeroInitializer;
-        // The compiler should never need to know a "defaultValue" for a(n internal) type synonym, but this routine may
-        // be asked from outside the compiler about one of the other output booleans.
-        Contract.Assume(compiler == null);
-        return;
-      } else if (cl is ClassDecl) {
-        hasSimpleZeroInitializer = true;
-        hasZeroInitializer = true;
-        initializerIsKnown = true;
-        return;
-      } else if (cl is DatatypeDecl) {
-        // --- hasZeroInitializer ---
-        hasSimpleZeroInitializer = false;  // TODO: improve this one in special cases where one of the datatype values can be represented by "null"
-        // --- initializerIsKnown ---
-        if (cl is CoDatatypeDecl) {
-          hasZeroInitializer = false;  // TODO: improve this one by laying down a _DafnyDefaultValue method when it's possible
-          // The constructors of a codatatype may use type arguments that are not "smaller" than "type",
-          // in which case recursing on the types of the constructor's formals may lead to an infinite loop
-          // here.  If this were important, the code here could be changed to detect such loop, which would
-          // let "initializerIsKnown" be computed more precisely.  For now, set it to "true" if the type
-          // has a zero initializer.
-          initializerIsKnown = hasZeroInitializer;
-        } else {
-          var groundingCtor = ((IndDatatypeDecl)cl).GroundingCtor;
-          var subst = Resolver.TypeSubstitutionMap(cl.TypeArgs, udt.TypeArgs);
-          hasZeroInitializer = groundingCtor.Formals.TrueForAll(formal => formal.IsGhost || HasZeroInitializer(Resolver.SubstType(formal.Type, subst)));
-          initializerIsKnown = groundingCtor.Formals.TrueForAll(formal => formal.IsGhost || InitializerIsKnown(Resolver.SubstType(formal.Type, subst)));
-        }
-        return;
-      } else {
-        Contract.Assert(false); throw new cce.UnreachableException();  // unexpected type
-      }
+      type = type.NormalizeExpandKeepConstraints();
+      Contract.Assert(type is NonProxyType);  // this should never happen, since all types should have been successfully resolved
+      return TypeInitializationValue(type, wr, tok, usage, false, constructTypeParameterDefaultsFromTypeDescriptors);
     }
 
     // ----- Stmt ---------------------------------------------------------------------------------
@@ -4120,7 +4022,7 @@ namespace Microsoft.Dafny {
       } else {
         // If an initializer is not known, the only way the verifier would have allowed this allocation
         // is if the requested size is 0.
-        EmitNewArray(tp.EType, tp.Tok, tp.ArrayDimensions, InitializerIsKnown(tp.EType), wr);
+        EmitNewArray(tp.EType, tp.Tok, tp.ArrayDimensions, tp.EType.HasCompilableValue, wr);
       }
     }
 
@@ -4734,8 +4636,6 @@ namespace Microsoft.Dafny {
         var e = (ConcreteSyntaxExpression)expr;
         TrExpr(e.ResolvedExpression, wr, inLetExprBody);
 
-      } else if (expr is NamedExpr) {
-        TrExpr(((NamedExpr)expr).Body, wr, inLetExprBody);
       } else {
         Contract.Assert(false); throw new cce.UnreachableException();  // unexpected expression
       }
@@ -5017,7 +4917,8 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public virtual bool SupportsInMemoryCompilation { get => true; }
+    public virtual bool SupportsInMemoryCompilation => true;
+    public virtual bool TextualTargetIsExecutable => false;
 
     /// <summary>
     /// Compile the target program known as "dafnyProgramName".
@@ -5026,7 +4927,7 @@ namespace Microsoft.Dafny {
     /// file. "targetFileName" must be non-null if "otherFileNames" is nonempty.
     /// "otherFileNames" is a list of other files to include in the compilation.
     ///
-    /// "hasMain" says whether or not the program contains a "Main()" program.
+    /// When "callToMain" is non-null, the program contains a "Main()" program.
     ///
     /// Upon successful compilation, "runAfterCompile" says whether or not to execute the program.
     ///
@@ -5036,13 +4937,13 @@ namespace Microsoft.Dafny {
     /// the instance's "RunTargetProgram" method.
     /// </summary>
     public virtual bool CompileTargetProgram(string dafnyProgramName, string targetProgramText, string/*?*/ callToMain, string/*?*/ targetFilename, ReadOnlyCollection<string> otherFileNames,
-      bool hasMain, bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
+      bool runAfterCompile, TextWriter outputWriter, out object compilationResult) {
       Contract.Requires(dafnyProgramName != null);
       Contract.Requires(targetProgramText != null);
       Contract.Requires(otherFileNames != null);
       Contract.Requires(otherFileNames.Count == 0 || targetFilename != null);
       Contract.Requires(this.SupportsInMemoryCompilation || targetFilename != null);
-      Contract.Requires(!runAfterCompile || hasMain);
+      Contract.Requires(!runAfterCompile || callToMain != null);
       Contract.Requires(outputWriter != null);
 
       compilationResult = null;
