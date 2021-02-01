@@ -4595,9 +4595,6 @@ MethodFunctionName<out IToken id>
 TypeNameOrCtorSuffix<out IToken id>
 = (. id = Token.NoToken; .)
   IdentOrDigits<out id>
-  ( Ident<out id>
-  | digits         (. id = t; .)
-  )
   .
 
 /*------------------------------------------------------------------------*/
