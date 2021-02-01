@@ -2037,7 +2037,20 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
          gt = new List<Type>{ ty };
          usages = new List<Usage>{ Usage.Ordinary };
        }
-       ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
+       var arity = gt.Count;
+       theBuiltIns.CreateArrowTypeDecl(arity, usage, usages);
+       if (arrowKind == 0) {
+         ty = new ArrowType(tok, gt, t2, usage, usages);
+       } else {
+         gt.Add(t2);
+         if (arrowKind == 1) {
+            // ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
+           ty = new UserDefinedType(tok, ArrowType.PartialArrowTypeName(arity), gt);
+         } else {
+            // ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
+           ty = new UserDefinedType(tok, ArrowType.TotalArrowTypeName(arity), gt);
+         }
+       }
     .)
   ]
   .
@@ -2048,7 +2061,8 @@ TupleType<.out Type ty, out IToken tok, out List<Type> tupleArgTypes.> =
   "("                             (. tok = t;
                                      ty = null; // To keep compiler happy
                                      tupleArgTypes = new List<Type>();
-                                     usages = new List<Usage>();
+                                     var usage = Usage.Ordinary;
+                                     var usages = new List<Usage>();
                                   .)
   [
     [ "linear"                    (. usage = Usage.Linear; .)
@@ -2405,7 +2419,7 @@ OneStmt<out Statement/*!*/ s>
   SYNC
   ( BlockStmt<out bs, out bodyStart, out bodyEnd>  (. s = bs; .)
   | UpdateStmt<out s>     // includes UpdateFailure
-  | IF(IsMatch()) NestedMatchStmt<out s>
+/*  | IF(IsMatch()) NestedMatchStmt<out s> */
   | VarDeclStatement<out s>
   | ReturnStmt<out s>
   | IfStmt<out s>
@@ -3927,7 +3941,7 @@ EndlessExpression<out Expression e, bool allowLemma, bool allowLambda, bool allo
      e = dummyExpr;
   .)
   ( IfExpression<out e, allowLemma, allowLambda, allowBitwiseOps>
-  | IF(IsMatch()) NestedMatchExpression<out e, allowSemi, allowLambda, allowBitwiseOps>
+/*  | IF(IsMatch()) NestedMatchExpression<out e, allowSemi, allowLambda, allowBitwiseOps> */
   | MatchExpression<out e, allowLemma, allowLambda, allowBitwiseOps>
   | QuantifierExpression<out e, allowLemma, allowLambda>  /* types are such that we can allow bitwise operations in the quantifier body */
   | SetComprehensionExpr<out e, allowLemma, allowLambda, allowBitwiseOps>
@@ -4529,11 +4543,18 @@ DotSuffix<out IToken x, out IToken y>
 /*------------------------------------------------------------------------*/
 // Identifier, disallowing leading underscores
 NoUSIdent<out IToken/*!*/ x>
-= (. Contract.Ensures(Contract.ValueAtReturn(out x) != null); .)
-  Ident<out x>     (. if (x.val.StartsWith("_")) {
-                        SemErr("cannot declare identifier beginning with underscore");
-                      }
-                   .)
+= (. Contract.Ensures(Contract.ValueAtReturn(out x) != null);
+     x = t;
+  .)
+  ( Ident<out x>     (.
+                        if (x.val.StartsWith("_")) {
+                          SemErr("cannot declare identifier beginning with underscore");
+                        }
+                     .)
+  | IF(IsOperatorSubscript()) operator '(' '[' ']' ')' (. x.val = "operator$subscript"; .)
+  | IF(IsOperatorCardinality()) operator '(' '|' '|' ')' (. x.val = "operator$cardinality"; .)
+  | operator '(' "in" ')' (. x.val = "operator$in"; .)
+  )
   .
 
 /*------------------------------------------------------------------------*/
@@ -4576,20 +4597,6 @@ TypeNameOrCtorSuffix<out IToken id>
   IdentOrDigits<out id>
   ( Ident<out id>
   | digits         (. id = t; .)
-  )
-  .
-
-// Identifier, disallowing leading underscores
-NoUSIdent<out IToken/*!*/ x>
-= (. Contract.Ensures(Contract.ValueAtReturn(out x) != null); x=null; .)
-  ( Ident<out x>  (. x = t;
-                      if (x.val.StartsWith("_")) {
-                        SemErr("cannot declare identifier beginning with underscore");
-                      }
-                   .)
-  | IF(IsOperatorSubscript()) operator '(' '[' ']' ')' (. x = t; x.val = "operator$subscript"; .)
-  | IF(IsOperatorCardinality()) operator '(' '|' '|' ')' (. x = t; x.val = "operator$cardinality"; .)
-  | operator '(' "in" ')' (. x = t; x.val = "operator$in"; .)
   )
   .
 
