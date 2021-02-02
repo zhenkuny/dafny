@@ -1944,7 +1944,7 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
      tok = Token.NoToken;
      ty = new BoolType();  /*keep compiler happy*/
      List<Type> gt;
-     List<Type> tupleArgTypes = null; List<Usage> usages = new List<Usage>(); Usage usage = Usage.Ordinary;
+     List<Type> tupleArgTypes = null; List<Usage> usages = null; Usage usage = Usage.Ordinary;
   .)
   ( "bool"                          (. tok = t; .)
   | "char"                          (. tok = t;  ty = new CharType(); .)
@@ -2018,7 +2018,7 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
                                        int dims = StringToInt(dimString, 1, "arrays of that many dimensions");
                                        ty = theBuiltIns.ArrayType(tok, dims, gt, true, q);
                                     .)
-  | TupleType<out ty, out tok, out tupleArgTypes>
+  | TupleType<out ty, out tok, out tupleArgTypes, out usages>
   | NamedType<out ty, out tok, inExpressionContext>
   )
   [ (. int arrowKind = 0; /* 0: any, 1: partial, 2: total */
@@ -2055,12 +2055,12 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
 
 /*------------------------------------------------------------------------*/
 
-TupleType<.out Type ty, out IToken tok, out List<Type> tupleArgTypes.> =
+TupleType<.out Type ty, out IToken tok, out List<Type> tupleArgTypes, out List<Usage> usages.> =
   "("                             (. tok = t;
                                      ty = null; // To keep compiler happy
                                      tupleArgTypes = new List<Type>();
                                      var usage = Usage.Ordinary;
-                                     var usages = new List<Usage>();
+                                     usages = new List<Usage>();
                                   .)
   [
     [ "linear"                    (. usage = Usage.Linear; .)
