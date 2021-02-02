@@ -8286,8 +8286,6 @@ namespace Microsoft.Dafny
               foreach (var local in s.LocalVars) {
                 local.MakeGhost();
               }
-            } else {
-              resolver.CheckIsCompilable(s.RHS);
             }
             s.IsGhost = spec;
           }

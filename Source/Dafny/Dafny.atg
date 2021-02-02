@@ -2417,7 +2417,7 @@ OneStmt<out Statement/*!*/ s>
   SYNC
   ( BlockStmt<out bs, out bodyStart, out bodyEnd>  (. s = bs; .)
   | UpdateStmt<out s>     // includes UpdateFailure
-/*  | IF(IsMatch()) NestedMatchStmt<out s> */
+  | IF(IsMatch()) MatchStmt<out s>
   | VarDeclStatement<out s>
   | ReturnStmt<out s>
   | IfStmt<out s>
@@ -2429,7 +2429,6 @@ OneStmt<out Statement/*!*/ s>
   | ExpectStmt<out s>
   | ForallStmt<out s>
   | LabeledStmt<out s>
-  | MatchStmt<out s>
   | ModifyStmt<out s>
   | PrintStmt<out s>
   | RevealStmt<out s>
@@ -3939,8 +3938,7 @@ EndlessExpression<out Expression e, bool allowLemma, bool allowLambda, bool allo
      e = dummyExpr;
   .)
   ( IfExpression<out e, allowLemma, allowLambda, allowBitwiseOps>
-/*  | IF(IsMatch()) NestedMatchExpression<out e, allowSemi, allowLambda, allowBitwiseOps> */
-  | MatchExpression<out e, allowLemma, allowLambda, allowBitwiseOps>
+  | IF(IsMatch()) MatchExpression<out e, allowLemma, allowLambda, allowBitwiseOps>
   | QuantifierExpression<out e, allowLemma, allowLambda>  /* types are such that we can allow bitwise operations in the quantifier body */
   | SetComprehensionExpr<out e, allowLemma, allowLambda, allowBitwiseOps>
   | StmtInExpr<out s>
