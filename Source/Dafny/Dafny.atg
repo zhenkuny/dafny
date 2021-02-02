@@ -1944,7 +1944,7 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
      tok = Token.NoToken;
      ty = new BoolType();  /*keep compiler happy*/
      List<Type> gt;
-     List<Type> tupleArgTypes = null; List<Usage> usages = null; Usage usage = Usage.Ordinary;
+     List<Type> tupleArgTypes = null; List<Usage> usages = new List<Usage>(); Usage usage = Usage.Ordinary;
   .)
   ( "bool"                          (. tok = t; .)
   | "char"                          (. tok = t;  ty = new CharType(); .)
@@ -2044,10 +2044,8 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
        } else {
          gt.Add(t2);
          if (arrowKind == 1) {
-            // ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
            ty = new UserDefinedType(tok, ArrowType.PartialArrowTypeName(arity), gt);
          } else {
-            // ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
            ty = new UserDefinedType(tok, ArrowType.TotalArrowTypeName(arity), gt);
          }
        }
