@@ -1386,7 +1386,7 @@ namespace Microsoft.Dafny {
         }
         Bpl.Variable resType = new Bpl.Formal(ctor.tok, new Bpl.TypedIdent(ctor.tok, Bpl.TypedIdent.NoName, predef.DatatypeType), false);
         Bpl.Function fn;
-        if (dt is TupleTypeDecl ttd && ttd.Dims == 2) {
+        if (dt is TupleTypeDecl ttd && ttd.Dims == 2 && ttd.Usages.TrueForAll(u => u == Usage.Ordinary)) {
           fn = predef.Tuple2Constructor;
         } else {
           fn = new Bpl.Function(ctor.tok, ctor.FullName, argTypes, resType, "Constructor function declaration");
@@ -9178,7 +9178,7 @@ namespace Microsoft.Dafny {
       // Create the type constructor
       if (td is ClassDecl cl && cl.IsObjectTrait) {
         // the type constructor for "object" is in DafnyPrelude.bpl
-      } else if (td is TupleTypeDecl ttd && ttd.Dims == 2) {
+      } else if (td is TupleTypeDecl ttd && ttd.Dims == 2 && ttd.Usages.TrueForAll(u => u == Usage.Ordinary)) {
         // the type constructor for "Tuple2" is in DafnyPrelude.bpl
       } else {
         Bpl.Variable tyVarOut = BplFormalVar(null, predef.Ty, false);
