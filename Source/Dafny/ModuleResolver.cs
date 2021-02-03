@@ -51,7 +51,19 @@ namespace Microsoft.Dafny
     }
     public AppliedModule LookupModule(string name)
     {
-      Contract.Assert(false);
+      foreach (TopLevelDecl decl in def.TopLevelDecls)
+      {
+        if (decl is AppliedModuleDecl amd) {
+          if (amd.Name == name)
+          {
+            return amd.appliedModule;
+          }
+        } else if (decl is LiteralModuleDecl lmd) {
+          if (lmd.Name == name) {
+            return new AppliedModule(lmd.ModuleDef);
+          }
+        }
+      }
       return null;
     }
   }
@@ -94,9 +106,9 @@ namespace Microsoft.Dafny
 
   public class SymbolTable<T> {
     readonly Dictionary<String, T> Symbols;
-    SymbolTable<T> parent;
-    readonly ErrorReporter reporter;
-    object debugOrigin;
+    internal SymbolTable<T> parent;
+    internal readonly ErrorReporter reporter;
+    internal object debugOrigin;
 
     public SymbolTable(SymbolTable<T> parent, ErrorReporter reporter, object debugOrigin) {
       this.Symbols = new Dictionary<String, T>();
@@ -106,7 +118,7 @@ namespace Microsoft.Dafny
     }
 
     // Returns false if name already appears in symbol table.
-    public bool insert(String name, T decl, IToken errTok, Func<T, string> errMsg) {
+    public virtual bool insert(String name, T decl, IToken errTok, Func<T, string> errMsg) {
       if (Symbols.ContainsKey(name))
       {
         reporter.Error(MessageSource.Resolver, errTok, errMsg(Symbols[name]));
@@ -116,7 +128,7 @@ namespace Microsoft.Dafny
       return true;
     }
 
-    public T lookup(String name) {
+    public virtual T lookup(String name) {
       T result;
       if (Symbols.TryGetValue(name, out result)) {
         return result;
@@ -125,6 +137,57 @@ namespace Microsoft.Dafny
         return parent.lookup(name);
       }
       return default(T);
+    }
+  }
+
+  public class RefinementModuleSymbolsView : SymbolTable<AppliedModule>
+  {
+    public AppliedModule refinementBase;
+    readonly Dictionary<String, AppliedModule> baseSyms;
+    public SymbolTable<AppliedModule> localSyms;
+
+    public RefinementModuleSymbolsView(AppliedModule refinementBase, SymbolTable<AppliedModule> localSyms, object debugOrigin)
+      : base(null, localSyms.reporter, debugOrigin)
+    {
+      this.refinementBase = refinementBase;
+      this.baseSyms = new Dictionary<String, AppliedModule>();
+      this.localSyms = localSyms;
+      Contract.Assert(localSyms.parent == null);  // because I'm going to peek into its dict
+      Console.Out.WriteLine($"Building RefinementModuleSymbolsView for {refinementBase.def.Name}");
+      foreach (TopLevelDecl d in refinementBase.def.TopLevelDecls) {
+        if (d is ModuleDecl md) {
+          if (d is AppliedModuleDecl ad)
+          {
+            baseSyms.Add(ad.Name, ad.appliedModule); // what goeth here? An AppliedModule
+            Console.Out.WriteLine($"Added AppliedModuleDecl {md.Name}");
+          } else if (d is LiteralModuleDecl ld) {
+            baseSyms.Add(md.Name, new AppliedModule(ld.ModuleDef)); // what goeth here? An AppliedModule
+            Console.Out.WriteLine($"Added LiteralModuleDecl {md.Name}");
+          } else {
+            Console.Out.WriteLine($"XXX What do to with {md.Name}?");
+          }
+        }
+      }
+    }
+    
+//    public override bool insert(String name, AppliedModule decl, IToken errTok, Func<AppliedModule, string> errMsg) {
+//    }
+    public override AppliedModule lookup(String name)
+    {
+      AppliedModule baseSym = null;
+      bool hasBase = baseSyms.TryGetValue(name, out baseSym);
+      AppliedModule localSym = localSyms.lookup(name);
+      if (baseSym==null && localSym==null) {
+        return null;
+      }
+      if (baseSym!=null && localSym!=null) {
+        reporter.Error(MessageSource.Resolver, localSym.def.tok, $"Symbol {name} shadowed in {refinementBase.def.Name} by definition in {debugOrigin}");
+        return null;
+      }
+      if (baseSym!=null) {
+        return baseSym;
+      }
+      return localSym;
     }
   }
 
@@ -160,11 +223,16 @@ namespace Microsoft.Dafny
           var errorCount = reporter.Count(ErrorLevel.Error);
           AppliedModule formalApplied = null;
           if (formal.ConstraintModExp.application.moduleParams.Count == 0) {
+            // Case I: the formal module doesn't take parameters, nor did the actual supply any.
+            // Case II: the formal module expects nonzero parameters, but the actual didn't supply any.
+            //     This is the fancy case, where we use 'module requires' to avoid unrolling all the
+            //     formal parameters.
             // This formal isn't applied. If it has its own formals, we imagine there exists values
             // that satisfy them, and then later when this module is applied with a value that
             // whose application satisfy the constraints, there's yer witness.
             formalApplied = resolveModulePathWithoutApplication(formal.ConstraintModExp, globalSyms, localSyms);
           } else {
+            // Case III: the formal module expects nonzero parameters, and the actual supplies them.
             // This formal is applied, so we apply it so inside the module we know what additional
             // facts we can enjoy.
             formalApplied = resolveModuleExpr(formal.ConstraintModExp, globalSyms, localSyms);
@@ -183,7 +251,8 @@ namespace Microsoft.Dafny
       {
         AppliedModule refinementBaseApplied
           = resolveModuleExpr(def.RefinementBaseModExp, globalSyms, localSyms);
-        // XXX do something to apply the refinement. Dafny today does the refinementCloner thing.
+        // Adjust symbol table to make refinement module symbols available.
+        localSyms = new RefinementModuleSymbolsView(refinementBaseApplied, localSyms, "refinement");
       }
 
       // Literal modules define ParameterizedModules.

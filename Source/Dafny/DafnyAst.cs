@@ -3819,7 +3819,7 @@ namespace Microsoft.Dafny {
 
     public override string ToString() {
         return application.ToString() +
-          ((path.Count>0) ?  Util.Comma(".", path, tok => tok.val) : "");
+          ((path.Count>0) ?  "." + Util.Comma(".", path, tok => tok.val) : "");
     }
 
     public IToken FirstToken() {
