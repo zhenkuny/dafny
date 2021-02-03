@@ -381,8 +381,7 @@ namespace Microsoft.Dafny
       Type.EnableScopes();
       var origErrorCount = reporter.Count(ErrorLevel.Error); //TODO: This is used further below, but not in the >0 comparisons in the next few lines. Is that right?
 
-      ModuleResolver moduleResolver = new ModuleResolver(reporter);
-      ParameterizedModule pm = moduleResolver.resolve((LiteralModuleDecl) prog.DefaultModule);
+      ModuleView resolvedModuleView = DefModuleView.FromTopDecl(prog.DefaultModule, reporter);
 
 ////////////////////////////////////////////////////////////////////////////////
 /////Begin paving

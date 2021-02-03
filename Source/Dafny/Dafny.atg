@@ -918,23 +918,19 @@ ModuleExpressionProd<out ModuleExpression modexp>
   (. modexp = new ModuleExpression(modapp, path); .)
   ) .
 
-ModuleFormal<ModuleDefinition parent, out FormalModuleDecl formal>
+ModuleFormal<ModuleDefinition module>
 = (.
     IToken id;
     ModuleExpression modexp;
   .)
 
   ( NoUSIdent<out id> ":" ModuleExpressionProd<out modexp> )
-  (. formal = new FormalModuleDecl(modexp, id, parent); .)
+  (. module.AddFunctorFormal(new FormalModuleDecl(modexp, id, module)); .)
   .
 
-ModuleFormals<. ModuleDefinition parent, out List<FormalModuleDecl> formals .>
-= (.
-    FormalModuleDecl formal = null;
-    formals = new List<FormalModuleDecl>();
-  .)
-  ( "(" ModuleFormal<parent, out formal>    (. formals.Add(formal); .)
-    { "," ModuleFormal<parent, out formal> (. formals.Add(formal); .) }
+ModuleFormals<. ModuleDefinition module .>
+= ( "(" ModuleFormal<module>
+    { "," ModuleFormal<module>  }
     ")"
   ) .
 
@@ -961,12 +957,11 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
     (. module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false, /*moduleRefined*/ null,
                                      parent, attrs, false, theVerifyThisFile, theCompileThisFile);
     .)
-    [ ModuleFormals<module, out formals> ]
+    [ ModuleFormals<module> ]
     [ "refines" ModuleExpressionProd<out moduleRefined> /* dots disallowed at Resolve time */
       (. module.RefinementBaseModExp = moduleRefined; .)
     |  Ident<out iderr> (. SemErr(la, $"expected either a '{{' or a 'refines' keyword here, found {iderr.val}"); .)
     ]
-    (.  module.SetFunctorFormals(formals); .)
     {
       "requires" ModuleExpressionProd<out var moduleRequiresLeft> "==" ModuleExpressionProd<out var moduleRequiresRight>
         (. module.AddModuleRequiresConstraint(moduleRequiresLeft, moduleRequiresRight); .)

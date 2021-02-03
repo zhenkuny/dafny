@@ -3922,7 +3922,7 @@ namespace Microsoft.Dafny {
 
     public List<ModuleExpressionPair> ModuleRequiresConstraints;
 
-    public List<FormalModuleDecl> Formals; // null if not a functor module
+    public List<FormalModuleDecl> Formals = new List<FormalModuleDecl>();
     public readonly IToken RefinementBaseName;  // null if no refinement base
     public bool SuccessfullyResolved;  // set to true upon successful resolution; modules that import an unsuccessfully resolved module are not themselves resolved
 
@@ -4189,9 +4189,8 @@ namespace Microsoft.Dafny {
       return true;
     }
 
-    public void SetFunctorFormals(List<FormalModuleDecl> formals) {
-      Contract.Assert(this.Formals == null);  // You can only do this so many times, buddy.
-      this.Formals = formals;
+    public void AddFunctorFormal(FormalModuleDecl formal) {
+      Formals.Add(formal);
     }
   }
 
