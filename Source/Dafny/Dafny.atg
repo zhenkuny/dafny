@@ -2021,12 +2021,13 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
   | TupleType<out ty, out tok, out tupleArgTypes, out usages>
   | NamedType<out ty, out tok, inExpressionContext>
   )
-  [ (. int arrowKind = 0; /* 0: any, 1: partial, 2: total */
-          Type t2;
+  [ (. Arrow arrow = Arrow.Any;
+       Type t2;
+       usage = Usage.Ordinary;
      .)
-     ( "~>"           (. tok = t; arrowKind = 0; .)
-     | "-->"          (. tok = t; arrowKind = 1; .)
-     | "->"           (. tok = t; arrowKind = 2; .)
+     ( "~>"           (. tok = t; arrow = Arrow.Any; .)
+     | "-->"          (. tok = t; arrow = Arrow.Partial; .)
+     | "->"           (. tok = t; arrow = Arrow.Total; .)
      )
     [ "linear"                  (. usage = Usage.Linear; .) ]
     // TODO: we could also support shared in function types (but not in tuple types)
@@ -2037,18 +2038,7 @@ TypeAndToken<out IToken tok, out Type ty, bool inExpressionContext>
          gt = new List<Type>{ ty };
          usages = new List<Usage>{ Usage.Ordinary };
        }
-       var arity = gt.Count;
-       theBuiltIns.CreateArrowTypeDecl(arity, usage, usages);
-       if (arrowKind == 0) {
-         ty = new ArrowType(tok, gt, t2, usage, usages);
-       } else {
-         gt.Add(t2);
-         if (arrowKind == 1) {
-           ty = new UserDefinedType(tok, ArrowType.PartialArrowTypeName(arity), gt);
-         } else {
-           ty = new UserDefinedType(tok, ArrowType.TotalArrowTypeName(arity), gt);
-         }
-       }
+       ty = theBuiltIns.CreateArrowType(tok, false, arrow, gt, t2, usage, usages);
     .)
   ]
   .

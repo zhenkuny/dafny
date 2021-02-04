@@ -2639,17 +2639,9 @@ namespace Microsoft.Dafny {
       return s.StartsWith("_#PartialFunc");
     }
 
-    public static string PartialArrowTypeName(int arity) {
-      return "_#PartialFunc" + arity;
-    }
-
     [Pure]
     public static bool IsTotalArrowTypeName(string s) {
       return s.StartsWith("_#TotalFunc");
-    }
-
-    public static string TotalArrowTypeName(int arity) {
-      return "_#TotalFunc" + arity;
     }
 
     public const string ANY_ARROW = "~>";
