@@ -21,6 +21,8 @@ namespace Microsoft.Dafny
   public interface ModuleView {
     public ModuleView lookup(string name);
 
+    public void GetSortedModuleDecls(List<ModuleDecl> outDecls);
+
     static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter) {
       String name = modExp.application.tok.val;
       ModuleView mv = view.lookup(name);
@@ -111,6 +113,9 @@ namespace Microsoft.Dafny
       return null;
     }
 
+    public void GetSortedModuleDecls(List<ModuleDecl> outDecls) {
+    }
+    
     public void Add(string name, ModuleView mv) {
       Underway.Add(name, mv);
     }
@@ -181,6 +186,17 @@ namespace Microsoft.Dafny
       }
       return null;
     }
+    
+    public void GetSortedModuleDecls(List<ModuleDecl> outDecls) {
+      foreach (TopLevelDecl decl in Def.TopLevelDecls)
+      {
+        if (decl is ModuleDecl md)
+        {
+          lookup(decl.Name).GetSortedModuleDecls(outDecls);
+          outDecls.Add(md);
+        }
+      }
+    }
   }
 
   public class ApplicationModuleView : ModuleView {
@@ -218,5 +234,8 @@ namespace Microsoft.Dafny
       }
       return Prototype.lookup(name);
     }
+
+    public void GetSortedModuleDecls(List<ModuleDecl> outDecls)
+    { }
   }
 }

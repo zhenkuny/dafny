@@ -420,8 +420,6 @@ namespace Microsoft.Dafny
 //// done paving
 ////////////////////////////////////////////////////////////////////////////////
 
-      List<ModuleDecl> sortedDecls = null;
-      
       rewriters = new List<IRewriter>();
       refinementTransformer = new RefinementTransformer(prog);
       rewriters.Add(refinementTransformer);
@@ -439,7 +437,7 @@ namespace Microsoft.Dafny
 
       rewriters.Add(new InductionRewriter(reporter));
 
-      systemNameInfo = RegisterTopLevelDecls(prog.BuiltIns.SystemModule, false);
+      systemNameInfo = ConstructSignatureForModule(prog.BuiltIns.SystemModule, false);
       prog.CompileModules.Add(prog.BuiltIns.SystemModule);
       RevealAllInScope(prog.BuiltIns.SystemModule.TopLevelDecls, systemNameInfo.VisibilityScope);
       ResolveValuetypeDecls();
@@ -458,6 +456,10 @@ namespace Microsoft.Dafny
       ResolveTopLevelDecls_Core(systemModuleClassesWithNonNullTypes, new Graph<IndDatatypeDecl>(), new Graph<CoDatatypeDecl>());
 
       var compilationModuleClones = new Dictionary<ModuleDefinition, ModuleDefinition>();
+      
+      List<ModuleDecl> sortedDecls = new List<ModuleDecl>();
+      resolvedModuleView.GetSortedModuleDecls(sortedDecls);
+      
       foreach (var decl in sortedDecls) {
         if (decl is LiteralModuleDecl) {
           // The declaration is a literal module, so it has members and such that we need
@@ -472,17 +474,12 @@ namespace Microsoft.Dafny
           var m = literalDecl.ModuleDef;
 
           var errorCount = reporter.Count(ErrorLevel.Error);
-          if (m.RefinementBaseModExp != null) {
-//            ModuleDecl md = ResolveModuleQualifiedId(m.RefinementBaseModExp.Root, m.RefinementBaseModExp, reporter);
-//            m.RefinementBaseModExp.Set(md); // If module is not found, md is null and an error message has been emitted
-            Contract.Assert(false); // this code is goingt away
-          }
 
           foreach (var r in rewriters) {
             r.PreResolve(m);
           }
 
-          literalDecl.Signature = RegisterTopLevelDecls(m, true);
+          literalDecl.Signature = ConstructSignatureForModule(m, true);
           literalDecl.Signature.Refines = refinementTransformer.RefinedSig;
 
           var sig = literalDecl.Signature;
@@ -526,7 +523,7 @@ namespace Microsoft.Dafny
             Contract.Assert(!useCompileSignatures);
             useCompileSignatures = true; // set Resolver-global flag to indicate that Signatures should be followed to their CompiledSignature
             Type.DisableScopes();
-            var compileSig = RegisterTopLevelDecls(nw, true);
+            var compileSig = ConstructSignatureForModule(nw, true);
             compileSig.Refines = refinementTransformer.RefinedSig;
             sig.CompileSignature = compileSig;
             foreach (var exportDecl in sig.ExportSets.Values) {
@@ -543,7 +540,7 @@ namespace Microsoft.Dafny
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
           ModuleSignature p;
-///          if (ResolveExport(alias, alias.EnclosingModuleDefinition, alias.TargetModExp, alias.Exports, out p, reporter)) {
+///          if (ResolveExport(alias, alias.EnclosingModuleDefinition, alias.TargetModExp, alias.Exports, out p, reporter)) {}
 ///  paving
           if (false) {
             if (alias.Signature == null) {
@@ -1394,7 +1391,7 @@ namespace Microsoft.Dafny
 
         reporter = new ErrorReporterWrapper(reporter,
           String.Format("Raised while checking export set {0}: ", decl.Name));
-        var testSig = RegisterTopLevelDecls(exportView, true);
+        var testSig = ConstructSignatureForModule(exportView, true);
         //testSig.Refines = refinementTransformer.RefinedSig;
         ResolveModuleDefinition(exportView, testSig, true);
         var wasError = reporter.Count(ErrorLevel.Error) > 0;
@@ -1837,7 +1834,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    ModuleSignature RegisterTopLevelDecls(ModuleDefinition moduleDef, bool useImports) {
+    ModuleSignature ConstructSignatureForModule(ModuleDefinition moduleDef, bool useImports) {
       Contract.Requires(moduleDef != null);
       var sig = new ModuleSignature();
       sig.ModuleDef = moduleDef;
@@ -2313,7 +2310,7 @@ namespace Microsoft.Dafny
         mod.TopLevelDecls.Add(CloneDeclaration(p.VisibilityScope, cl, mod, mods, Name, compilationModuleClones));
       }
 
-      var sig = RegisterTopLevelDecls(mod, true);
+      var sig = ConstructSignatureForModule(mod, true);
       sig.Refines = p.Refines;
       sig.CompileSignature = p;
       sig.IsAbstract = p.IsAbstract;
