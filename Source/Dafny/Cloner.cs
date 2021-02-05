@@ -810,7 +810,26 @@ namespace Microsoft.Dafny
       return tok;
     }
   }
-
+  class ModuleApplicationCloner : Cloner {
+    internal readonly ApplicationModuleView Application;
+    public ModuleApplicationCloner(ApplicationModuleView Application) {
+      this.Application = Application;
+    }
+    
+    public override TopLevelDecl CloneDeclaration(TopLevelDecl d, ModuleDefinition m) {
+      TopLevelDecl decl = base.CloneDeclaration(d, m);
+      if (d == Application.Prototype.Decl) {
+        LiteralModuleDecl lmd = (LiteralModuleDecl) d;
+        /*
+        foreach (string name in lmd.TopLevels)
+        {
+          lmd.TopLevels[name] = CloneDeclaration()
+        }
+        */
+      }
+      return decl;
+    }
+  }
 
   /// <summary>
   /// This cloner copies the origin module signatures to their cloned declarations
@@ -833,7 +852,7 @@ namespace Microsoft.Dafny
   }
 
 
-  class ScopeCloner : DeepModuleSignatureCloner {
+    class ScopeCloner : DeepModuleSignatureCloner {
     private VisibilityScope scope = null;
 
     private Dictionary<Declaration, Declaration> reverseMap = new Dictionary<Declaration, Declaration>();

@@ -381,7 +381,7 @@ namespace Microsoft.Dafny
       Type.EnableScopes();
       var origErrorCount = reporter.Count(ErrorLevel.Error); //TODO: This is used further below, but not in the >0 comparisons in the next few lines. Is that right?
 
-      ModuleView resolvedModuleView = DefModuleView.FromTopDecl(prog.DefaultModule, reporter);
+      DefModuleView resolvedModuleView = DefModuleView.FromTopDecl(prog.DefaultModule, reporter);
 
 ////////////////////////////////////////////////////////////////////////////////
 /////Begin paving
@@ -437,7 +437,7 @@ namespace Microsoft.Dafny
 
       rewriters.Add(new InductionRewriter(reporter));
 
-      systemNameInfo = ConstructSignatureForModule(prog.BuiltIns.SystemModule, false);
+      systemNameInfo = ConstructSignatureForModule(null, prog.BuiltIns.SystemModule, false);
       prog.CompileModules.Add(prog.BuiltIns.SystemModule);
       RevealAllInScope(prog.BuiltIns.SystemModule.TopLevelDecls, systemNameInfo.VisibilityScope);
       ResolveValuetypeDecls();
@@ -457,10 +457,12 @@ namespace Microsoft.Dafny
 
       var compilationModuleClones = new Dictionary<ModuleDefinition, ModuleDefinition>();
       
-      List<ModuleDecl> sortedDecls = new List<ModuleDecl>();
-      resolvedModuleView.GetSortedModuleDecls(sortedDecls);
+      List<Tuple<ModuleDecl, DefModuleView>> visitList = new List<Tuple<ModuleDecl, DefModuleView>>();
+      resolvedModuleView.BuildModuleVisitList(visitList);
       
-      foreach (var decl in sortedDecls) {
+      foreach (var visit in visitList) {
+        ModuleDecl decl = visit.Item1;
+        DefModuleView defModuleView = visit.Item2;
         if (decl is LiteralModuleDecl) {
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature
@@ -479,7 +481,7 @@ namespace Microsoft.Dafny
             r.PreResolve(m);
           }
 
-          literalDecl.Signature = ConstructSignatureForModule(m, true);
+          literalDecl.Signature = ConstructSignatureForModule(defModuleView, m, true);
           literalDecl.Signature.Refines = refinementTransformer.RefinedSig;
 
           var sig = literalDecl.Signature;
@@ -523,7 +525,7 @@ namespace Microsoft.Dafny
             Contract.Assert(!useCompileSignatures);
             useCompileSignatures = true; // set Resolver-global flag to indicate that Signatures should be followed to their CompiledSignature
             Type.DisableScopes();
-            var compileSig = ConstructSignatureForModule(nw, true);
+            var compileSig = ConstructSignatureForModule(defModuleView, nw, true);
             compileSig.Refines = refinementTransformer.RefinedSig;
             sig.CompileSignature = compileSig;
             foreach (var exportDecl in sig.ExportSets.Values) {
@@ -540,9 +542,7 @@ namespace Microsoft.Dafny
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
           ModuleSignature p;
-///          if (ResolveExport(alias, alias.EnclosingModuleDefinition, alias.TargetModExp, alias.Exports, out p, reporter)) {}
-///  paving
-          if (false) {
+          if (GetSignatureForAlias(defModuleView, out p, reporter)) {
             if (alias.Signature == null) {
               alias.Signature = p;
             }
@@ -1391,7 +1391,7 @@ namespace Microsoft.Dafny
 
         reporter = new ErrorReporterWrapper(reporter,
           String.Format("Raised while checking export set {0}: ", decl.Name));
-        var testSig = ConstructSignatureForModule(exportView, true);
+        var testSig = ConstructSignatureForModule(null, exportView, true);  // TODO moduleView
         //testSig.Refines = refinementTransformer.RefinedSig;
         ResolveModuleDefinition(exportView, testSig, true);
         var wasError = reporter.Count(ErrorLevel.Error) > 0;
@@ -1834,7 +1834,10 @@ namespace Microsoft.Dafny
       }
     }
 
-    ModuleSignature ConstructSignatureForModule(ModuleDefinition moduleDef, bool useImports) {
+    ModuleSignature ConstructSignatureForModule(DefModuleView dmv, ModuleDefinition moduleDef, bool useImports) {
+      Contract.Assert(dmv==null || moduleDef == dmv.Def
+        || moduleDef.Name.EndsWith("_Compile")  // TODO Argh.
+        );
       Contract.Requires(moduleDef != null);
       var sig = new ModuleSignature();
       sig.ModuleDef = moduleDef;
@@ -1846,8 +1849,20 @@ namespace Microsoft.Dafny
 
       // This is solely used to detect duplicates amongst the various e
       Dictionary<string, TopLevelDecl> toplevels = new Dictionary<string, TopLevelDecl>();
+
       // Now add the things present
       var anonymousImportCount = 0;
+
+      // Import the formals
+      foreach (FormalModuleDecl d in moduleDef.Formals) {
+        ModuleView formalView = dmv.lookup(d.Name.val);
+        ModuleDecl registerThisDecl = formalView.GetDecl();
+        string registerUnderThisName = string.Format("{0}#{1}", d.Name.val, anonymousImportCount);
+        anonymousImportCount++;
+        toplevels[registerUnderThisName] = registerThisDecl;
+        sig.TopLevels[registerUnderThisName] = registerThisDecl;
+      }
+
       foreach (TopLevelDecl d in declarations) {
         Contract.Assert(d != null);
 
@@ -1867,7 +1882,8 @@ namespace Microsoft.Dafny
             }
           } else if (d is AliasModuleDecl importDecl && importDecl.ShadowsLiteralModule) {
             // add under an anonymous name
-            registerThisDecl = d;
+            ModuleView formalView = dmv.lookup(d.Name);
+            registerThisDecl = formalView.GetDecl();
             registerUnderThisName = string.Format("{0}#{1}", d.Name, anonymousImportCount);
             anonymousImportCount++;
           } else if (toplevels.ContainsKey(d.Name)) {
@@ -2283,46 +2299,6 @@ namespace Microsoft.Dafny
       }
     }
 
-    private ModuleSignature MakeAbstractSignature(ModuleSignature p, string Name, int Height,
-      Dictionary<ModuleDefinition, ModuleSignature> mods,
-      Dictionary<ModuleDefinition, ModuleDefinition> compilationModuleClones) {
-      Contract.Requires(p != null);
-      Contract.Requires(Name != null);
-      Contract.Requires(mods != null);
-      Contract.Requires(compilationModuleClones != null);
-      var errCount = reporter.Count(ErrorLevel.Error);
-
-      var mod = new ModuleDefinition(Token.NoToken, Name + ".Abs", new List<IToken>(), true, true, null, null, null,
-        false,
-        p.ModuleDef.IsToBeVerified, p.ModuleDef.IsToBeCompiled);
-      mod.Height = Height;
-      bool hasDefaultClass = false;
-      foreach (var kv in p.TopLevels) {
-        hasDefaultClass = kv.Value is DefaultClassDecl || hasDefaultClass;
-        if (!(kv.Value is NonNullTypeDecl)) {
-          var clone = CloneDeclaration(p.VisibilityScope, kv.Value, mod, mods, Name, compilationModuleClones);
-          mod.TopLevelDecls.Add(clone);
-        }
-      }
-
-      if (!hasDefaultClass) {
-        DefaultClassDecl cl = new DefaultClassDecl(mod, p.StaticMembers.Values.ToList());
-        mod.TopLevelDecls.Add(CloneDeclaration(p.VisibilityScope, cl, mod, mods, Name, compilationModuleClones));
-      }
-
-      var sig = ConstructSignatureForModule(mod, true);
-      sig.Refines = p.Refines;
-      sig.CompileSignature = p;
-      sig.IsAbstract = p.IsAbstract;
-      mods.Add(mod, sig);
-      var good = ResolveModuleDefinition(mod, sig);
-      if (good && reporter.Count(ErrorLevel.Error) == errCount) {
-        mod.SuccessfullyResolved = true;
-      }
-
-      return sig;
-    }
-
     TopLevelDecl CloneDeclaration(VisibilityScope scope, TopLevelDecl d, ModuleDefinition m,
       Dictionary<ModuleDefinition, ModuleSignature> mods, string Name,
       Dictionary<ModuleDefinition, ModuleDefinition> compilationModuleClones) {
@@ -2381,65 +2357,83 @@ namespace Microsoft.Dafny
     }
 
 
-    public bool ResolveExport(ModuleDecl alias, ModuleDefinition parent, ModuleQualifiedId qid,
-      List<IToken> Exports, out ModuleSignature p, ErrorReporter reporter) {
-      Contract.Requires(qid != null);
-      Contract.Requires(qid.Path.Count > 0);
-      Contract.Requires(Exports != null);
-
-      ModuleDecl root = qid.Root;
-      ModuleDecl decl = ResolveModuleQualifiedId(root, qid, reporter);
-      if (decl == null) {
+    public bool GetSignatureForAlias(ModuleView moduleView,
+      /*List<IToken> Exports,*/ out ModuleSignature p, ErrorReporter reporter) {
+      
+      // We've got this moduleView that represents the module or application that alias should point at.
+      // If it's a DefModuleView, we could just sneak the ModuleDef out, grab its Signature, and call it a day, right?
+      // If it's an ApplicationModuleView, we need to do a tricksy cloney thing and then recurse. I think.
+      if (moduleView is DefModuleView dmv) {
+        p = dmv.Decl.Signature;
+        return true;
+        //return dmv.Def;
+      } else if (moduleView is ApplicationModuleView amv)
+      {
+        ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
+        ModuleDecl clone = (ModuleDecl) cloner.CloneDeclaration(amv.Prototype.Decl, amv.Prototype.Def);
+        p = clone.Signature;
+        return false;
+      } else {
+        Contract.Assert(false); // I are too dumb
         p = null;
         return false;
       }
-      p = decl.Signature;
-      if (Exports.Count == 0) {
-        if (p.ExportSets.Count == 0) {
-          if (decl is LiteralModuleDecl) {
-            p = ((LiteralModuleDecl)decl).DefaultExport;
-          } else {
-            // p is OK
-          }
-        } else {
-          var m = p.ExportSets.GetValueOrDefault(decl.Name, null);
-          if (m == null) {
-            // no default view is specified.
-            reporter.Error(MessageSource.Resolver, qid.rootToken(), "no default export set declared in module: {0}", decl.Name);
-            return false;
-          }
-          p = m.AccessibleSignature();
-        }
-      } else {
-        ModuleExportDecl pp;
-        if (decl.Signature.ExportSets.TryGetValue(Exports[0].val, out pp)) {
-          p = pp.AccessibleSignature();
-        } else {
-          reporter.Error(MessageSource.Resolver, Exports[0], "no export set '{0}' in module '{1}'", Exports[0].val, decl.Name);
-          p = null;
-          return false;
-        }
-
-        foreach (IToken export in Exports.Skip(1)) {
-          if (decl.Signature.ExportSets.TryGetValue(export.val, out pp)) {
-            Contract.Assert(Object.ReferenceEquals(p.ModuleDef, pp.Signature.ModuleDef));
-            ModuleSignature merged = MergeSignature(p, pp.Signature);
-            merged.ModuleDef = pp.Signature.ModuleDef;
-            if (p.CompileSignature != null) {
-              Contract.Assert(pp.Signature.CompileSignature != null);
-              merged.CompileSignature = MergeSignature(p.CompileSignature, pp.Signature.CompileSignature);
-            } else {
-              Contract.Assert(pp.Signature.CompileSignature == null);
-            }
-            p = merged;
-          } else {
-            reporter.Error(MessageSource.Resolver, export, "no export set {0} in module {1}", export.val, decl.Name);
-            p = null;
-            return false;
-          }
-        }
-      }
-      return true;
+      
+// PAVED
+//      Contract.Requires(Exports != null);
+//
+//      ModuleDecl decl = null; //ResolveModuleQualifiedId(root, qid, reporter);
+//      if (decl == null) {
+//        p = null;
+//        return false;
+//      }
+//      p = decl.Signature;
+//      if (Exports.Count == 0) {
+//        if (p.ExportSets.Count == 0) {
+//          if (decl is LiteralModuleDecl) {
+//            p = ((LiteralModuleDecl)decl).DefaultExport;
+//          } else {
+//            // p is OK
+//          }
+//        } else {
+//          var m = p.ExportSets.GetValueOrDefault(decl.Name, null);
+//          if (m == null) {
+//            // no default view is specified.
+//            reporter.Error(MessageSource.Resolver, (IToken) null /*qid.rootToken()*/, "no default export set declared in module: {0}", decl.Name);
+//            return false;
+//          }
+//          p = m.AccessibleSignature();
+//        }
+//      } else {
+//        ModuleExportDecl pp;
+//        if (decl.Signature.ExportSets.TryGetValue(Exports[0].val, out pp)) {
+//          p = pp.AccessibleSignature();
+//        } else {
+//          reporter.Error(MessageSource.Resolver, Exports[0], "no export set '{0}' in module '{1}'", Exports[0].val, decl.Name);
+//          p = null;
+//          return false;
+//        }
+//
+//        foreach (IToken export in Exports.Skip(1)) {
+//          if (decl.Signature.ExportSets.TryGetValue(export.val, out pp)) {
+//            Contract.Assert(Object.ReferenceEquals(p.ModuleDef, pp.Signature.ModuleDef));
+//            ModuleSignature merged = MergeSignature(p, pp.Signature);
+//            merged.ModuleDef = pp.Signature.ModuleDef;
+//            if (p.CompileSignature != null) {
+//              Contract.Assert(pp.Signature.CompileSignature != null);
+//              merged.CompileSignature = MergeSignature(p.CompileSignature, pp.Signature.CompileSignature);
+//            } else {
+//              Contract.Assert(pp.Signature.CompileSignature == null);
+//            }
+//            p = merged;
+//          } else {
+//            reporter.Error(MessageSource.Resolver, export, "no export set {0} in module {1}", export.val, decl.Name);
+//            p = null;
+//            return false;
+//          }
+//        }
+//      }
+//      return true;
     }
 
     public void RevealAllInScope(List<TopLevelDecl> declarations, VisibilityScope scope) {

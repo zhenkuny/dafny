@@ -21,7 +21,8 @@ namespace Microsoft.Dafny
   public interface ModuleView {
     public ModuleView lookup(string name);
 
-    public void GetSortedModuleDecls(List<ModuleDecl> outDecls);
+    // Return a decl for this module with Signature populated.
+    public ModuleDecl GetDecl();
 
     static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter) {
       String name = modExp.application.tok.val;
@@ -113,9 +114,11 @@ namespace Microsoft.Dafny
       return null;
     }
 
-    public void GetSortedModuleDecls(List<ModuleDecl> outDecls) {
+    public ModuleDecl GetDecl() {
+      Contract.Assert(false); // This class shouldn't survive into the type resolver.
+      return null;
     }
-    
+
     public void Add(string name, ModuleView mv) {
       Underway.Add(name, mv);
     }
@@ -129,15 +132,20 @@ namespace Microsoft.Dafny
   // View of the modules visible inside a module: formals, literals, and stuff from refinement.
   public class DefModuleView : ModuleView {
     public readonly ModuleDefinition Def;
+    public readonly LiteralModuleDecl Decl; // keep a ref to the decl, which Resolver.cs will populate with a signature and then want to find that signature later.
     public Dictionary<string, ModuleView> LocalViews;
     public readonly ModuleView RefinementView;
 
-    public static DefModuleView FromTopDecl(ModuleDecl defaultModule, ErrorReporter reporter) {
-      return new DefModuleView(null, ((LiteralModuleDecl) defaultModule).ModuleDef, reporter);
+    public static DefModuleView FromTopDecl(ModuleDecl defaultModule, ErrorReporter reporter)
+    {
+      LiteralModuleDecl lmd = (LiteralModuleDecl) defaultModule;
+      return new DefModuleView(null, lmd.ModuleDef, lmd, reporter);
     }
 
-    internal DefModuleView(ModuleView parentContext, ModuleDefinition Def, ErrorReporter reporter) {
+    internal DefModuleView(ModuleView parentContext, ModuleDefinition Def, LiteralModuleDecl Decl, ErrorReporter reporter)
+    {
       this.Def = Def;
+      this.Decl = Decl;
       this.LocalViews = new Dictionary<string, ModuleView>();
       SymbolTableView context = new SymbolTableView(parentContext, Def.Name);
 
@@ -159,7 +167,7 @@ namespace Microsoft.Dafny
       foreach (TopLevelDecl decl in Def.TopLevelDecls)
       {
         if (decl is LiteralModuleDecl lmd) {
-          ModuleView lv = new DefModuleView(context, lmd.ModuleDef, reporter);
+          ModuleView lv = new DefModuleView(context, lmd.ModuleDef, lmd, reporter);
           LocalViews.Add(lmd.Name, lv); // XXX LocalViews is redundant with context.
           context.Add(lmd.Name, lv);
         } else if (decl is AliasModuleDecl amd) {
@@ -187,15 +195,23 @@ namespace Microsoft.Dafny
       return null;
     }
     
-    public void GetSortedModuleDecls(List<ModuleDecl> outDecls) {
+    public void BuildModuleVisitList(List<Tuple<ModuleDecl, DefModuleView>> outModuleViews) {
       foreach (TopLevelDecl decl in Def.TopLevelDecls)
       {
         if (decl is ModuleDecl md)
         {
-          lookup(decl.Name).GetSortedModuleDecls(outDecls);
-          outDecls.Add(md);
+          ModuleView mv = lookup(decl.Name);
+          if (mv is DefModuleView dmv) {
+            dmv.BuildModuleVisitList(outModuleViews);
+            outModuleViews.Add(new Tuple<ModuleDecl, DefModuleView>(md, dmv));
+          }
         }
       }
+    }
+
+    public ModuleDecl GetDecl() {
+      Contract.Assert(Decl.Signature != null);  // Shouldn't be using this module before it gets type-resolved.
+      return Decl;
     }
   }
 
@@ -235,7 +251,9 @@ namespace Microsoft.Dafny
       return Prototype.lookup(name);
     }
 
-    public void GetSortedModuleDecls(List<ModuleDecl> outDecls)
-    { }
+    public ModuleDecl GetDecl() {
+      Contract.Assert(false); // unimpl! Do Travis' tricksy substitution.
+      return null;
+    }
   }
 }
