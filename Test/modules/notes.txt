@@ -1,0 +1,46 @@
+abstract modules
+    X                   // original definition of X // type resolution & verification
+
+memoized list of all concrete modules
+    _ref1_X              // clone of X's ModuleDefinition
+    _ref2_X              // clone of X's ModuleDefinition
+    A(_inst1_X, _inst2_X) // original definition of A   // type resolution & verification
+    A(_inst1_X, _inst1_X) // clone of A's ModuleDefinition with a substitution
+    B(_inst1_X, _inst2_X) // original definition of B   // type resolution & verification
+    B(_inst1_X, _inst1_X) // clone of B's ModuleDefinition with a substitution
+    C(_inst1_X)           // original definition of C   // type resolution & verification
+
+ModuleView:
+    FormalModuleView(base: ModuleView)
+    InstantiatedModuleView(module: ModuleDefinition, params: [ModuleView])
+
+
+ModuleView X
+abstract module X { 
+  type T
+}
+
+module A(x: X, x2: X) {
+  ModuleView _inst1_X
+  ModuleView _inst2_X
+  function (y: x.T) {  }
+}
+
+module B(x: X, x2: X) {
+  ModuleView _inst1_X
+  ModuleView _inst2_X
+  
+  import W = A(x, x2) // ModuleView A(_inst1_X, _inst2_X)
+}
+
+ModuleView B(_inst1_X, _inst1_X)
+  ModuleDefinition
+    import W = A(x, x2) // ModuleView A(_inst1_X, _inst1_X)
+    
+
+module C(x: X) {
+  ModuleView _inst1_X
+
+  import V = B(x, x) // ModuleView B(_inst1_X, _inst1_X)
+  import W = B(x, x)
+}
