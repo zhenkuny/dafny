@@ -596,6 +596,7 @@ namespace Microsoft.Dafny {
       if (other != null) {
         scopeTokens.UnionWith(other.scopeTokens);
         scopeIds.UnionWith(other.scopeIds);
+        //Console.Out.WriteLine("Augment: " + String.Join(",", other.scopeIds));
         cached.Clear();
       }
     }

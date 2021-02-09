@@ -1872,6 +1872,12 @@ namespace Microsoft.Dafny
       sig.VisibilityScope = new VisibilityScope();
       sig.VisibilityScope.Augment(moduleDef.VisibilityScope);
 
+      if (dmv is ApplicationModuleView amv) {
+        foreach (ModuleView applicationView in amv.Substitutions.Values) {
+          sig.VisibilityScope.Augment(applicationView.GetDef().VisibilityScope);
+        }
+      }
+
       List<TopLevelDecl> declarations = moduleDef.TopLevelDecls;
 
       // This is solely used to detect duplicates amongst the various e

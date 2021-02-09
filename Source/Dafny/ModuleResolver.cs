@@ -27,6 +27,8 @@ namespace Microsoft.Dafny
     // Return a decl for this module with Signature populated.
     public ModuleDecl GetDecl();
 
+    public ModuleDefinition GetDef();
+
     static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter) {
       String name = modExp.application.tok.val;
       ModuleView mv = view.lookup(name);
@@ -125,6 +127,12 @@ namespace Microsoft.Dafny
       Contract.Assert(false); // This class shouldn't survive into the type resolver.
       return null;
     }
+    
+    public ModuleDefinition GetDef()
+    {
+      Contract.Assert(false);
+      return null;
+    }
 
     public void Add(string name, ModuleView mv) {
       Underway.Add(name, mv);
@@ -217,6 +225,11 @@ namespace Microsoft.Dafny
       Contract.Assert(Decl.Signature != null);  // Shouldn't be using this module before it gets type-resolved.
       return Decl;
     }
+
+    public ModuleDefinition GetDef()
+    {
+      return Def; 
+    }
   }
 
   public class ApplicationModuleView : ModuleView {
@@ -262,6 +275,11 @@ namespace Microsoft.Dafny
     public ModuleDecl GetDecl() {
       Contract.Assert(false); // unimpl! Do Travis' tricksy substitution.
       return null;
+    }
+
+    public ModuleDefinition GetDef()
+    {
+      return Prototype.GetDef();
     }
   }
 }
