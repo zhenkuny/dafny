@@ -463,7 +463,19 @@ namespace Microsoft.Dafny
       foreach (var visit in visitList) {
         ModuleDecl decl = visit.Item1;
         ModuleView moduleView = visit.Item2;
-        if (decl is LiteralModuleDecl) {
+        if (decl is LiteralModuleDecl lmd) {
+
+          // VisibilityScopes: how do they work? And why do they get built here and there
+          // and everywhere including the flippin' Transformer.cs!? How the heck could I get
+          // information about the formals from here to there even if I wanted to? I think
+          // instead I'm going to just tamper with the def's VisibilityScope right here.
+          // This is how spaghetti code accretes pasta: I can't make any sense of the rest
+          // of the spaghetti.
+          foreach (FormalModuleDecl d in lmd.ModuleDef.Formals) {
+            ModuleView formalView = moduleView.lookup(d.Name.val);
+            lmd.ModuleDef.VisibilityScope.Augment(formalView.GetDef().VisibilityScope);
+          }
+
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature
           // of the module. This is the public, externally visible signature. Then we add in
