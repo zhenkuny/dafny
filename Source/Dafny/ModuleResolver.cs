@@ -29,7 +29,9 @@ namespace Microsoft.Dafny
 
     public ModuleDefinition GetDef();
 
-    static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter) {
+    enum RequireApplication { Yes, No }
+
+    static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter, RequireApplication requireApplication) {
       String name = modExp.application.tok.val;
       ModuleView mv = view.lookup(name);
       if (mv == null) {
@@ -49,7 +51,7 @@ namespace Microsoft.Dafny
         foreach (ModuleExpression actualParam in modExp.application.moduleParams)
         {
           Console.Out.WriteLine("XXX-TODO check {actualParam} refines its formal");
-          actuals.Add(ModuleView.resolveModuleExpression(view, actualParam, reporter));
+          actuals.Add(ModuleView.resolveModuleExpression(view, actualParam, reporter, requireApplication));
         }
 
         if (dmv.Def.Formals.Count != actuals.Count)
@@ -62,7 +64,13 @@ namespace Microsoft.Dafny
         appliedView = new ApplicationModuleView(dmv, actuals);
       } else {
         if (mv is DefModuleView dmv) {
-          Contract.Assert(dmv.Def.Formals.Count == 0); // XXX How do we feel if there are formals? Depends on the context...?
+          // Is this the only way we can have unfilled formals? What if the thing we're referencing
+          // is a previous actual that itself left its formals empty?
+          if (requireApplication==RequireApplication.Yes && dmv.Def.Formals.Count > 0) {
+            reporter.Error(MessageSource.Resolver, modExp.application.tok,
+                $"Module {dmv.Def.Name} requires {dmv.Def.Formals.Count} parameters.");
+            return null;
+          }
         }
         appliedView = mv;
       }
@@ -167,7 +175,7 @@ namespace Microsoft.Dafny
 
       // Add the formals first; they're reachable from the refinement expression.
       foreach (FormalModuleDecl formal in Def.Formals) {
-        ModuleView fv = ModuleView.resolveModuleExpression(context, formal.ConstraintModExp, reporter);
+        ModuleView fv = ModuleView.resolveModuleExpression(context, formal.ConstraintModExp, reporter, ModuleView.RequireApplication.No);
         // There's no TopLevelDecl here, so we'll roll up an AliasModuleDecl to make
         // the type resolver happy.
         ModuleDecl fd = new AliasModuleDecl(formal.ConstraintModExp, formal.Name, Def, false, null);
@@ -178,7 +186,7 @@ namespace Microsoft.Dafny
       // Evaluate the refinement expression next.
       RefinementView = null;
       if (Def.RefinementBaseModExp != null) {
-        RefinementView = ModuleView.resolveModuleExpression(context, Def.RefinementBaseModExp, reporter);
+        RefinementView = ModuleView.resolveModuleExpression(context, Def.RefinementBaseModExp, reporter, ModuleView.RequireApplication.Yes);
         context.SetRefinementView(RefinementView);  // XXX and now RefinementView is, too.
       }
 
@@ -190,7 +198,7 @@ namespace Microsoft.Dafny
           LocalViews.Add(lmd.Name, new Tuple<ModuleDecl,ModuleView>(lmd,lv));
           context.Add(lmd.Name, lv);
         } else if (decl is AliasModuleDecl amd) {
-          ModuleView lv = ModuleView.resolveModuleExpression(context, amd.TargetModExp, reporter);
+          ModuleView lv = ModuleView.resolveModuleExpression(context, amd.TargetModExp, reporter, ModuleView.RequireApplication.Yes);
           LocalViews.Add(amd.Name, new Tuple<ModuleDecl,ModuleView>(amd,lv));
           context.Add(amd.Name, lv);
         }
