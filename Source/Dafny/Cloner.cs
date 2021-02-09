@@ -26,6 +26,9 @@ namespace Microsoft.Dafny
         var newTup = new Tuple<List<IToken>, LiteralModuleDecl>(tup.Item1, (LiteralModuleDecl)CloneDeclaration(tup.Item2, nw));
         nw.PrefixNamedModules.Add(newTup);
       }
+      foreach (var fml in m.Formals) {
+        nw.Formals.Add(fml);  // Shallow-clone the formals, I guess?
+      }
       nw.Height = m.Height;
       return nw;
     }
@@ -828,6 +831,28 @@ namespace Microsoft.Dafny
         */
       }
       return decl;
+    }
+
+    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
+      ModuleDefinition result = base.CloneModuleDefinition(m, name);
+      foreach (FormalModuleDecl formal in m.Formals)
+      {
+        ModuleView mv = Application.Substitutions[formal.Name.val];
+        if (mv is DefModuleView dmv)
+        {
+          // m refers to the unsubstituted formal def. Create an alias to the substituted one.
+          // Use the decl in the DefModuleView, because that thing has already been type-resolved
+          // and hence has a signature.
+          Contract.Assert(dmv.Decl.Signature != null);
+          result.TopLevelDecls.Insert(0, dmv.Decl);
+        }
+        else
+        {
+          Contract.Assert(false); // Recurse on an application?
+        }
+      }
+      Console.Out.WriteLine("Need to substitute here.");
+      return result;
     }
   }
 

@@ -21,6 +21,9 @@ namespace Microsoft.Dafny
   public interface ModuleView {
     public ModuleView lookup(string name);
 
+    // Construct the of modules to resolve, in dependency order (postorder tree walk).
+    public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews);
+
     // Return a decl for this module with Signature populated.
     public ModuleDecl GetDecl();
 
@@ -114,6 +117,10 @@ namespace Microsoft.Dafny
       return null;
     }
 
+    public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews) {
+      Contract.Assert(false); // This class shouldn't survive into the type resolver.
+    }
+
     public ModuleDecl GetDecl() {
       Contract.Assert(false); // This class shouldn't survive into the type resolver.
       return null;
@@ -133,7 +140,8 @@ namespace Microsoft.Dafny
   public class DefModuleView : ModuleView {
     public readonly ModuleDefinition Def;
     public readonly LiteralModuleDecl Decl; // keep a ref to the decl, which Resolver.cs will populate with a signature and then want to find that signature later.
-    public Dictionary<string, ModuleView> LocalViews;
+    public Dictionary<string, Tuple<ModuleDecl,ModuleView>> LocalViews; // XXX LocalViews is redundant with context.
+    public Dictionary<string, ModuleDecl> LocalDecls;
     public readonly ModuleView RefinementView;
 
     public static DefModuleView FromTopDecl(ModuleDecl defaultModule, ErrorReporter reporter)
@@ -146,13 +154,16 @@ namespace Microsoft.Dafny
     {
       this.Def = Def;
       this.Decl = Decl;
-      this.LocalViews = new Dictionary<string, ModuleView>();
+      this.LocalViews = new Dictionary<string, Tuple<ModuleDecl, ModuleView>>();
       SymbolTableView context = new SymbolTableView(parentContext, Def.Name);
 
       // Add the formals first; they're reachable from the refinement expression.
       foreach (FormalModuleDecl formal in Def.Formals) {
         ModuleView fv = ModuleView.resolveModuleExpression(context, formal.ConstraintModExp, reporter);
-        LocalViews.Add(formal.Name.val, fv); // XXX LocalViews is redundant with context.
+        // There's no TopLevelDecl here, so we'll roll up an AliasModuleDecl to make
+        // the type resolver happy.
+        ModuleDecl fd = new AliasModuleDecl(formal.ConstraintModExp, formal.Name, Def, false, null);
+        LocalViews.Add(formal.Name.val, new Tuple<ModuleDecl,ModuleView>(fd,fv));
         context.Add(formal.Name.val, fv);
       }
 
@@ -168,11 +179,11 @@ namespace Microsoft.Dafny
       {
         if (decl is LiteralModuleDecl lmd) {
           ModuleView lv = new DefModuleView(context, lmd.ModuleDef, lmd, reporter);
-          LocalViews.Add(lmd.Name, lv); // XXX LocalViews is redundant with context.
+          LocalViews.Add(lmd.Name, new Tuple<ModuleDecl,ModuleView>(lmd,lv));
           context.Add(lmd.Name, lv);
         } else if (decl is AliasModuleDecl amd) {
           ModuleView lv = ModuleView.resolveModuleExpression(context, amd.TargetModExp, reporter);
-          LocalViews.Add(amd.Name, lv);
+          LocalViews.Add(amd.Name, new Tuple<ModuleDecl,ModuleView>(amd,lv));
           context.Add(amd.Name, lv);
         }
       }
@@ -185,9 +196,9 @@ namespace Microsoft.Dafny
     }
 
     public ModuleView lookup(string name) {
-      ModuleView mv;
-      if (LocalViews.TryGetValue(name, out mv)) {
-        return mv;
+      Tuple<ModuleDecl,ModuleView> lvt;
+      if (LocalViews.TryGetValue(name, out lvt)) {
+        return lvt.Item2;
       }
       if (RefinementView != null) {
         return RefinementView.lookup(name);
@@ -195,17 +206,10 @@ namespace Microsoft.Dafny
       return null;
     }
     
-    public void BuildModuleVisitList(List<Tuple<ModuleDecl, DefModuleView>> outModuleViews) {
-      foreach (TopLevelDecl decl in Def.TopLevelDecls)
-      {
-        if (decl is ModuleDecl md)
-        {
-          ModuleView mv = lookup(decl.Name);
-          if (mv is DefModuleView dmv) {
-            dmv.BuildModuleVisitList(outModuleViews);
-            outModuleViews.Add(new Tuple<ModuleDecl, DefModuleView>(md, dmv));
-          }
-        }
+    public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews) {
+      foreach (var (key,lvt) in LocalViews.Select(x => (x.Key, x.Value))) {
+        lvt.Item2.BuildModuleVisitList(outModuleViews);
+        outModuleViews.Add(lvt);
       }
     }
 
@@ -249,6 +253,10 @@ namespace Microsoft.Dafny
         return mv;
       }
       return Prototype.lookup(name);
+    }
+
+    public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews) {
+      // All modules referenced by this application must already have been visited
     }
 
     public ModuleDecl GetDecl() {

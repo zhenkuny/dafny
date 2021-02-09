@@ -457,12 +457,12 @@ namespace Microsoft.Dafny
 
       var compilationModuleClones = new Dictionary<ModuleDefinition, ModuleDefinition>();
       
-      List<Tuple<ModuleDecl, DefModuleView>> visitList = new List<Tuple<ModuleDecl, DefModuleView>>();
+      List<Tuple<ModuleDecl, ModuleView>> visitList = new List<Tuple<ModuleDecl, ModuleView>>();
       resolvedModuleView.BuildModuleVisitList(visitList);
       
       foreach (var visit in visitList) {
         ModuleDecl decl = visit.Item1;
-        DefModuleView defModuleView = visit.Item2;
+        ModuleView moduleView = visit.Item2;
         if (decl is LiteralModuleDecl) {
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature
@@ -481,19 +481,21 @@ namespace Microsoft.Dafny
             r.PreResolve(m);
           }
 
-          literalDecl.Signature = ConstructSignatureForModule(defModuleView, m, true);
+          literalDecl.Signature = ConstructSignatureForModule((DefModuleView) moduleView, m, true);
           literalDecl.Signature.Refines = refinementTransformer.RefinedSig;
 
           var sig = literalDecl.Signature;
           // set up environment
           var preResolveErrorCount = reporter.Count(ErrorLevel.Error);
 
+          SubstituteApplications(m);
+
           ResolveModuleExport(literalDecl, sig);
           var good = ResolveModuleDefinition(m, sig);
 
           if (good && reporter.Count(ErrorLevel.Error) == preResolveErrorCount) {
             // Check that the module export gives a self-contained view of the module.
-            CheckModuleExportConsistency(m);
+            CheckModuleExportConsistency((DefModuleView) moduleView, m);
           }
 
           var tempVis = new VisibilityScope();
@@ -525,7 +527,7 @@ namespace Microsoft.Dafny
             Contract.Assert(!useCompileSignatures);
             useCompileSignatures = true; // set Resolver-global flag to indicate that Signatures should be followed to their CompiledSignature
             Type.DisableScopes();
-            var compileSig = ConstructSignatureForModule(defModuleView, nw, true);
+            var compileSig = ConstructSignatureForModule((DefModuleView) moduleView, nw, true);
             compileSig.Refines = refinementTransformer.RefinedSig;
             sig.CompileSignature = compileSig;
             foreach (var exportDecl in sig.ExportSets.Values) {
@@ -542,7 +544,7 @@ namespace Microsoft.Dafny
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
           ModuleSignature p;
-          if (GetSignatureForAlias(defModuleView, out p, reporter)) {
+          if (GetSignatureForAlias(moduleView, out p, reporter)) {
             if (alias.Signature == null) {
               alias.Signature = p;
             }
@@ -1339,9 +1341,19 @@ namespace Microsoft.Dafny
       }
     }
 
+    private void SubstituteApplications(ModuleDefinition m) {
+      foreach (var top in m.TopLevelDecls) {
+        if (top is AliasModuleDecl amd) {
+          if (!amd.TargetModExp.application.IsSimple()) {
+            Console.Out.WriteLine("Need to substitute here.");
+          }
+        }
+      }
+    }
+
     //check for export consistency by resolving internal modules
     //this should be effect-free, as it only operates on clones
-    private void CheckModuleExportConsistency(ModuleDefinition m) {
+    private void CheckModuleExportConsistency(DefModuleView moduleView, ModuleDefinition m) {
       var oldModuleInfo = moduleInfo;
       foreach (var top in m.TopLevelDecls) {
         if (!(top is ModuleExportDecl))
@@ -1451,118 +1463,131 @@ namespace Microsoft.Dafny
       }
     }
 
-    private ModuleBindings BindModuleNames(ModuleDefinition moduleDecl, ModuleBindings parentBindings) {
-      var bindings = new ModuleBindings(parentBindings);
+//    private ModuleBindings XXX_DELETE_BindModuleNames(ModuleDefinition moduleDecl, ModuleBindings parentBindings) {
+//      var bindings = new ModuleBindings(parentBindings);
+//
+//      // moduleDecl.PrefixNamedModules is a list of pairs like:
+//      //     A.B.C  ,  module D { ... }
+//      // We collect these according to the first component of the prefix, like so:
+//      //     "A"   ->   (A.B.C  ,  module D { ... })
+//      var prefixNames = new Dictionary<string, List<Tuple<List<IToken>, LiteralModuleDecl>>>();
+//      foreach (var tup in moduleDecl.PrefixNamedModules) {
+//        var id = tup.Item1[0].val;
+//        List<Tuple<List<IToken>, LiteralModuleDecl>> prev;
+//        if (!prefixNames.TryGetValue(id, out prev)) {
+//          prev = new List<Tuple<List<IToken>, LiteralModuleDecl>>();
+//        }
+//
+//        prev.Add(tup);
+//        prefixNames[id] = prev;
+//      }
+//
+//      moduleDecl.PrefixNamedModules.Clear();
+//
+//      // First, register all literal modules, and transferring their prefix-named modules downwards
+//      foreach (var tld in moduleDecl.TopLevelDecls) {
+//        if (tld is LiteralModuleDecl) {
+//          var subdecl = (LiteralModuleDecl)tld;
+//          // Transfer prefix-named modules downwards into the sub-module
+//          List<Tuple<List<IToken>, LiteralModuleDecl>> prefixModules;
+//          if (prefixNames.TryGetValue(subdecl.Name, out prefixModules)) {
+//            prefixNames.Remove(subdecl.Name);
+//            prefixModules = prefixModules.ConvertAll(ShortenPrefix);
+//          } else {
+//            prefixModules = null;
+//          }
+//
+//          BindModuleName_LiteralModuleDecl(subdecl, prefixModules, bindings);
+//        }
+//      }
+//
+//      // Next, add new modules for any remaining entries in "prefixNames".
+//      foreach (var entry in prefixNames) {
+//        var name = entry.Key;
+//        var prefixNamedModules = entry.Value;
+//        var tok = prefixNamedModules.First().Item1[0];
+//        var modDef = new ModuleDefinition(tok, name, new List<IToken>(), false, false, null, moduleDecl, null, false,
+//          true, true);
+//        // Every module is expected to have a default class, so we create and add one now
+//        var defaultClass = new DefaultClassDecl(modDef, new List<MemberDecl>());
+//        modDef.TopLevelDecls.Add(defaultClass);
+//        // Add the new module to the top-level declarations of its parent and then bind its names as usual
+//        var subdecl = new LiteralModuleDecl(modDef, moduleDecl);
+//        moduleDecl.TopLevelDecls.Add(subdecl);
+//        BindModuleName_LiteralModuleDecl(subdecl, prefixNamedModules.ConvertAll(ShortenPrefix), bindings);
+//      }
+//      
+//      // Bind the formals
+//      foreach (FormalModuleDecl fmd in moduleDecl.Formals)
+//      {
+//        moduleView.lookup(formal.Name);
+//        if (bindings.BindName(formal.Name, subdecl, null))
+//        {
+//          // the add was successful
+//        } else
+//        {
+//          Contract.Assert(false);  // TODO Shadow unimpl. Looks like else case in loop below; factor out.
+//        }
+//      }
+//
+//      // Finally, go through import declarations (that is, AbstractModuleDecl's and AliasModuleDecl's).
+//      foreach (var tld in moduleDecl.TopLevelDecls) {
+//        if (tld is AliasModuleDecl) {
+//          var subdecl = (ModuleDecl)tld;
+//          if (bindings.BindName(subdecl.Name, subdecl, null)) {
+//            // the add was successful
+//          } else {
+//            // there's already something with this name
+//            ModuleDecl prevDecl;
+//            var yes = bindings.TryLookup(subdecl.tok, out prevDecl);
+//            Contract.Assert(yes);
+//            if (prevDecl is AliasModuleDecl) {
+//              reporter.Error(MessageSource.Resolver, subdecl.tok, "Duplicate name of import: {0}", subdecl.Name);
+//            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened &&
+//                       importDecl.Name == importDecl.TargetModExp.FirstToken().val) {
+//              importDecl.ShadowsLiteralModule = true;
+//            } else {
+//              reporter.Error(MessageSource.Resolver, subdecl.tok,
+//                "Import declaration uses same name as a module in the same scope: {0}", subdecl.Name);
+//            }
+//          }
+//        }
+//      }
+//
+//      return bindings;
+//    }
 
-      // moduleDecl.PrefixNamedModules is a list of pairs like:
-      //     A.B.C  ,  module D { ... }
-      // We collect these according to the first component of the prefix, like so:
-      //     "A"   ->   (A.B.C  ,  module D { ... })
-      var prefixNames = new Dictionary<string, List<Tuple<List<IToken>, LiteralModuleDecl>>>();
-      foreach (var tup in moduleDecl.PrefixNamedModules) {
-        var id = tup.Item1[0].val;
-        List<Tuple<List<IToken>, LiteralModuleDecl>> prev;
-        if (!prefixNames.TryGetValue(id, out prev)) {
-          prev = new List<Tuple<List<IToken>, LiteralModuleDecl>>();
-        }
+//    private Tuple<List<IToken>, LiteralModuleDecl> ShortenPrefix(Tuple<List<IToken>, LiteralModuleDecl> tup) {
+//      Contract.Requires(tup.Item1.Count != 0);
+//      var rest = tup.Item1.GetRange(1, tup.Item1.Count - 1);
+//      return new Tuple<List<IToken>, LiteralModuleDecl>(rest, tup.Item2);
+//    }
 
-        prev.Add(tup);
-        prefixNames[id] = prev;
-      }
-
-      moduleDecl.PrefixNamedModules.Clear();
-
-      // First, register all literal modules, and transferring their prefix-named modules downwards
-      foreach (var tld in moduleDecl.TopLevelDecls) {
-        if (tld is LiteralModuleDecl) {
-          var subdecl = (LiteralModuleDecl)tld;
-          // Transfer prefix-named modules downwards into the sub-module
-          List<Tuple<List<IToken>, LiteralModuleDecl>> prefixModules;
-          if (prefixNames.TryGetValue(subdecl.Name, out prefixModules)) {
-            prefixNames.Remove(subdecl.Name);
-            prefixModules = prefixModules.ConvertAll(ShortenPrefix);
-          } else {
-            prefixModules = null;
-          }
-
-          BindModuleName_LiteralModuleDecl(subdecl, prefixModules, bindings);
-        }
-      }
-
-      // Next, add new modules for any remaining entries in "prefixNames".
-      foreach (var entry in prefixNames) {
-        var name = entry.Key;
-        var prefixNamedModules = entry.Value;
-        var tok = prefixNamedModules.First().Item1[0];
-        var modDef = new ModuleDefinition(tok, name, new List<IToken>(), false, false, null, moduleDecl, null, false,
-          true, true);
-        // Every module is expected to have a default class, so we create and add one now
-        var defaultClass = new DefaultClassDecl(modDef, new List<MemberDecl>());
-        modDef.TopLevelDecls.Add(defaultClass);
-        // Add the new module to the top-level declarations of its parent and then bind its names as usual
-        var subdecl = new LiteralModuleDecl(modDef, moduleDecl);
-        moduleDecl.TopLevelDecls.Add(subdecl);
-        BindModuleName_LiteralModuleDecl(subdecl, prefixNamedModules.ConvertAll(ShortenPrefix), bindings);
-      }
-
-      // Finally, go through import declarations (that is, AbstractModuleDecl's and AliasModuleDecl's).
-      foreach (var tld in moduleDecl.TopLevelDecls) {
-        if (tld is AliasModuleDecl) {
-          var subdecl = (ModuleDecl)tld;
-          if (bindings.BindName(subdecl.Name, subdecl, null)) {
-            // the add was successful
-          } else {
-            // there's already something with this name
-            ModuleDecl prevDecl;
-            var yes = bindings.TryLookup(subdecl.tok, out prevDecl);
-            Contract.Assert(yes);
-            if (prevDecl is AliasModuleDecl) {
-              reporter.Error(MessageSource.Resolver, subdecl.tok, "Duplicate name of import: {0}", subdecl.Name);
-            } else if (tld is AliasModuleDecl importDecl && importDecl.Opened &&
-                       importDecl.Name == importDecl.TargetModExp.FirstToken().val) {
-              importDecl.ShadowsLiteralModule = true;
-            } else {
-              reporter.Error(MessageSource.Resolver, subdecl.tok,
-                "Import declaration uses same name as a module in the same scope: {0}", subdecl.Name);
-            }
-          }
-        }
-      }
-
-      return bindings;
-    }
-
-    private Tuple<List<IToken>, LiteralModuleDecl> ShortenPrefix(Tuple<List<IToken>, LiteralModuleDecl> tup) {
-      Contract.Requires(tup.Item1.Count != 0);
-      var rest = tup.Item1.GetRange(1, tup.Item1.Count - 1);
-      return new Tuple<List<IToken>, LiteralModuleDecl>(rest, tup.Item2);
-    }
-
-    private void BindModuleName_LiteralModuleDecl(LiteralModuleDecl litmod,
-      List<Tuple<List<IToken>, LiteralModuleDecl>> /*?*/ prefixModules, ModuleBindings parentBindings) {
-      Contract.Requires(litmod != null);
-      Contract.Requires(parentBindings != null);
-
-      // Transfer prefix-named modules downwards into the sub-module
-      if (prefixModules != null) {
-        foreach (var tup in prefixModules) {
-          if (tup.Item1.Count == 0) {
-            tup.Item2.ModuleDef.EnclosingModule =
-              litmod.ModuleDef; // change the parent, now that we have found the right parent module for the prefix-named module
-            var sm = new LiteralModuleDecl(tup.Item2.ModuleDef,
-              litmod.ModuleDef); // this will create a ModuleDecl with the right parent
-            litmod.ModuleDef.TopLevelDecls.Add(sm);
-          } else {
-            litmod.ModuleDef.PrefixNamedModules.Add(tup);
-          }
-        }
-      }
-
-      var bindings = BindModuleNames(litmod.ModuleDef, parentBindings);
-      if (!parentBindings.BindName(litmod.Name, litmod, bindings)) {
-        reporter.Error(MessageSource.Resolver, litmod.tok, "Duplicate module name: {0}", litmod.Name);
-      }
-    }
+//    private void XXX_DELETE_BindModuleName_LiteralModuleDecl(LiteralModuleDecl litmod,
+//      List<Tuple<List<IToken>, LiteralModuleDecl>> /*?*/ prefixModules, ModuleBindings parentBindings) {
+//      Contract.Requires(litmod != null);
+//      Contract.Requires(parentBindings != null);
+//
+//      // Transfer prefix-named modules downwards into the sub-module
+//      if (prefixModules != null) {
+//        foreach (var tup in prefixModules) {
+//          if (tup.Item1.Count == 0) {
+//            tup.Item2.ModuleDef.EnclosingModule =
+//              litmod.ModuleDef; // change the parent, now that we have found the right parent module for the prefix-named module
+//            var sm = new LiteralModuleDecl(tup.Item2.ModuleDef,
+//              litmod.ModuleDef); // this will create a ModuleDecl with the right parent
+//            litmod.ModuleDef.TopLevelDecls.Add(sm);
+//          } else {
+//            litmod.ModuleDef.PrefixNamedModules.Add(tup);
+//          }
+//        }
+//      }
+//
+//      var bindings = BindModuleNames(litmod.ModuleDef, parentBindings);
+//      if (!parentBindings.BindName(litmod.Name, litmod, bindings)) {
+//        reporter.Error(MessageSource.Resolver, litmod.tok, "Duplicate module name: {0}", litmod.Name);
+//      }
+//    }
 
     private bool ResolveQualifiedModuleIdRootRefines(ModuleDefinition context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
@@ -1834,8 +1859,10 @@ namespace Microsoft.Dafny
       }
     }
 
-    ModuleSignature ConstructSignatureForModule(DefModuleView dmv, ModuleDefinition moduleDef, bool useImports) {
-      Contract.Assert(dmv==null || moduleDef == dmv.Def
+    ModuleSignature ConstructSignatureForModule(ModuleView dmv, ModuleDefinition moduleDef, bool useImports) {
+      Contract.Assert(dmv==null
+        || ((dmv is DefModuleView) && ((DefModuleView) dmv).Def == moduleDef)
+        || (dmv is ApplicationModuleView)
         || moduleDef.Name.EndsWith("_Compile")  // TODO Argh.
         );
       Contract.Requires(moduleDef != null);
@@ -1857,7 +1884,7 @@ namespace Microsoft.Dafny
       foreach (FormalModuleDecl d in moduleDef.Formals) {
         ModuleView formalView = dmv.lookup(d.Name.val);
         ModuleDecl registerThisDecl = formalView.GetDecl();
-        string registerUnderThisName = string.Format("{0}#{1}", d.Name.val, anonymousImportCount);
+        string registerUnderThisName = d.Name.val;
         anonymousImportCount++;
         toplevels[registerUnderThisName] = registerThisDecl;
         sig.TopLevels[registerUnderThisName] = registerThisDecl;
@@ -2371,8 +2398,12 @@ namespace Microsoft.Dafny
       {
         ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
         ModuleDecl clone = (ModuleDecl) cloner.CloneDeclaration(amv.Prototype.Decl, amv.Prototype.Def);
+        // Need a new Def identity to avoid collision in classMembers bucket
+        ModuleDefinition cloneDef = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.Prototype+"_XXX_suffix");
+        cloneDef.SuccessfullyResolved = amv.Prototype.Def.SuccessfullyResolved; // XXX this is such a teetering pile
+        clone.Signature = ConstructSignatureForModule(amv, cloneDef, /*useImports? I dunnoXXX */ false);
         p = clone.Signature;
-        return false;
+        return true;
       } else {
         Contract.Assert(false); // I are too dumb
         p = null;
