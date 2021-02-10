@@ -463,7 +463,7 @@ namespace Microsoft.Dafny
       foreach (var visit in visitList) {
         ModuleDecl decl = visit.Item1;
         ModuleView moduleView = visit.Item2;
-        if (decl is LiteralModuleDecl lmd) {
+        if (decl is LiteralModuleDecl literalDecl) {
 
           // VisibilityScopes: how do they work? And why do they get built here and there
           // and everywhere including the flippin' Transformer.cs!? How the heck could I get
@@ -471,9 +471,9 @@ namespace Microsoft.Dafny
           // instead I'm going to just tamper with the def's VisibilityScope right here.
           // This is how spaghetti code accretes pasta: I can't make any sense of the rest
           // of the spaghetti.
-          foreach (FormalModuleDecl d in lmd.ModuleDef.Formals) {
+          foreach (FormalModuleDecl d in literalDecl.ModuleDef.Formals) {
             ModuleView formalView = moduleView.lookup(d.Name.val);
-            lmd.ModuleDef.VisibilityScope.Augment(formalView.GetDef().VisibilityScope);
+            literalDecl.ModuleDef.VisibilityScope.Augment(formalView.GetDef().VisibilityScope);
           }
 
           // The declaration is a literal module, so it has members and such that we need
@@ -484,10 +484,14 @@ namespace Microsoft.Dafny
           // which is only used while resolving the members of the module is stored in the (basically)
           // global variable moduleInfo. Then the signatures of the module members are resolved, followed
           // by the bodies.
-          var literalDecl = (LiteralModuleDecl)decl;
           var m = literalDecl.ModuleDef;
 
           var errorCount = reporter.Count(ErrorLevel.Error);
+          if (m.RefinementBaseModExp != null) {
+            // TODO accessors on ModuleViews. This casting is stupid.
+            DefModuleView dmv = (DefModuleView) moduleView;
+            m.RefinementBaseModExp.SetFromModuleDecl(dmv.RefinementView.GetDecl());
+          }
 
           foreach (var r in rewriters) {
             r.PreResolve(m);
@@ -2359,47 +2363,47 @@ namespace Microsoft.Dafny
     // Returns the resolved Module declaration corresponding to the qualified module id
     // Requires the root to have been resolved
     // Issues an error and returns null if the path is not valid
-    public ModuleDecl ResolveModuleQualifiedId(ModuleDecl root, ModuleQualifiedId qid, ErrorReporter reporter) {
-
-      Contract.Requires(qid != null);
-      Contract.Requires(qid.Path.Count > 0);
-
-      List<IToken> Path = qid.Path;
-      ModuleDecl decl = root;
-      ModuleSignature p;
-      for (int k = 1; k < Path.Count; k++) {
-        if (decl is LiteralModuleDecl) {
-          p = ((LiteralModuleDecl)decl).DefaultExport;
-          if (p == null) {
-            reporter.Error(MessageSource.Resolver, Path[k],
-              ModuleNotFoundErrorMessage(k, Path, $" because {decl.Name} does not have a default export"));
-            return null;
-          }
-        } else {
-          p = decl.Signature;
-        }
-
-        var tld = p.TopLevels.GetValueOrDefault(Path[k].val, null);
-        if (!(tld is ModuleDecl dd)) {
-          if (decl.Signature.ModuleDef == null) {
-            reporter.Error(MessageSource.Resolver, Path[k],
-              ModuleNotFoundErrorMessage(k, Path, " because of previous error"));
-          } else {
-            reporter.Error(MessageSource.Resolver, Path[k], ModuleNotFoundErrorMessage(k, Path));
-          }
-          return null;
-        }
-
-        // Any aliases along the qualified path ought to be already resolved,
-        // else the modules are not being resolved in the right order
-        if (dd is AliasModuleDecl amd) {
-          Contract.Assert(amd.Signature != null);
-        }
-        decl = dd;
-      }
-
-      return decl;
-    }
+//    public ModuleDecl ResolveModuleQualifiedId(ModuleDecl root, ModuleQualifiedId qid, ErrorReporter reporter) {
+//
+//      Contract.Requires(qid != null);
+//      Contract.Requires(qid.Path.Count > 0);
+//
+//      List<IToken> Path = qid.Path;
+//      ModuleDecl decl = root;
+//      ModuleSignature p;
+//      for (int k = 1; k < Path.Count; k++) {
+//        if (decl is LiteralModuleDecl) {
+//          p = ((LiteralModuleDecl)decl).DefaultExport;
+//          if (p == null) {
+//            reporter.Error(MessageSource.Resolver, Path[k],
+//              ModuleNotFoundErrorMessage(k, Path, $" because {decl.Name} does not have a default export"));
+//            return null;
+//          }
+//        } else {
+//          p = decl.Signature;
+//        }
+//
+//        var tld = p.TopLevels.GetValueOrDefault(Path[k].val, null);
+//        if (!(tld is ModuleDecl dd)) {
+//          if (decl.Signature.ModuleDef == null) {
+//            reporter.Error(MessageSource.Resolver, Path[k],
+//              ModuleNotFoundErrorMessage(k, Path, " because of previous error"));
+//          } else {
+//            reporter.Error(MessageSource.Resolver, Path[k], ModuleNotFoundErrorMessage(k, Path));
+//          }
+//          return null;
+//        }
+//
+//        // Any aliases along the qualified path ought to be already resolved,
+//        // else the modules are not being resolved in the right order
+//        if (dd is AliasModuleDecl amd) {
+//          Contract.Assert(amd.Signature != null);
+//        }
+//        decl = dd;
+//      }
+//
+//      return decl;
+//    }
 
 
     public bool GetSignatureForAlias(ModuleView moduleView,
