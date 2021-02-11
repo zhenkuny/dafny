@@ -846,9 +846,13 @@ namespace Microsoft.Dafny
           Contract.Assert(dmv.Decl.Signature != null);
           result.TopLevelDecls.Insert(0, dmv.Decl);
         }
-        else
+        else if (mv is ApplicationModuleView amv)
         {
-          Contract.Assert(false); // Recurse on an application?
+          // Recurse on an application
+          ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
+          result = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
+        } else {
+          Contract.Assert(false);
         }
       }
       Console.Out.WriteLine("Need to substitute here.");

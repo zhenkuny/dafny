@@ -208,7 +208,7 @@ namespace Microsoft.Dafny
     }
 
     public override string ToString() {
-      return $"Def({Def.Name})";
+      return Def.Name;
     }
 
     public ModuleView lookup(string name) {
@@ -256,12 +256,12 @@ namespace Microsoft.Dafny
 
     public override string ToString() {
       StringBuilder sb = new StringBuilder(100);
-      sb.Append("Apply(").Append(Prototype).Append(":");
+      sb.Append(Prototype).Append("(");
       for (int i=0; i<Prototype.Def.Formals.Count; i++) {
         if (i>0) { sb.Append(","); }
         string name = Prototype.Def.Formals[i].Name.val;
-        sb.Append(name);
-        sb.Append("=");
+        //sb.Append(name);
+        //sb.Append("=");
         sb.Append(Substitutions[name]);
       }
       sb.Append(")");

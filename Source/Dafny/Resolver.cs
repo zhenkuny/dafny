@@ -87,8 +87,7 @@ namespace Microsoft.Dafny
       }
 
       public static string Name(ISet<Thing> s, Func<Thing, string> name) {
-        Contract.Requires(s != null);
-        Contract.Requires(s.Count != 0);
+        Contract.Requires(s != null); Contract.Requires(s.Count != 0);
         string nm = null;
         foreach (var thing in s) {
           string n = name(thing);
@@ -490,7 +489,11 @@ namespace Microsoft.Dafny
           if (m.RefinementBaseModExp != null) {
             // TODO accessors on ModuleViews. This casting is stupid.
             DefModuleView dmv = (DefModuleView) moduleView;
-            m.RefinementBaseModExp.SetFromModuleDecl(dmv.RefinementView.GetDecl());
+            Contract.Assert(dmv.RefinementView != null);
+            ModuleDecl refinementDecl;
+            if (GetSignatureForAlias(dmv.RefinementView, out refinementDecl, out _, reporter)) {
+              m.RefinementBaseModExp.SetFromModuleDecl(refinementDecl);
+            }
           }
 
           foreach (var r in rewriters) {
@@ -560,7 +563,8 @@ namespace Microsoft.Dafny
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
           ModuleSignature p;
-          if (GetSignatureForAlias(moduleView, out p, reporter)) {
+          //ModuleDecl _decl;
+          if (GetSignatureForAlias(moduleView, out _, out p, reporter)) {
             if (alias.Signature == null) {
               alias.Signature = p;
             }
@@ -2407,30 +2411,35 @@ namespace Microsoft.Dafny
 
 
     public bool GetSignatureForAlias(ModuleView moduleView,
+      out ModuleDecl decl,
       /*List<IToken> Exports,*/ out ModuleSignature p, ErrorReporter reporter) {
       
       // We've got this moduleView that represents the module or application that alias should point at.
       // If it's a DefModuleView, we could just sneak the ModuleDef out, grab its Signature, and call it a day, right?
       // If it's an ApplicationModuleView, we need to do a tricksy cloney thing and then recurse. I think.
       if (moduleView is DefModuleView dmv) {
+        decl = dmv.Decl;
         p = dmv.Decl.Signature;
         return true;
         //return dmv.Def;
       } else if (moduleView is ApplicationModuleView amv)
       {
         ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
-        ModuleDecl clone = (ModuleDecl) cloner.CloneDeclaration(amv.Prototype.Decl, amv.Prototype.Def);
         // Need a new Def identity to avoid collision in classMembers bucket
-        ModuleDefinition cloneDef = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.Prototype+"_XXX_suffix");
+        ModuleDefinition cloneDef = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
         cloneDef.SuccessfullyResolved = amv.Prototype.Def.SuccessfullyResolved; // XXX this is such a teetering pile
-        clone.Signature = ConstructSignatureForModule(amv, cloneDef, /*useImports? I dunnoXXX */ false);
-        p = clone.Signature;
+        ModuleDecl cloneDecl = new LiteralModuleDecl(cloneDef, amv.Prototype.Decl.EnclosingModuleDefinition);
+        cloneDecl.Signature = ConstructSignatureForModule(amv, cloneDef, /*useImports? I dunnoXXX */ false);
+        decl = cloneDecl;
+        p = cloneDecl.Signature;
         return true;
       } else {
         Contract.Assert(false); // I are too dumb
         p = null;
+        decl = null;
         return false;
       }
+    }
       
 // PAVED
 //      Contract.Requires(Exports != null);
@@ -2487,7 +2496,6 @@ namespace Microsoft.Dafny
 //        }
 //      }
 //      return true;
-    }
 
     public void RevealAllInScope(List<TopLevelDecl> declarations, VisibilityScope scope) {
       foreach (TopLevelDecl d in declarations) {
