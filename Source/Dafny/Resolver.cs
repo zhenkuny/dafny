@@ -491,7 +491,7 @@ namespace Microsoft.Dafny
             DefModuleView dmv = (DefModuleView) moduleView;
             Contract.Assert(dmv.RefinementView != null);
             ModuleDecl refinementDecl;
-            if (GetSignatureForAlias(dmv.RefinementView, out refinementDecl, out _, reporter)) {
+            if (GetSignatureForAlias(dmv.RefinementView, out refinementDecl, reporter)) {
               m.RefinementBaseModExp.SetFromModuleDecl(refinementDecl);
             }
           }
@@ -562,11 +562,10 @@ namespace Microsoft.Dafny
           }
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
-          ModuleSignature p;
-          //ModuleDecl _decl;
-          if (GetSignatureForAlias(moduleView, out _, out p, reporter)) {
+          ModuleDecl aliasDecl;
+          if (GetSignatureForAlias(moduleView, out aliasDecl, reporter)) {
             if (alias.Signature == null) {
-              alias.Signature = p;
+              alias.Signature = aliasDecl.Signature;
             }
           } else {
             alias.Signature = new ModuleSignature(); // there was an error, give it a valid but empty signature
@@ -2410,32 +2409,24 @@ namespace Microsoft.Dafny
 //    }
 
 
-    public bool GetSignatureForAlias(ModuleView moduleView,
-      out ModuleDecl decl,
-      /*List<IToken> Exports,*/ out ModuleSignature p, ErrorReporter reporter) {
+    public bool GetSignatureForAlias(ModuleView moduleView, out ModuleDecl decl, ErrorReporter reporter) {
       
       // We've got this moduleView that represents the module or application that alias should point at.
       // If it's a DefModuleView, we could just sneak the ModuleDef out, grab its Signature, and call it a day, right?
       // If it's an ApplicationModuleView, we need to do a tricksy cloney thing and then recurse. I think.
       if (moduleView is DefModuleView dmv) {
         decl = dmv.Decl;
-        p = dmv.Decl.Signature;
         return true;
         //return dmv.Def;
       } else if (moduleView is ApplicationModuleView amv)
       {
-        ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
-        // Need a new Def identity to avoid collision in classMembers bucket
-        ModuleDefinition cloneDef = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
-        cloneDef.SuccessfullyResolved = amv.Prototype.Def.SuccessfullyResolved; // XXX this is such a teetering pile
-        ModuleDecl cloneDecl = new LiteralModuleDecl(cloneDef, amv.Prototype.Decl.EnclosingModuleDefinition);
-        cloneDecl.Signature = ConstructSignatureForModule(amv, cloneDef, /*useImports? I dunnoXXX */ false);
+        ModuleDefinition parent = amv.Prototype.Decl.EnclosingModuleDefinition; // XXX not right.
+        LiteralModuleDecl cloneDecl = ModuleApplicationCloner.apply(amv, parent);
+        cloneDecl.Signature = ConstructSignatureForModule(amv, cloneDecl.ModuleDef, /*useImports? I dunnoXXX */ false);
         decl = cloneDecl;
-        p = cloneDecl.Signature;
         return true;
       } else {
         Contract.Assert(false); // I are too dumb
-        p = null;
         decl = null;
         return false;
       }

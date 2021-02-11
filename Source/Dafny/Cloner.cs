@@ -832,6 +832,13 @@ namespace Microsoft.Dafny
       }
       return decl;
     }
+    
+    public static LiteralModuleDecl apply(ApplicationModuleView amv, ModuleDefinition parent) {
+      ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
+      ModuleDefinition def = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
+      def.SuccessfullyResolved = amv.Prototype.Def.SuccessfullyResolved; // XXX this is such a teetering pile
+      return new LiteralModuleDecl(def, parent);
+    }
 
     public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
       ModuleDefinition result = base.CloneModuleDefinition(m, name);
@@ -848,9 +855,7 @@ namespace Microsoft.Dafny
         }
         else if (mv is ApplicationModuleView amv)
         {
-          // Recurse on an application
-          ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
-          result = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
+          result.TopLevelDecls.Insert(0, apply(amv, m)); // Recurse on an application
         } else {
           Contract.Assert(false);
         }
