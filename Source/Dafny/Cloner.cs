@@ -855,6 +855,8 @@ namespace Microsoft.Dafny
           Contract.Assert(false);
         }
       }
+      // The formals are applied, so the result def no longer has formal slots.
+      result.Formals = new List<FormalModuleDecl>();
       Console.Out.WriteLine("Need to substitute here.");
       return result;
     }
