@@ -2423,6 +2423,7 @@ namespace Microsoft.Dafny
         ModuleDefinition parent = amv.Prototype.Decl.EnclosingModuleDefinition; // XXX not right.
         LiteralModuleDecl cloneDecl = ModuleApplicationCloner.apply(amv, parent, actualName);
         cloneDecl.Signature = ConstructSignatureForModule(amv, cloneDecl.ModuleDef, /*useImports? I dunnoXXX */ false);
+        cloneDecl.DefaultExport = cloneDecl.Signature;  // XXX No idea when this is required or allowed.
         decl = cloneDecl;
         return true;
       } else {

@@ -851,8 +851,9 @@ namespace Microsoft.Dafny
           // Use the decl in the DefModuleView, because that thing has already been type-resolved
           // and hence has a signature.
           Contract.Assert(dmv.Decl.Signature != null);
-          ModuleDecl renamedDecl = new LiteralModuleDecl(dmv.Def, dmv.Decl.EnclosingModuleDefinition, formal.Name.val);
+          LiteralModuleDecl renamedDecl = new LiteralModuleDecl(dmv.Def, dmv.Decl.EnclosingModuleDefinition, formal.Name.val);
           renamedDecl.Signature = dmv.Decl.Signature;
+          renamedDecl.DefaultExport = renamedDecl.Signature;
           result.TopLevelDecls.Insert(0, renamedDecl);
         }
         else if (mv is ApplicationModuleView amv)
