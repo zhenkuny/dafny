@@ -3548,8 +3548,8 @@ namespace Microsoft.Dafny {
       return DefaultExport;
     }
 
-    public LiteralModuleDecl(ModuleDefinition module, ModuleDefinition parent)
-      : base(module.tok, module.Name, parent, false, false) {
+    public LiteralModuleDecl(ModuleDefinition module, ModuleDefinition parent, string name = null)
+      : base(module.tok, name ?? module.Name, parent, false, false) {
       ModuleDef = module;
     }
     public override object Dereference() { return ModuleDef; }

@@ -491,7 +491,7 @@ namespace Microsoft.Dafny
             DefModuleView dmv = (DefModuleView) moduleView;
             Contract.Assert(dmv.RefinementView != null);
             ModuleDecl refinementDecl;
-            if (GetSignatureForAlias(dmv.RefinementView, out refinementDecl, reporter)) {
+            if (GetSignatureForAlias(dmv.RefinementView, out refinementDecl, dmv.ToString(), reporter)) {
               m.RefinementBaseModExp.SetFromModuleDecl(refinementDecl);
             }
           }
@@ -563,7 +563,7 @@ namespace Microsoft.Dafny
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
           ModuleDecl aliasDecl;
-          if (GetSignatureForAlias(moduleView, out aliasDecl, reporter)) {
+          if (GetSignatureForAlias(moduleView, out aliasDecl, alias.Name, reporter)) {
             if (alias.Signature == null) {
               alias.Signature = aliasDecl.Signature;
             }
@@ -2409,7 +2409,7 @@ namespace Microsoft.Dafny
 //    }
 
 
-    public bool GetSignatureForAlias(ModuleView moduleView, out ModuleDecl decl, ErrorReporter reporter) {
+    public bool GetSignatureForAlias(ModuleView moduleView, out ModuleDecl decl, string actualName, ErrorReporter reporter) {
       
       // We've got this moduleView that represents the module or application that alias should point at.
       // If it's a DefModuleView, we could just sneak the ModuleDef out, grab its Signature, and call it a day, right?
@@ -2421,7 +2421,7 @@ namespace Microsoft.Dafny
       } else if (moduleView is ApplicationModuleView amv)
       {
         ModuleDefinition parent = amv.Prototype.Decl.EnclosingModuleDefinition; // XXX not right.
-        LiteralModuleDecl cloneDecl = ModuleApplicationCloner.apply(amv, parent);
+        LiteralModuleDecl cloneDecl = ModuleApplicationCloner.apply(amv, parent, actualName);
         cloneDecl.Signature = ConstructSignatureForModule(amv, cloneDecl.ModuleDef, /*useImports? I dunnoXXX */ false);
         decl = cloneDecl;
         return true;

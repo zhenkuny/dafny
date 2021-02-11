@@ -833,11 +833,11 @@ namespace Microsoft.Dafny
       return decl;
     }
     
-    public static LiteralModuleDecl apply(ApplicationModuleView amv, ModuleDefinition parent) {
+    public static LiteralModuleDecl apply(ApplicationModuleView amv, ModuleDefinition parent, string declName = null) {
       ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
       ModuleDefinition def = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
       def.SuccessfullyResolved = amv.Prototype.Def.SuccessfullyResolved; // XXX this is such a teetering pile
-      return new LiteralModuleDecl(def, parent);
+      return new LiteralModuleDecl(def, parent, declName ?? def.Name);
     }
 
     public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
@@ -851,11 +851,13 @@ namespace Microsoft.Dafny
           // Use the decl in the DefModuleView, because that thing has already been type-resolved
           // and hence has a signature.
           Contract.Assert(dmv.Decl.Signature != null);
-          result.TopLevelDecls.Insert(0, dmv.Decl);
+          ModuleDecl renamedDecl = new LiteralModuleDecl(dmv.Def, dmv.Decl.EnclosingModuleDefinition, formal.Name.val);
+          renamedDecl.Signature = dmv.Decl.Signature;
+          result.TopLevelDecls.Insert(0, renamedDecl);
         }
         else if (mv is ApplicationModuleView amv)
         {
-          result.TopLevelDecls.Insert(0, apply(amv, m)); // Recurse on an application
+          result.TopLevelDecls.Insert(0, apply(amv, m, formal.Name.val)); // Recurse on an application
         } else {
           Contract.Assert(false);
         }
