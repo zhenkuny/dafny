@@ -85,23 +85,23 @@ or Walker, "Substructural Type Systems", 2005).
 Wadler's 1990 type system also introduced the idea of borrowing read-only access to a linear variable.
 To understand how linear Dafny builds on (and differs from) Wadler's idea,
 here is linear Dafny's rule for typing `u1 var x := e1; e2 : u2` from [TypingRules.md](TypingRules.md),
-specialized to `u1 = ordinary` and omitting treatment of ghost variables:
+specialized to `u1 = ordinary` and omitting treatment of ghost variables and mutable borrowing:
 
 ```
-O       ; S, Bs ; {} ; L1         |-           e1     : u1
-O, {x1} ; S     ; {} ;     Bs, L2 |-               e2 : u2
-----------------------------------------------------------
-O       ; S     ; {} ; L1, Bs, L2 |- var x1 := e1; e2 : u2
+O       ; S, Bs ; L1         |-           e1     : u1
+O, {x1} ; S     ;     Bs, L2 |-               e2 : u2
+-----------------------------------------------------
+O       ; S     ; L1, Bs, L2 |- var x1 := e1; e2 : u2
 ```
 
 Here is what Wadler's original rule would look like written in the notation of [TypingRules.md](TypingRules.md):
 
 ```
 For each xs in Bs, x1's type is "safe" for xs's type
-O, Bs   ; {} ; L1         |-                e1     : u1
-O, {x1} ; {} ;     Bs, L2 |-                    e2 : u2
--------------------------------------------------------
-O       ; {} ; L1, Bs, L2 |- var!(Bs) x1 := e1; e2 : u2
+O, Bs   ; L1         |-                e1     : u1
+O, {x1} ;     Bs, L2 |-                    e2 : u2
+--------------------------------------------------
+O       ; L1, Bs, L2 |- var!(Bs) x1 := e1; e2 : u2
 ```
 
 The idea behind the two rules is very similar: the variables `Bs` are borrowed nonlinearly in `e1`
