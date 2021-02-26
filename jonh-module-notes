@@ -1,0 +1,312 @@
+Current mystery:
+Why does CommonApplication.P1 NormalizeExpand to int, but P2 NormalizeExpands to P2.A.Key?
+
+Current mystery:
+ABase got resolved (look at the first entry in sortedDecls; it has a Signature),
+but at the crash point we're holding an ABase that's not resolved. From whence came it?
+
+... okay, so the ModuleApplicationCloner created the problem. It didn't really
+need to be created for ABase, so I deferred the problem a step.
+
+--------
+
+Interesting, seems like there's confusion between 
+
+Relsolver.cs:ResolveTypeLenient: type is UserDefinedType
+
+ResolveDotSuffix_Type
+
+------------------------------------------------------------------------------
+((AliasModuleDecl)decl.Signature.TopLevels["A"]).Signature.TopLevels["Key"].WhatKind
+
+revealScope.scopeIds is {"InnocentA"}
+Resolver.cs:1148: P1's AccessibleSignature().VisibilityScope is null.
+AccessibleSignature() == Signature
+
+Binaries/dafny
+(when you merge master, Binaries/dafny moves to Scripts)
+
+sudo pip install lit
+sudo pip install OutputCheck
+cd Test/dafny0
+lit ModuleApplication.i.dfy
+
+git config --global submodule.recurse true
+git config --global merge.conflictstyle diff3
+
+ResolveModuleQualifiedId - is now empty -- what was it in Cok's version before the merge?
+
+ResolveModuleExpression
+    - is the thing that I wrote that walks a moduleexpression and creates
+    a decl and populates its Signature (which should now move into the
+    expr/qid?)
+
+ResolveExport
+    - calls out to ResolveModuleQualifiedId
+    - and then does a bunch of ExportSet math.
+
+GetAppliedModule:
+    - ProcessDependenciesDefinition.RefinementBaseModExp only ever needs to
+    resolve a single application.
+    And it'll need to recurse dottily. So why restrict? Just use below case.
+        refines A(B, C.D(E))
+    - ResolveModuleExpression walks a whole path making substitutions at the
+        top level (B, C.D(E), G) and recursing (D(E)).
+        import A(B, C.D(E)).F(G)
+
+        Its Cloner gets applied one expression at a time:
+            One for A(B, C.D(E)) with transformation.Keys = {B, C}
+            One for F(G) with transformation.Keys = {G}
+
+
+G expects 2 application arguments:
+When we get to PreResolve (m.Name=="G"), m.RefinementBaseModExp already has
+a Def and Sig filled in, but evidently not with application info. Who does
+that filling-in?
+
+
+((ModuleDecl)((ModuleDecl)m.Signature.TopLevels["c"])
+    .Signature.TopLevels["a"]).Signature.TopLevels["T"].FullName
+  "G.a.Abs.T"
+
+((ModuleDecl)((ModuleDecl)((LiteralModuleDecl)m).ModuleDef.TopLevelDecls[0])
+    .Signature.TopLevels["a"]).Signature.TopLevels["T"].FullName
+  "E.c.a.Abs.T"
+  
+...so m's ModuleDef has the wrong c decl in it, but its Signature is okay.
+------------------------------------------------------------------------------
+
+Verification can consume either a ParameterizedModule or an AppliedModule.
+A ParameterizedModule acts like an old-school abstract import (:).
+
+We apply modules at refinement time and at import time.
+Both applications may be "incomplete" in that an application
+parameter may itself be a formal parameter that gets filled in again
+later. How do we implement that?
+
+module A { type T }
+module B(a:A) {
+  function x() : T
+}
+module C(a:A) {
+  import B' = B(a)
+  // Is B' applied? I mean, it looks like it, and yet later, in module
+  // E's import of C(D), we're going to apply it harder.
+}
+module D refines A { datatype T = T(v:int) }
+module E {
+  import C' = C(D)
+    // This substitution must push through C.B' to replace T's definition.
+    // Does resolving the module early do enough, so that type resolution can
+    // sort out the rest?
+  predicate y() {
+    C'.B'.x().v == 6  // Now we know that x returns type D.T, not merely A.T
+  }
+}
+
+module A {}
+module B {}
+module C(a:A) refines B
+module C(b:B) {}
+
+Okay so we registered E.__default back when we parsed E.
+Now we're trying to do it again while working on EA', which is trying
+to get a signature for EA'. ConstructSignatureForModule(EA') iterates
+over the decls in EA'.Def, which ... got copied from E, I guess.
+We haven't 
+  
+
+fskcing compile clone got created at 522
+I stuffed the formals at ConstructSignatureForModule, line 484
+But line 522 uses CloneModuleDefinition, which clones the toplevels.
+Why doesn't 530 ConstructSignatureForModule do its thing?
+Why doesn't the compile module have Formals? Because the cloner doesn't
+know about Formals. fixed.
+
+Okay so now A_k isn't in the visibility scope.
+
+Relevant section is Resolver.cs:1252 (ResolveModuleExport)
+I suspect the problem is that the VisibilityScope for application EA' needs to
+include A' (A_k). That kind of thing normally happens when interpreting
+the module, but here we also need to pick up the types mentioned in the
+application?
+The modDecl is EA', which we made :2408 (GetSignatureForAlias), which is the
+thing that has an AccessibleSignature().VisibilityScope, so we should Augment
+it in :1875 ConstructSignatureForModule (called from 2408)
+
+------------------------------------------------------------------------------
+
+Boogie Translating E . __default . member f1 . formal x
+TrType -- translate type into boogie repr.
+
+...oh, this is a failure of isyn.IsVisibleInScope -- A isn't visible in E,
+but it should be.
+Ah, we handled the actual case, now we need to handle the formal case.
+
+Why are the augmentations to the decl.Signature in ConstructSignatureForModule
+enough to solve a problem of F.EA' -- oh because EA' is an aliasdecl, and
+that's the lens through which we view it. Now we're working with the Def.
+Where does the def's scope come from?
+
+Dear heaven there's ANOTHER visibilityscope accumulator in the Translator.
+
+I just jammed some more garbage into the VisibilityScope way back at
+module resolution time. No idea how criminal that is.
+
+------------------------------------------------------------------------------
+Dafny tech debt concerns
+
+- Cloning is a mess. Why not interfaces and views of underlying objects?
+  Cloning makes it hard to identify how something got into the state its in;
+  it's denormalizing gone wild.
+  - Private Howell reporting back from another mission gone wild. I made
+  a new decl called 'ea' to represent a formal parameter, pointing at a
+  Def called A. The refinement cloner cloned it -- and took the name A from
+  the Def rather than the Decl. Why? I dunno. Another victim of
+  denormalization.
+
+- Similarly, there are many, many kinds of lookups: lists of TopLevels in
+  Defs and in Decls, Signatures in Defs, Signatures in Decls, Signatures
+  now stapled into QIDs to clean up some of the previous confusion. I spent
+  literally weeks trying to figure out all the places I needed to update
+  signatures and signature-like things, and that was only to get something
+  that would consume a minimum test; I almost certainly broke all the
+  error cases and ExportSets stuff.
+
+- Lots of ambient quasi-static state, rather than attaching or wrapping
+  state to the object it is associated to.
+  Type.Scope push and pop, Enable/Disable
+  moduleInfo (oldModuleInfo / restore)
+    (Yay I'm fighting this one again. Very hard to track down how it
+    got established.)
+  classDefs table
+
+- Wild amounts of cross-layer coupling. After acquiring many battle scars
+with VisibilityScopes, I thought I pretty much had them in line. And then
+I discovered that there's another little module scan hiding down in the
+Translater that builds up yet another set of VisibilityScopes.
+
+- General code smell
+  - The Resolver is 18,000 lines of code in a single class. That's not
+    a unit size amenable to incremental comprehension and evolving
+    development.
+  - The Resolver has lots of very long methods for which comprehension would
+    benefit greatly from even simple functional decomposition. But try
+    decomposing them; you'll find it's hard because the computation
+    state is tucked in stack variables and side-state that creates very
+    convoluted calling contracts if blocks are extracted as methods.
+    Long as in hundreds of lines and conflating many different concerns.
+
+------------------------------------------------------------------------------
+
+Okay, I can get verification, but for some reason it complains three times
+about the error in H. Sigh.
+
+Moving on to the error in CommonApplication.i:G.R.
+R isn't in the literalDecl.Signature, which is fine, but that thing
+ends up making its way to the moduleInfo,
+
+How does refinement type naming work in normal Dafny?
+Simplified to RefinementNaming.i.dfy to test against master.
+Yeah, master passes. Why?
+G's sig at moduleInfo = MergeSignature(sig, systemNameInfo)
+  in ResolveModuleDefinition has the refinement stuff in it already.
+...because in ResolveProgram:483 the literalDecl.Signature already
+has R in it.
+...and the refinementRewriter stuffed some crap into ModuleDef m, in
+place, which happens to be literalDecl.ModuleDef. After the rewriters,
+we load ("Register...") the literalDecl.Signature from m.TopLevelDecls.
+
+Back to module dafny.
+...RefinementTransformer.PreResolve expects RefinementBaseModExp.Decl to
+have been populated, and we haven't yet. What did we do with the
+RefinementBase?
+In Resolver.cs: Absosmurfly nothing.
+In ModuleResolver: We tuck a RefinementView into the context for module
+  name evaluation.
+
+In regular dafny, whose job was it to write the RefinementBaseModExp.Decl?
+...in the ResolveProgram foreach-decl preamble: "First we do refinement
+transformation."
+... Okay, fixed by reinstating an analogous stanza.
+
+After chasing Signatures around the block six times, I'm now chasing
+them into the DefaultExports. I have no idea what the rules are,
+and the implementation that implies them is spread all over.
+
+------------------------------------------------------------------------------
+
+Next up, trying to substitute formals into C(A).
+...okay, delete the formals.
+
+Next up, the missing R type problem has recurred!
+It seems module-application-clone of E(C(a)) gave back C(a)
+
+------------------------------------------------------------------------------
+Solved some signature-propagation isses. Well, "solved" in the sense that
+I kicked the export system a little harder until its leaking blood
+covered up the signature evidence.
+------------------------------------------------------------------------------
+
+Can't find ea when type-resolving SimpleModuleApplication.G, because
+G's moduleInfo only has ga, _default, and A.
+'kay, it's because ResolveModuleDefinition.sig has {ga,_default,A}.
+And in fact that's just LiteralModuleDecl G's signature. Wasn't
+it supposed to get enhanced by the RefinedSig?
+literalDecl(G).Signature.Refines has {ea and E(A).__default},
+which isn't very useful either -- should be E(ga).
+
+Why didn't refinement fill it out?
+...or should it have? Let's find the corresponding idea in master dafny.
+
+RefinementScope.i.dfy
+module-parameters-b: ga,_default,A
+master: _default,ea (!)
+That ga is missing is fine -- it wasn't declared in the master version of the
+input. And default belongs to G.
+So the presence of A is perhaps a bug.
+But the absence of ea is the bug we care about. How did it get here in master?
+My money's on the refinementRewriter. And yep, that paid off like $GME baby.
+
+Oh fascinating! RefinementTransformer.cs:142 cloned ea and got decl "A" out!
+Because the decl name comes from the def. Dear goodness this architecture
+is frustrating.
+
+------------------------------------------------------------------------------
+Rustan 2021-02-19
+
+- one compiler; a couple years ago that got split into a multitarget compiler
+- if we want to verify that compiler, that would look different.
+  - we'd branch out to a new compiler arch; old ones would stay plugged in
+    until they got plugged into the new arch
+- (no plans for) the verifier (translator.cs)  you'd want to, but no plans to connect compiler to verifier
+
+Clear that resolver had to be two passes.
+  - registration pass
+  - resolution pass
+Grew into:
+  - registration
+  - resolve signatures
+  - resolve bodies
+Type inference, ghost -- all of that is wrapped into one big pass
+  - now split into major phases, big loops one after another
+
+Once the names have been filled in, everything has types (but not necessarily
+inferred) -- all the decl and type fields have been filled in.
+If you have coinductive routines, there are more passes to do checks.
+  - they're read only, or they compute data that nobody else depends on;
+  the code doesn't exploit that right now.
+
+- in these big loops, you'd think they'd go over all the top-level decls,
+but they go over the newtypes and subtypes first, and then you have to be
+careful not to go over them again.
+
+one way to reduce this complexity would be to: refactor this analysis phase,
+at least name the phase, maybe refactor into another file. It'll depend on
+these fields, and it'll supply these other fields.
+
+------------------------------------------------------------------------------
+Moving state back to work laptop.
+veribetrfs: origin/functor-examples
+dafny: securefoundations/module-parameters-b
+Runtime arguments: /home/selah/jonh/vmware/dafny/Binaries/Dafny.dll  /compile:0 veribetrfs3/examples/FunctorExamples/RefinementScope.i.dfy
