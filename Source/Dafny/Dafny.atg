@@ -938,7 +938,6 @@ SubModuleDecl<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl sub
 = (. Attributes attrs = null;  IToken/*!*/ id, iderr; var prefixIds = new List<IToken>();
      List<MemberDecl/*!*/> namedModuleDefaultClassMembers = new List<MemberDecl>();;
      List<IToken> idExports = null;
-     List<FormalModuleDecl> formals = new List<FormalModuleDecl>();
      List<IToken> idPath = null;    // For forms that don't take ModuleExpression, until ModuleExpression has a variant that handles Exports. Hrmm. XXX
      ModuleExpression modexp = null;
      ModuleExpression moduleRefined = null;

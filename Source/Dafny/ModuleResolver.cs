@@ -172,6 +172,17 @@ namespace Microsoft.Dafny
       this.Decl = Decl;
       this.LocalViews = new Dictionary<string, Tuple<ModuleDecl, ModuleView>>();
       SymbolTableView context = new SymbolTableView(parentContext, Def.Name);
+      
+      /*
+       module A { type T }
+       module B(a:A) {}
+       module C(b:B) { predicate foo(x:b.a.T) { false } }
+       module C(a:A, a2:A, b:B(a), b2:B(a2)) {}
+       module C(b:B, b2:B) requires b.A==b2.A {}
+       module C(b:B(A)) {}
+       module D refines B(A) { //adds behavior }
+       module { import F = C(D) }
+       */
 
       // Add the formals first; they're reachable from the refinement expression.
       foreach (FormalModuleDecl formal in Def.Formals) {
@@ -221,7 +232,17 @@ namespace Microsoft.Dafny
       }
       return null;
     }
-    
+
+/*
+
+    module A { import U }
+    module B refines A {}
+    module C(b:B) {
+      import V = b.U
+      predicate foo(x:V.T) {}
+    }
+    */
+
     public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews) {
       foreach (var (key,lvt) in LocalViews.Select(x => (x.Key, x.Value))) {
         lvt.Item2.BuildModuleVisitList(outModuleViews);
