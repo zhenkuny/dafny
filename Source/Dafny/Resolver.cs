@@ -7846,7 +7846,7 @@ namespace Microsoft.Dafny
           Visit(s.Receiver, inGhostContext);
           Contract.Assert(s.Args.Count == s.Method.Ins.Count);
           for (var i = 0; i < s.Method.Ins.Count; i++) {
-            Visit(s.Args[i], inGhostContext || s.Method.Ins[i].IsGhost);
+            Visit(s.Args[i].Expr, inGhostContext || s.Method.Ins[i].IsGhost);
           }
           return false;
         } else if (stmt is ForallStmt) {
@@ -8408,6 +8408,7 @@ namespace Microsoft.Dafny
         } else if (stmt is AssignStmt) {
           var s = (AssignStmt)stmt;
           var lhs = s.Lhs.Resolved;
+          var isAutoGhost = AssignStmt.LhsIsToGhostOrAutoGhost(lhs);
 
           // Make an auto-ghost variable a ghost if the RHS is a ghost
           if (lhs.Resolved is AutoGhostIdentifierExpr && s.Rhs is ExprRhs) {
@@ -8471,46 +8472,48 @@ namespace Microsoft.Dafny
                   ((lhs as AutoGhostIdentifierExpr).Var as LocalVariable).MakeGhost();
                   madeGhost = true;
                 }
+              }
 
-                if (!AssignStmt.LhsIsToGhost(lhs)) {
+              // REVIEW: From Dafny official.  Still needed or superceded by checks below?
+              if (!AssignStmt.LhsIsToGhost(lhs)) {
                   resolver.CheckIsCompilable(rhs.Expr);
+              }
+
+              if (!madeGhost && !assumeRhsCompilable) {
+                resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
+              }
+
+              if (x != null && x.Var.IsLinear) {
+                // TODO(andrea) with new assignment syntax, use this again to check correct rewriting for inout?
+                if (usageContext.available[x.Var] != Available.Consumed && !assumeRhsCompilable) {
+                  Error(x, "variable must be unavailable before assignment");
                 }
 
-                if (!madeGhost && !assumeRhsCompilable) {
-                  resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
+                usageContext.available[x.Var] = Available.Available;
+              } else if (x != null && x.Var.IsShared && usageContext.Borrows()) {
+                Error(rhs.Expr, "cannot borrow variable because expression returns a shared result");
+              }
+
+            } else if (s.Rhs is HavocRhs) {
+              // cool
+            } else {
+              var rhs = (TypeRhs) s.Rhs;
+              if (rhs.ArrayDimensions != null) {
+                rhs.ArrayDimensions.ForEach(resolver.CheckIsCompilable);
+                if (rhs.ElementInit != null) {
+                  resolver.CheckIsCompilable(rhs.ElementInit);
                 }
 
-                if (x != null && x.Var.IsLinear) {
-                  // TODO(andrea) with new assignment syntax, use this again to check correct rewriting for inout?
-                  if (usageContext.available[x.Var] != Available.Consumed && !assumeRhsCompilable) {
-                    Error(x, "variable must be unavailable before assignment");
-                  }
-
-                  usageContext.available[x.Var] = Available.Available;
-                } else if (x != null && x.Var.IsShared && usageContext.Borrows()) {
-                  Error(rhs.Expr, "cannot borrow variable because expression returns a shared result");
+                if (rhs.InitDisplay != null) {
+                  rhs.InitDisplay.ForEach(resolver.CheckIsCompilable);
                 }
-              } else if (s.Rhs is HavocRhs) {
-                // cool
-              } else {
-                var rhs = (TypeRhs) s.Rhs;
-                if (rhs.ArrayDimensions != null) {
-                  rhs.ArrayDimensions.ForEach(resolver.CheckIsCompilable);
-                  if (rhs.ElementInit != null) {
-                    resolver.CheckIsCompilable(rhs.ElementInit);
-                  }
+              }
 
-                  if (rhs.InitDisplay != null) {
-                    rhs.InitDisplay.ForEach(resolver.CheckIsCompilable);
-                  }
-                }
-
-                if (rhs.InitCall != null) {
-                  for (var i = 0; i < rhs.InitCall.Args.Count; i++) {
-                    if (!rhs.InitCall.Method.Ins[i].IsGhost) {
-                      resolver.CheckIsCompilable(rhs.InitCall.Args[i].Expr, usageContext,
-                        rhs.InitCall.Method.Ins[i].Usage);
-                    }
+              if (rhs.InitCall != null) {
+                for (var i = 0; i < rhs.InitCall.Args.Count; i++) {
+                  if (!rhs.InitCall.Method.Ins[i].IsGhost) {
+                    resolver.CheckIsCompilable(rhs.InitCall.Args[i].Expr, usageContext,
+                      rhs.InitCall.Method.Ins[i].Usage);
                   }
                 }
               }
@@ -15817,7 +15820,7 @@ namespace Microsoft.Dafny
             if (j < ctor.Formals.Count) {
               var formal = ctor.Formals[j];
               Type st = SubstType(formal.Type, subst);
-              ResolveCasePattern(arg, st, new CodeContextWrapper(context, context.IsGhost || formal.IsGhost));
+              ResolveCasePattern(arg, st, new CodeContextWrapper(context, context.IsGhost || formal.IsGhost), uOuter, formal.Usage);
             }
             j++;
           }
@@ -16689,7 +16692,7 @@ namespace Microsoft.Dafny
                 // do nothing else; error has been reported
               } else if (callee != null) {
                 // produce a FunctionCallExpr instead of an ApplyExpr(MemberSelectExpr)
-                var rr = new FunctionCallExpr(e.Lhs.tok, callee.Name, mse.Obj, e.tok, ApplySuffixArgListToExpressionList(e.Args, atLabel));
+                var rr = new FunctionCallExpr(e.Lhs.tok, callee.Name, mse.Obj, e.tok, ApplySuffixArgListToExpressionList(e.Args), atLabel);
                 // resolve it here:
                 rr.Function = callee;
                 Contract.Assert(!(mse.Obj is StaticReceiverExpr) || callee.IsStatic);  // this should have been checked already
@@ -18353,7 +18356,7 @@ namespace Microsoft.Dafny
       }
       if (u != null && !u.IsArrayType) {
         var f = new NameSegment(e.tok, "operator'" + overload + "?" + u.Name, null);
-        var apply = new ApplySuffix(e.tok, f, args);
+        var apply = new ApplySuffix(e.tok, null, f, args);
         ResolveApplySuffix(apply, opts, false);
         if (apply.ResolvedExpression != null) {
           e.PlaceholderReplacement = apply;

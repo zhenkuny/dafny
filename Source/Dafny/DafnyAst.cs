@@ -6340,10 +6340,6 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public void MakeGhost() {
-      Usage = Usage.Ghost;
-    }
-
     public BoundVar(IToken tok, string name, Type type, Usage usage = Usage.Ordinary)
       : base(tok, name, type, usage) {
       Contract.Requires(tok != null);
@@ -12796,8 +12792,8 @@ namespace Microsoft.Dafny {
       Args = args;
     }
 
-    public ApplySuffix(IToken tok, Expression lhs, List<Expression> args)
-      : this(tok, lhs, args.ConvertAll(e => new ApplySuffixArg { Inout = false, Expr = e }))
+    public ApplySuffix(IToken tok, IToken/*?*/ atLabel, Expression lhs, List<Expression> args)
+      : this(tok, atLabel, lhs, args.ConvertAll(e => new ApplySuffixArg { Inout = false, Expr = e }))
     {}
   }
 
