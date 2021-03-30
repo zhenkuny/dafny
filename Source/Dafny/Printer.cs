@@ -2826,6 +2826,25 @@ namespace Microsoft.Dafny {
       wr.Write(")");
     }
 
+    void PrintActualArguments(List<ApplySuffixArg> args, string name, Bpl.IToken/*?*/ atLabel) {
+      Contract.Requires(args != null);
+      if (name != null && name.EndsWith("#")) {
+        Contract.Assert(atLabel == null);
+        wr.Write("[");
+        if (args[0].Inout) {
+          wr.Write("inout ");
+        }
+        PrintExpression(args[0].Expr, false);
+        wr.Write("]");
+        args = new List<ApplySuffixArg>(args.Skip(1));
+      } else if (atLabel != null) {
+        wr.Write($"@{atLabel.val}");
+      }
+      wr.Write("(");
+      PrintExpressionList(args, false);
+      wr.Write(")");
+    }
+
     void PrintActualArguments(List<ApplySuffixArg> args, string name) {
       Contract.Requires(args != null);
       if (name != null && name.EndsWith("#")) {
