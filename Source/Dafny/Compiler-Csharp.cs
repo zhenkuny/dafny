@@ -44,7 +44,20 @@ namespace Microsoft.Dafny
     static string FormatTypeDescriptorVariable(string typeVarName) => $"_td_{typeVarName}";
     static string FormatTypeDescriptorVariable(TypeParameter tp) => FormatTypeDescriptorVariable(tp.CompileName);
     const string TypeDescriptorMethodName = "_TypeDescriptor";
-    static string FormatDefaultTypeParameterValue(TypeParameter tp) => $"_default_{tp.CompileName}";
+    static string FormatDefaultTypeParameterValue(TypeParameter tp) {
+      if (tp is OpaqueType_AsParameter) {
+        // This is unusual. Typically, the compiler never needs to compile an opaque type, but this opaque type
+        // is apparently an :extern. It's difficult to say what the compiler could do in this situation, since
+        // it doesn't know how to generate code that produces a legal value of the opaque type. If we don't do
+        // anything different from the common case (the "else" branch below), then the code emitted will not
+        // compile (see github issue #1151). So, to do something a wee bit better, we emit a placebo value. This
+        // will only work when the opaque type is in the same module and has no type parameters.
+        return $"default({tp.CompileName})";
+      } else {
+        // this is the common case
+        return $"_default_{tp.CompileName}";
+      }
+    }
 
     protected override void EmitHeader(Program program, TargetWriter wr) {
       wr.WriteLine("// Dafny program {0} compiled into C#", program.Name);
@@ -2914,13 +2927,13 @@ namespace Microsoft.Dafny
     }
 
     public override void EmitCallToMain(Method mainMethod, string baseName, TargetWriter wr) {
-      var companion = TypeName_Companion(mainMethod.EnclosingClass as TopLevelDecl, wr, mainMethod.tok);
+      var companion = TypeName_Companion(UserDefinedType.FromTopLevelDeclWithAllBooleanTypeParameters(mainMethod.EnclosingClass), wr, mainMethod.tok, mainMethod);
       var wClass = wr.NewNamedBlock("class __CallToMain");
       var wBody = wClass.NewNamedBlock("public static void Main(string[] args)");
       var modName = mainMethod.EnclosingClass.EnclosingModuleDefinition.CompileName == "_module" ? "_module." : "";
       companion = modName + companion;
 
-      var idName = mainMethod.IsStatic ? IdName(mainMethod) : "_StaticMain";
+      var idName = IssueCreateStaticMain(mainMethod) ? "_StaticMain" : IdName(mainMethod);
 
       Coverage.EmitSetup(wBody);
       wBody.WriteLine($"{GetHelperModuleName()}.WithHaltHandling({companion}.{idName});");

@@ -1608,8 +1608,8 @@ as explained below.
 MethodSignature_(isGhost, isExtreme) =
   [ GenericParameters ]
   [ KType ]    // permitted only if isExtreme == true
-  Formals(allowGhostKeyword: !isGhost)
-  [ "returns" Formals(allowGhostKeyword: !isGhost) ]
+  Formals(allowGhostKeyword: !isGhost, allowNewKeyword: isTwostateLemma))
+  [ "returns" Formals(allowGhostKeyword: !isGhost, allowNewKeyword: false) ]
 ````
 A method signature specifies the method generic parameters,
 input parameters and return parameters.
@@ -1810,7 +1810,97 @@ See [the Dafny Lemmas tutorial](http://rise4fun.com/Dafny/tutorial/Lemmas)
 for more examples and hints for using lemmas.
 
 ### 13.3.4. Two-state lemmas and functions {#sec-two-state}
-TO BE WRITTEN - two-state lemmas; unchanged predicate
+
+The heap is an implicit parameter to every function, though a function is only allowed
+to read those parts of the mutable heap that it admits to in its `reads` clause.
+Sometimes, it is useful for a function to take two heap parameters, for example, so
+the function can return the difference between the value of a field in the two heaps.
+Such a _two-state function_ is declared by `twostate function` (or `twostate predicate`,
+which is the same as a `twostate function` that returns a `bool`). A two-state function
+is always ghost. It is appropriate to think of these two implicit heap parameters as
+representing a "current" heap and an "old" heap.
+
+For example, the predicate
+```dafny
+{% include_relative examples/Example-TwoState-Increasing.dfy %}
+```
+returns `true` if the value of `c.data` has not been reduced from the old state to the
+current. Dereferences in the current heap are written as usual (e.g., `c.data`) and
+must, as usual, be accounted for in the function's `reads` clause. Dereferences in the
+old heap are enclosed by `old` (e.g., `old(c.data)`), just like when one dereferences
+a  method's initial heap. The function is allowed to read anything in the old heap;
+the `reads` clause only declares dependencies on locations in the current heap.
+Consequently, the frame axiom for a two-state function is sensitive to any change
+in the old-heap parameter; in other words, the frame axiom says nothing about two
+invocations of the two-state function with different old-heap parameters.
+
+At a call site, the two-state function's current-heap parameter is always passed in
+as the caller's current heap. The two-state function's old-heap parameter is by
+default passed in as the caller's old heap (that is, the initial heap if the caller
+is a method and the old heap if the caller is a two-state function). While there is
+never a choice in which heap gets passed as the current heap, the caller can use
+any preceding heap as the argument to the two-state function's old-heap parameter.
+This is done by labeling a state in the caller and passing in the label, just like
+this is done with the built-in `old` function.
+
+For example, the following assertions all hold:
+```dafny
+{% include_relative examples/Example-TwoState-Caller.dfy %}
+```
+The first call to `Increasing` uses `Caller`'s initial state as the old-heap parameter,
+and so does the second call. The third call instead uses as the old-heap parameter
+the heap at label `L`, which is why the third call returns `false`.
+As shown in the example, an explicitly given old-heap parameter is given after
+an `@`-sign (which follows the name of the function and any explicitly given type
+parameters) and before the open parenthesis (after which the ordinary parameters are
+given).
+
+A two-state function is allowed to be called only from a two-state context, which
+means a method, a two-state lemma (see below), or another two-state function.
+Just like a label used with an `old` expressions, any label used in a call to a
+two-state function must denote a program point that _dominates_ the call. This means
+that any control leading to the call must necessarily have passed through the labeled
+program point.
+
+Any parameter (including the receiver parameter, if any) passed to a two-state function
+must have been allocated already in the old state. For example, the second call to
+`Diff` in method `M` is illegal, since `d` was not allocated on entry to `M`:
+```dafny
+{% include_relative examples/Example-TwoState-Diff.dfy %}
+```
+
+A two-state function can declare that it only assumes a parameter to be allocated
+in the current heap. This is done by preceding the parameter with the `new` modifier,
+as illustrated in the following example, where the first call to `DiffAgain` is legal:
+```dafny
+{% include_relative examples/Example-TwoState-DiffAgain.dfy %}
+```
+
+A _two-state lemma_ works in an analogous way. It is a lemma with both a current-heap
+parameter and an old-heap parameter, it can use `old` expressions in its
+specification (including in the precondition) and body, its parameters may
+use the `new` modifier, and the old-heap parameter is by default passed in as
+the caller's old heap, which can be changed by using an `@`-parameter.
+
+Here is an example of something useful that can be done with a two-state lemma:
+```dafny
+{% include_relative examples/Example-TwoState-SeqSum.dfy %}
+```
+
+A two-state function can be used as a first-class function value, where the receiver
+(if any), type parameters (if any), and old-heap parameter are determined at the
+time the first-class value is mentioned. While the receiver and type parameters can
+be explicitly instantiated in such a use (for example, `p.F<int>` for a two-state
+instance function `F` that takes one type parameter), there is currently no syntactic
+support for giving the old-heap parameter explicitly. A caller can work
+around this restriction by using (fancy-word alert!) eta-expansion, meaning
+wrapping a lambda expression around the call, as in `x => p.F<int>@L(x)`.
+The following example illustrates using such an eta-expansion:
+```dafny
+{% include_relative examples/Example-TwoState-EtaExample.dfy %}
+```
+
+TO BE WRITTEN - unchanged predicate
 
 ## 13.4. Function Declarations
 
@@ -1819,14 +1909,19 @@ FunctionDecl(isWithinAbstractModule) =
   ( [ "twostate" ] "function" [ "method" ] { Attribute }
     MethodFunctionName
     FunctionSignatureOrEllipsis_(allowGhostKeyword:
-                                           ("method" present))
+                                           ("method" present),
+                                 allowNewKeyword:
+                                           "twostate" present)
   | "predicate" [ "method" ] { Attribute }
     MethodFunctionName
     PredicateSignatureOrEllipsis_(allowGhostKeyword:
-                                           ("method" present))
+                                           ("method" present),
+                                  allowNewKeyword:
+                                           "twostate" present)
   | ( "least" | "greatest" ) "predicate" { Attribute }
     MethodFunctionName
-    PredicateSignatureOrEllipsis_(allowGhostKeyword: false)
+    PredicateSignatureOrEllipsis_(allowGhostKeyword: false,
+                         allowNewKeyword: "twostate" present))
   )
   FunctionSpec
   [ FunctionBody ]
@@ -1834,15 +1929,22 @@ FunctionDecl(isWithinAbstractModule) =
 FunctionSignatureOrEllipsis_(allowGhostKeyword) =
   FunctionSignature_(allowGhostKeyword) | ellipsis
 
-FunctionSignature_(allowGhostKeyword) =
-  [ GenericParameters ] Formals(allowGhostKeyword)i
-  ":" ( Type | "(" GIdentType ")" )
+FunctionSignature_(allowGhostKeyword, allowNewKeyword) =
+  [ GenericParameters ]
+  Formals(allowGhostKeyword, allowNewKeyword)
+  ":"
+  ( Type
+  | "(" GIdentType(allowGhostKeyword: false,
+                   allowNewKeyword: false)
+    ")"
+  )
 
 PredicateSignatureOrEllipsis_(allowGhostKeyword) =
   PredicateSignature_(allowGhostKeyword) | ellipsis
 
 PredicateSignature_(allowGhostKeyword) =
-  [ GenericParameters ] [ KType ] Formals(allowGhostKeyword)
+  [ GenericParameters ] [ KType ] Formals(allowGhostKeyword,
+                                          allowNewKeyword)
 
 FunctionBody = "{" Expression(allowLemma: true, allowLambda: true)
                "}"
@@ -2368,8 +2470,8 @@ sequence.
 ````grammar
 IteratorDecl = "iterator" { Attribute } IteratorName
   ( [ GenericParameters ]
-    Formals(allowGhostKeyword: true)
-    [ "yields" Formals(allowGhostKeyword: true) ]
+    Formals(allowGhostKeyword: true, allowNewKeyword: false)
+    [ "yields" Formals(allowGhostKeyword: true, allowNewKeyword: false) ]
   | ellipsis
   )
   IteratorSpec
@@ -3296,4 +3398,3 @@ co-inductive proof in using a co-lemma with the inductive proof in using
 the lemma. Whereas the inductive proof is performing proofs for deeper
 and deeper equalities, the co-lemma can be understood as producing the
 infinite proof on demand.
-

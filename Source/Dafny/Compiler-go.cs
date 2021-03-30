@@ -89,12 +89,15 @@ namespace Microsoft.Dafny {
     }
 
     public override void EmitCallToMain(Method mainMethod, string baseName, TargetWriter wr) {
-      var companion = TypeName_Companion(mainMethod.EnclosingClass as ClassDecl, wr, mainMethod.tok);
+      var companion = TypeName_Companion(UserDefinedType.FromTopLevelDeclWithAllBooleanTypeParameters(mainMethod.EnclosingClass), wr, mainMethod.tok, mainMethod);
 
       var wBody = wr.NewNamedBlock("func main()");
       wBody.WriteLine("defer _dafny.CatchHalt()");
+
+      var idName = IssueCreateStaticMain(mainMethod) ? "Main" : IdName(mainMethod);
+
       Coverage.EmitSetup(wBody);
-      wBody.WriteLine("{0}.{1}()", companion, mainMethod.IsStatic ? IdName(mainMethod) : "Main");
+      wBody.WriteLine("{0}.{1}()", companion, idName);
       Coverage.EmitTearDown(wBody);
     }
 
@@ -1770,6 +1773,7 @@ namespace Microsoft.Dafny {
 
     protected override TargetWriter CreateLabeledCode(string label, TargetWriter wr) {
       var w = wr.ForkSection();
+      wr.WriteLine("goto L{0};", label);
       wr.IndentLess();
       wr.WriteLine("L{0}:", label);
       return w;
@@ -2561,13 +2565,17 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitIndexCollectionUpdate(Expression source, Expression index, Expression value, CollectionType resultCollectionType, bool inLetExprBody, TargetWriter wr) {
-      EmitIndexCollectionUpdate(out var wSource, out var wIndex, out var wValue, wr);
+      EmitIndexCollectionUpdate(out var wSource, out var wIndex, out var wValue, wr, false);
       TrParenExpr(source, wSource, inLetExprBody);
-      TrExprToBigInt(index, wIndex, inLetExprBody);
+      if (source.Type.AsSeqType != null) {
+        TrExprToBigInt(index, wIndex, inLetExprBody);
+      } else {
+        TrExpr(index, wIndex, inLetExprBody);
+      }
       TrExpr(value, wValue, inLetExprBody);
     }
 
-    protected override void EmitIndexCollectionUpdate(out TargetWriter wSource, out TargetWriter wIndex, out TargetWriter wValue, TargetWriter wr, bool nativeIndex = false) {
+    protected override void EmitIndexCollectionUpdate(out TargetWriter wSource, out TargetWriter wIndex, out TargetWriter wValue, TargetWriter wr, bool nativeIndex) {
       wSource = wr.Fork();
       wr.Write(nativeIndex ? ".UpdateInt(" : ".Update(");
       wIndex = wr.Fork();

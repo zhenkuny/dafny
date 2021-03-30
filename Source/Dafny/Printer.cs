@@ -1508,7 +1508,7 @@ namespace Microsoft.Dafny {
         // prefix lemmas end up as CallStmt's by the end of resolution and they may need to be printed here.
         var s = (CallStmt)stmt;
         PrintExpression(s.MethodSelect, false);
-        PrintActualArguments(s.Args, s.Method.Name);
+        PrintActualArguments(s.Args, s.Method.Name, null);
 
       } else if (stmt is VarDeclStmt) {
         var s = (VarDeclStmt)stmt;
@@ -2111,7 +2111,7 @@ namespace Microsoft.Dafny {
           PrintExpr(e.Lhs, opBindingStrength, false, false, !parensNeeded && isFollowedBySemicolon, -1, keyword);
         }
         string name = e.Lhs is NameSegment ? ((NameSegment)e.Lhs).Name : e.Lhs is ExprDotName ? ((ExprDotName)e.Lhs).SuffixName : null;
-        PrintActualArguments(e.Args, name);
+        PrintActualArguments(e.Args, name, e.AtTok);
         if (parensNeeded) { wr.Write(")"); }
 
       } else if (expr is MemberSelectExpr) {
@@ -2252,7 +2252,7 @@ namespace Microsoft.Dafny {
         */
         if (e.OpenParen == null && e.Args.Count == 0) {
         } else {
-          PrintActualArguments(e.Args, e.Name);
+          PrintActualArguments(e.Args, e.Name, null);
         }
         if (parensNeeded) { wr.Write(")"); }
 
@@ -2810,13 +2810,16 @@ namespace Microsoft.Dafny {
       }
     }
 
-    void PrintActualArguments(List<Expression> args, string name) {
+    void PrintActualArguments(List<Expression> args, string name, Bpl.IToken/*?*/ atLabel) {
       Contract.Requires(args != null);
       if (name != null && name.EndsWith("#")) {
+        Contract.Assert(atLabel == null);
         wr.Write("[");
         PrintExpression(args[0], false);
         wr.Write("]");
         args = new List<Expression>(args.Skip(1));
+      } else if (atLabel != null) {
+        wr.Write($"@{atLabel.val}");
       }
       wr.Write("(");
       PrintExpressionList(args, false);
