@@ -8475,11 +8475,7 @@ namespace Microsoft.Dafny
               }
 
               // REVIEW: From Dafny official.  Still needed or superceded by checks below?
-              if (!AssignStmt.LhsIsToGhost(lhs)) {
-                  resolver.CheckIsCompilable(rhs.Expr);
-              }
-
-              if (!madeGhost && !assumeRhsCompilable) {
+              if (!AssignStmt.LhsIsToGhost(lhs) || (!madeGhost && !assumeRhsCompilable)) {
                 resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
               }
 
@@ -17248,7 +17244,7 @@ namespace Microsoft.Dafny
             }
 
             if (!lhs.Vars.All(bv => bv.IsGhost) || e.Usage == Usage.Linear) {
-              CheckIsCompilable(ee);
+              CheckIsCompilable(ee, usageContext, e.Usage);
             }
             i++;
           }
