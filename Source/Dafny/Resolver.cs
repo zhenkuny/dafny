@@ -419,6 +419,7 @@ namespace Microsoft.Dafny
 
       rewriters = new List<IRewriter>();
       rewriters.Add(new Linear.InoutTranslateRewriter(reporter, this.FreshTempVarName));
+      rewriters.Add(new Linear.AtomicRewriter(reporter));
 
       refinementTransformer = new RefinementTransformer(prog);
       rewriters.Add(refinementTransformer);
@@ -571,7 +572,7 @@ namespace Microsoft.Dafny
       foreach (var nw in prog.CompileModules) {
         Linear.OxideCompilationRewriter.Rewrite(nw);
       }
-
+      
       if (reporter.Count(ErrorLevel.Error) != origErrorCount) {
         // do nothing else
         return;
