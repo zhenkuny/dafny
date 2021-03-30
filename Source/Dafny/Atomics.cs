@@ -190,6 +190,50 @@ namespace Microsoft.Dafny.Linear
 
             return null;
         }
+
+        private void check_no_assign_lhs(Expression lhs, String varName)
+        {
+            switch (lhs)
+            {
+                case NameSegment ns:
+                    check_no_assign_lhs(ns.Resolved, varName);
+                    break;
+                case IdentifierExpr ie:
+                    if (ie.Var.CompileName == varName)
+                    {
+                        reporter.Error(MessageSource.Rewriter, lhs.tok,
+                            "Assign to variable which should be preserved for atomic block");
+                    }
+
+                    break;
+                default:
+                    Contract.Assert(false);
+                    break;
+            }
+        }
+
+        private void check_no_assign_stmt(Statement stmt, String varName)
+        {
+            if (stmt is UpdateStmt us)
+            {
+                foreach (Expression lhs in us.Lhss)
+                {
+                    check_no_assign_lhs(lhs, varName);
+                }
+            }
+        }
+
+        private void check_no_assign(Statement stmt, String varName)
+        {
+            check_no_assign_stmt(stmt, varName);
+            foreach (var stmtList in Visit.AllStatementLists(stmt))
+            {
+                foreach (var s in stmtList)
+                {
+                    check_no_assign_stmt(s, varName);
+                }
+            }
+        }
         
         private void RewriteMethod(Method m) {
             var body = m.Body?.Body;
@@ -214,6 +258,8 @@ namespace Microsoft.Dafny.Linear
 
                         openStmt = call;
                         preservedContents = get_preserved_contents_open_stmt(call);
+                        
+                        check_no_assign(openStmt, preservedContents.Atomic);
                     } else if (call != null && is_close_stmt(call))
                     {
                         if (openStmt == null)
@@ -230,10 +276,16 @@ namespace Microsoft.Dafny.Linear
                     }
                     else
                     {
-                        if (openStmt != null && !stmt.IsGhost)
+                        if (openStmt != null)
                         {
-                            reporter.Error(MessageSource.Rewriter, stmt.Tok,
-                                "Only ghost statements can be within an atomic block");
+                            if (!stmt.IsGhost)
+                            {
+                                reporter.Error(MessageSource.Rewriter, stmt.Tok,
+                                    "Only ghost statements can be within an atomic block");
+                            }
+                            
+                            check_no_assign(stmt, preservedContents.Atomic);
+                            check_no_assign(stmt, preservedContents.NewValue);
                         }
                     }
                 }
