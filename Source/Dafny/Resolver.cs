@@ -2753,7 +2753,7 @@ namespace Microsoft.Dafny
             bool isLinear = idt != null && idt.IsLinear;
             foreach (var ctor in dt.Ctors) {
               foreach (var formal in ctor.Formals) {
-                if (formal.IsLinear) {
+                if (formal.IsLinearKind) {
                   if (!isLinear) {
                     reporter.Error(MessageSource.Resolver, formal, "use 'linear datatype' to allow linear fields", UsageName(formal.Usage));
                   }
@@ -2842,7 +2842,7 @@ namespace Microsoft.Dafny
                     reporter.Error(MessageSource.Resolver, other,
                       "shared destructors must have the same type, but '{0}' has type '{1}' in constructor '{2}' and type '{3}' in constructor '{4}'",
                       rolemodel.Name, rolemodel.Type, dtor.EnclosingCtors[0].Name, other.Type, dtor.EnclosingCtors[i].Name);
-                  } else if (rolemodel.Usage != other.Usage) {
+                  } else if (!rolemodel.Usage.IsEqualTo(other.Usage)) {
                     reporter.Error(MessageSource.Resolver, other,
                       "shared destructors must agree on whether or not they are ghost, but '{0}' is {1} in constructor '{2}' and {3} in constructor '{4}'",
                       rolemodel.Name,
@@ -3478,20 +3478,20 @@ namespace Microsoft.Dafny
             var m = (Method)member;
             if (m.Body != null) {
               UsageContext usageContext = new UsageContext(m, member.Usage);
-              if (!member.IsStatic && member.Usage == Usage.Linear) {
+              if (!member.IsStatic && member.Usage.IsLinearKind) {
                 usageContext.available.Add(usageContext.thisId.Var, Available.Available);
               }
               foreach (Formal x in m.Ins) {
-                if (x.IsLinear) usageContext.available.Add(x, Available.Available);
+                if (x.IsLinearKind) usageContext.available.Add(x, Available.Available);
               }
               foreach (Formal x in m.Outs) {
-                if (x.IsLinear) usageContext.available.Add(x, Available.Consumed);
+                if (x.IsLinearKind) usageContext.available.Add(x, Available.Consumed);
               }
               UsageContext outer = UsageContext.Copy(usageContext);
               usageContext = ComputeGhostInterest(m.Body, m.IsGhost, m, usageContext);
               CheckExpression(m.Body, this, m);
               PopUsageContext(m.Body.EndTok, outer, usageContext);
-              if (!member.IsStatic && m.Usage == Usage.Linear) {
+              if (!member.IsStatic && m.Usage.IsLinearKind) {
                 if (m.HasInoutThis) {
                   if (usageContext.available[usageContext.thisId.Var] != Available.Available) {
                     reporter.Error(MessageSource.Resolver, member.tok, "linear inout 'this' must be assigned at method exit");
@@ -3503,7 +3503,7 @@ namespace Microsoft.Dafny
                 }
               }
               foreach (Formal x in m.Ins) {
-                if (x.IsLinear) {
+                if (x.IsLinearKind) {
                   if (usageContext.available[x] != Available.Consumed) {
                     if (x.Inout) {
                       Contract.Assert(false);
@@ -3513,7 +3513,7 @@ namespace Microsoft.Dafny
                 }
               }
               foreach (Formal x in m.Outs) {
-                if (x.IsLinear && usageContext.available[x] != Available.Available) {
+                if (x.IsLinearKind && usageContext.available[x] != Available.Available) {
                   reporter.Error(MessageSource.Resolver, x, "linear variable <<{0}>> must be assigned at method exit", x.Name);
                 }
               }
@@ -3523,18 +3523,18 @@ namespace Microsoft.Dafny
             var f = (Function)member;
             if (!f.IsGhost && f.Body != null) {
               UsageContext usageContext = new UsageContext(f, member.Usage);
-              if (!member.IsStatic && member.Usage == Usage.Linear) {
+              if (!member.IsStatic && member.Usage.IsLinearKind) {
                 usageContext.available.Add(usageContext.thisId.Var, Available.Available);
               }
               foreach (Formal x in f.Formals) {
-                if (x.IsLinear) usageContext.available.Add(x, Available.Available);
+                if (x.IsLinearKind) usageContext.available.Add(x, Available.Available);
               }
               CheckIsCompilable(f.Body, usageContext, f.Result != null ? f.Result.Usage : Usage.Ordinary);
-              if (!member.IsStatic && member.Usage == Usage.Linear && usageContext.available[usageContext.thisId.Var] != Available.Consumed) {
+              if (!member.IsStatic && member.Usage.IsLinearKind && usageContext.available[usageContext.thisId.Var] != Available.Consumed) {
                 reporter.Error(MessageSource.Resolver, member.tok, "linear 'this' must be unavailable at function exit");
               }
               foreach (Formal x in f.Formals) {
-                if (x.IsLinear && usageContext.available[x] != Available.Consumed) {
+                if (x.IsLinearKind && usageContext.available[x] != Available.Consumed) {
                   reporter.Error(MessageSource.Resolver, x, "linear variable <<{0}>> must be unavailable at function exit", x.Name);
                 }
               }
@@ -8195,7 +8195,7 @@ namespace Microsoft.Dafny
       bool CheckValidInoutArg(String contextDesc, UsageContext usageContext, Expression expr, bool last) {
         IdentifierExpr x = ExprAsIdentifier(usageContext, expr);
         if (expr is NameSegment && x != null) {
-          if (!x.Var.IsLinear) {
+          if (!x.Var.IsLinearKind) {
             Error(expr, String.Format("only linear member selection (e.g., <<{0}>>) is allowed in inout {1}", x.Var.Name, contextDesc));
             return false;
           } else {
@@ -8208,7 +8208,7 @@ namespace Microsoft.Dafny
             return false;
           } else if (!last) {
             var d = mse.Member as DatatypeDestructor;
-            if (d == null || !d.CorrespondingFormals.All(f => f.IsLinear)) {
+            if (d == null || !d.CorrespondingFormals.All(f => f.IsLinearKind && f.Usage.realm == LinearRealm.Physical)) {
               Error(expr, "only linear member selection is allowed in inout {0}: \"{1}\" is not linear", contextDesc, mse.Member.Name);
               return false;
             } else {
@@ -8296,7 +8296,7 @@ namespace Microsoft.Dafny
               usageContext.unreachable = true;
             }
           } else if (method != null) {
-            bool linearInOut = method.Ins.Concat(method.Outs).ToList().Exists(x => x.IsLinear);
+            bool linearInOut = method.Ins.Concat(method.Outs).ToList().Exists(x => x.IsLinearKind);
             bool linearHere = usageContext != null && usageContext.available.Count > 0;
             if (linearInOut || linearHere) {
               Error(stmt, "break statement is not allowed when using linear");
@@ -8314,7 +8314,7 @@ namespace Microsoft.Dafny
           }
           Method method = codeContext as Method;
           if (method != null) {
-            bool linearInOut = method.Ins.Concat(method.Outs).ToList().Exists(x => x.IsLinear);
+            bool linearInOut = method.Ins.Concat(method.Outs).ToList().Exists(x => x.IsLinearKind);
             bool linearHere = usageContext != null && usageContext.available.Count > 0;
             if (linearInOut || linearHere) {
               Error(stmt, "{0} statement is not allowed when using linear", kind);
@@ -8365,7 +8365,7 @@ namespace Microsoft.Dafny
             }
           }
           foreach (var local in s.Locals) {
-            if (local.Usage == Usage.Linear) {
+            if (local.Usage.IsLinearKind) {
               usageContext.available.Add(local, Available.Consumed);
             }
           }
@@ -8383,7 +8383,7 @@ namespace Microsoft.Dafny
             }
           }
           if (!s.IsAutoGhost || mustBeErasable) {
-            s.IsGhost = s.LocalVars.All(v => v.IsGhost) && s.Usage != Usage.Linear;
+            s.IsGhost = s.LocalVars.All(v => v.IsGhost) && !s.Usage.IsLinearKind;
           } else {
             var spec = resolver.UsesSpecFeatures(s.RHS);
             if (spec) {
@@ -8396,11 +8396,11 @@ namespace Microsoft.Dafny
           if (!s.IsGhost) {
             resolver.CheckIsCompilable(s.RHS, usageContext, s.Usage);
           }
-          if (s.Usage == Usage.Shared && usageContext.Borrows()) {
+          if (s.Usage.IsSharedKind && usageContext.Borrows()) {
             Error(s.RHS, "cannot borrow variable because expression returns a shared result");
           }
           foreach (var local in s.LocalVars) {
-            if (local.Usage == Usage.Linear) {
+            if (local.Usage.IsLinearKind) {
               usageContext.available[local] = Available.Available;
             }
           }
@@ -8447,7 +8447,7 @@ namespace Microsoft.Dafny
               var (inoutAssignTargetUsage, inoutAssignTargetExpr) = s.InoutAssignTarget.Value;
               var mse = inoutAssignTargetExpr.Resolved as MemberSelectExpr;
               if (mse != null) {
-                if (mse.Member.Usage != inoutAssignTargetUsage) {
+                if (!mse.Member.Usage.IsEqualTo(inoutAssignTargetUsage)) {
                   Error(mse, "expected {0} lhs, found {1} lhs", UsageName(inoutAssignTargetUsage),
                     UsageName(mse.Member.Usage));
                 } else if (!CheckValidInoutArg("lhs", usageContext, inoutAssignTargetExpr, true)) {
@@ -8457,7 +8457,7 @@ namespace Microsoft.Dafny
                 Error(s, "invalid inout update lhs");
               }
 
-              if (inoutAssignTargetUsage == Usage.Ghost) {
+              if (inoutAssignTargetUsage.IsGhostKind) {
                 s.IsGhost = true;
               }
             }
@@ -8479,14 +8479,14 @@ namespace Microsoft.Dafny
                 resolver.CheckIsCompilable(rhs.Expr, usageContext, expectedUsage);
               }
 
-              if (x != null && x.Var.IsLinear) {
+              if (x != null && x.Var.IsLinearKind) {
                 // TODO(andrea) with new assignment syntax, use this again to check correct rewriting for inout?
                 if (usageContext.available[x.Var] != Available.Consumed && !assumeRhsCompilable) {
                   Error(x, "variable must be unavailable before assignment");
                 }
 
                 usageContext.available[x.Var] = Available.Available;
-              } else if (x != null && x.Var.IsShared && usageContext.Borrows()) {
+              } else if (x != null && x.Var.IsSharedKind && usageContext.Borrows()) {
                 Error(rhs.Expr, "cannot borrow variable because expression returns a shared result");
               }
 
@@ -8527,8 +8527,8 @@ namespace Microsoft.Dafny
             }
           } else {
             int j;
-            bool returnsShared = callee.Outs.Exists(o => o.IsShared);
-            bool isPureCall = callee.Mod.Expressions.Count == 0 && callee.Outs.TrueForAll(x => x.Usage != Usage.Shared);
+            bool returnsShared = callee.Outs.Exists(o => o.IsSharedKind);
+            bool isPureCall = callee.Mod.Expressions.Count == 0 && callee.Outs.TrueForAll(x => !x.Usage.IsSharedKind);
             if (!callee.IsGhost) {
               if (usageContext != null) {
                 usageContext.insidePureCall = isPureCall;
@@ -8595,24 +8595,23 @@ namespace Microsoft.Dafny
                   // this is an array update, and arrays are always non-ghost
                   Error(s, "actual out-parameter{0} is required to be a ghost variable", s.Lhs.Count == 1 ? "" : " " + j);
                 }
-              } else if (jUsage == Usage.Linear) {
-                if (xUsage == Usage.Ignore) {
+              } else if (jUsage.IsLinearKind) {
+                if (xUsage.ignore) {
                   // ok
-                } else if (xUsage != Usage.Linear) {
-                  Error(x, "variable must be linear");
+                } else if (!xUsage.IsEqualTo(jUsage)) {
+                  Error(x, "variable must be {0}", UsageName(jUsage));
                 } else if (usageContext.available[x.Var] != Available.Consumed && usageContext.available[x.Var] != Available.MutablyBorrowed) {
                   // TODO(andrea) is this check sufficient?
                   Error(x, "variable must be unavailable before assignment");
                 }
-                if (xUsage != Usage.Ignore)
-                {
+                if (!xUsage.ignore) {
                   usageContext.available[x.Var] = Available.Available;
                 }
-              } else if (jUsage == Usage.Ordinary && xUsage == Usage.Ignore) {
+              } else if (jUsage.IsOrdinaryKind && xUsage.ignore) {
                 // ok
-              } else if (xUsage == Usage.Ghost) {
+              } else if (xUsage.IsGhostKind) {
                 // ok
-              } else if (xUsage != jUsage) {
+              } else if (!xUsage.IsEqualTo(jUsage)) {
                 Error(x, "expected {0} variable, found {1} variable", UsageName(jUsage), UsageName(xUsage));
               }
               j++;
@@ -8748,7 +8747,7 @@ namespace Microsoft.Dafny
           if (!s.IsGhost) {
             resolver.CheckIsCompilable(s.Source, usageContext, s.Usage);
           }
-          if (s.Usage == Usage.Shared && usageContext.Borrows()) {
+          if (s.Usage.IsSharedKind && usageContext.Borrows()) {
             Error(s.Source, "cannot borrow variable because expression returns a shared result");
           }
           if (usageContext != null) usageContext.Unborrow();
@@ -8760,7 +8759,7 @@ namespace Microsoft.Dafny
               usageContext = UsageContext.Copy(uc1);
             }
             foreach (var x in c.Arguments) {
-              if (x.Usage == Usage.Linear) {
+              if (x.Usage.IsLinearKind) {
                 usageContext.available.Add(x, Available.Available);
               }
             }
@@ -11088,7 +11087,7 @@ namespace Microsoft.Dafny
           ScopePushAndReport(scope, bv, "local_variable");
           c++;
         }
-        if (c == 0 && s.Usage != Usage.Linear) {
+        if (c == 0 && !s.Usage.IsLinearKind) {
           // Every identifier-looking thing in the pattern resolved to a constructor; that is, this LHS is a constant literal
           reporter.Error(MessageSource.Resolver, s.LHS.tok, "LHS is a constant literal; to be legal, it must introduce at least one bound variable");
         }
@@ -11920,7 +11919,7 @@ namespace Microsoft.Dafny
       var type = new InferredTypeProxy();
       var err = new TypeConstraint.ErrorMsgWithToken(oldtok, "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", type, subtype, name);
       ConstrainSubtypeRelation(type, subtype, err);
-      Usage usage = (uOuter == Usage.Shared && uInner == Usage.Linear) ? Usage.Shared : uInner;
+      Usage usage = UsageInheritShared(uOuter, uInner);
       return new BoundVar(tok, name, type, usage);
     }
 
@@ -11930,7 +11929,7 @@ namespace Microsoft.Dafny
       var type = new InferredTypeProxy();
       var err = new TypeConstraint.ErrorMsgWithToken(oldtok, "the declared type of the formal ({0}) does not agree with the corresponding type in the constructor's signature ({1})", type, subtype, name);
       ConstrainSubtypeRelation(type, subtype, err);
-      Usage usage = (uOuter == Usage.Shared && uInner == Usage.Linear) ? Usage.Shared : uInner;
+      Usage usage = UsageInheritShared(uOuter, uInner);
       return new IdPattern(tok, name, type, null, usage);
     }
 
@@ -12067,13 +12066,10 @@ namespace Microsoft.Dafny
               }
               for (int j = 0; j < currPattern.Arguments.Count; j++) {
                 // mark patterns standing in for ghost field
-                Usage u = ctor.Value.Formals[j].Usage;
-                  if (mti.Usage == Usage.Shared && u == Usage.Linear) {
-                    u = Usage.Shared;
-                  }
-                  if (currPattern.Arguments[j].Usage == Usage.Ordinary) {
+                Usage u = UsageInheritShared(mti.Usage, ctor.Value.Formals[j].Usage);
+                  if (currPattern.Arguments[j].Usage.IsOrdinaryKind) {
                     currPattern.Arguments[j].Usage = u;
-                  } else if (currPattern.Arguments[j].Usage != u) {
+                  } else if (!currPattern.Arguments[j].Usage.IsEqualTo(u)) {
                     reporter.Error(MessageSource.Resolver, mti.BranchTok[PB.Item2.BranchID], "expected {0} pattern, found {1} pattern", UsageName(ctor.Value.Formals[j].Usage), UsageName(u));
                   }
               }
@@ -15102,7 +15098,7 @@ namespace Microsoft.Dafny
               ScopePushAndReport(scope, v, "let-variable");
               c++;
             }
-            if (c == 0 && e.Usage != Usage.Linear) {
+            if (c == 0 && !e.Usage.IsLinearKind) {
               // Every identifier-looking thing in the pattern resolved to a constructor; that is, this LHS is a constant literal
               reporter.Error(MessageSource.Resolver, lhs.tok, "LHS is a constant literal; to be legal, it must introduce at least one bound variable");
             }
@@ -16905,7 +16901,7 @@ namespace Microsoft.Dafny
       foreach (var x in borrow) {
         if (usageContext.available[x] == Available.Consumed) {
           // If Body consumed x, try to introduce let!(x) here
-          if (usage == Usage.Shared) {
+          if (usage.IsSharedKind) {
             reporter.Error(MessageSource.Resolver, tok, "cannot borrow {0} when assigning to shared variable", x.Name);
           }
         } else {
@@ -16984,42 +16980,53 @@ namespace Microsoft.Dafny
       return borrow;
     }
 
-    static Usage ConstructorArgUsage(Usage outer, Usage formal) {
-      if (outer == Usage.Ghost || formal == Usage.Ghost) {
-        return Usage.Ghost;
-      } else if (outer == Usage.Ordinary || formal == Usage.Ordinary) {
-        return Usage.Ordinary;
+    static Usage UsageInheritShared(Usage outer, Usage inner) {
+      if (outer.IsSharedKind && inner.IsLinearKind) {
+        return Usage.Shared(inner.realm);
       } else {
-        if (outer != formal && formal == Usage.Shared) throw new Exception("internal error: " + outer + " " + formal);
-        return outer;
+        return inner;
+      }
+    }
+
+    static Usage ConstructorArgUsage(Usage outer, Usage formal) {
+      if (outer.IsGhostKind || formal.IsGhostKind) {
+        return Usage.Ghost;
+      } else if (outer.IsOrdinaryKind || formal.IsOrdinaryKind) {
+        return Usage.Ordinary;
+      } else if (outer.IsLinearKind) {
+        if (formal.IsSharedKind) throw new Exception("internal error: " + outer + " " + formal);
+        return formal;
+      } else {
+        if (!outer.IsSharedKind) throw new Exception("internal error: " + outer + " " + formal);
+        return Usage.Shared(formal.realm);
       }
     }
 
     public static bool HasLinearity(Usage u) {
-      return u != Usage.Ghost && u != Usage.Ordinary;
+      return !u.IsGhostKind && !u.IsOrdinaryKind;
     }
 
     public static string UsageName(Usage u) {
       return
-        (u == Usage.Ghost) ? "ghost" :
-        (u == Usage.Linear) ? "linear" :
-        (u == Usage.Shared) ? "shared" :
+        (u.IsGhostKind) ? "ghost" :
+        (u.IsLinearKind) ? (u.realm == LinearRealm.Physical ? "linear" : "glinear") :
+        (u.IsSharedKind) ? (u.realm == LinearRealm.Physical ? "shared" : "gshared") :
         "ordinary";
     }
 
     public static string UsageNameNonGhost(Usage u) {
       return
-        (u == Usage.Ghost) ? "ghost" :
-        (u == Usage.Linear) ? "linear" :
-        (u == Usage.Shared) ? "shared" :
+        (u.IsGhostKind) ? "ghost" :
+        (u.IsLinearKind) ? (u.realm == LinearRealm.Physical ? "linear" : "glinear") :
+        (u.IsSharedKind) ? (u.realm == LinearRealm.Physical ? "shared" : "gshared") :
         "non-ghost";
     }
 
     public static string UsagePrefix(Usage u) {
       return
-        (u == Usage.Ghost) ? "ghost " :
-        (u == Usage.Linear) ? "linear " :
-        (u == Usage.Shared) ? "shared " :
+        (u.IsGhostKind) ? "ghost " :
+        (u.IsLinearKind) ? (u.realm == LinearRealm.Physical ? "linear " : "glinear ") :
+        (u.IsSharedKind) ? (u.realm == LinearRealm.Physical ? "shared " : "gshared ") :
         "";
     }
 
@@ -17046,7 +17053,7 @@ namespace Microsoft.Dafny
 
     void CheckIsCompilable(Expression expr, UsageContext usageContext, Usage expectedUsage, bool inoutUsage = false) {
       IdentifierExpr x = ExprAsIdentifier(usageContext, expr);
-      if (usageContext != null && expectedUsage == Usage.Shared && x != null && x.Var.Usage == Usage.Linear) {
+      if (usageContext != null && expectedUsage.IsSharedKind && x != null && x.Var.Usage.IsLinearKind && expectedUsage.realm == x.Var.Usage.realm) {
         // Try to borrow x
         if (usageContext.available[x.Var] == Available.Consumed) {
           reporter.Error(MessageSource.Resolver, expr, "tried to borrow variable, but it was already unavailable");
@@ -17057,7 +17064,7 @@ namespace Microsoft.Dafny
         usageContext.available[x.Var] = Available.Borrowed;
       } else {
         Usage usage = CheckIsCompilable(expr, usageContext, inoutUsage);
-        if (expectedUsage != Usage.Ghost && usage != expectedUsage) {
+        if (!expectedUsage.IsGhostKind && !usage.IsEqualTo(expectedUsage)) {
           reporter.Error(MessageSource.Resolver, expr, "expected {0} expression, found {1} expression",
             UsageName(expectedUsage), UsageName(usage));
         }
@@ -17070,7 +17077,7 @@ namespace Microsoft.Dafny
 
       if (expr is IdentifierExpr) {
         var e = (IdentifierExpr)expr;
-        if (e.Var != null && e.Var.IsLinear) {
+        if (e.Var != null && e.Var.IsLinearKind) {
           bool ok = false;
           if (usageContext != null) {
             var available = usageContext.available;
@@ -17089,7 +17096,7 @@ namespace Microsoft.Dafny
             }
           }
         }
-        if (e.Var != null && e.Var.IsShared && usageContext == null) {
+        if (e.Var != null && e.Var.IsSharedKind && usageContext == null) {
           reporter.Error(MessageSource.Resolver, expr, "shared variable <<{0}>> is out of scope here", e.Var.Name);
         }
         if (e.Var != null && e.Var.IsGhost) {
@@ -17110,24 +17117,28 @@ namespace Microsoft.Dafny
         var d = e.Member as DatatypeDestructor;
         var s = e.Member as SpecialField;
         if (d != null || s != null) {
-          bool linearDestructor = (d == null) ? false : d.CorrespondingFormals.Exists(x => x.IsLinear);
+          bool linearDestructor = (d == null) ? false : d.CorrespondingFormals.Exists(x => x.IsLinearKind);
+          LinearRealm destructorRealm = LinearRealm.Physical;
+          if (linearDestructor) {
+            destructorRealm = d.CorrespondingFormals.Find(x => x.IsLinearKind).Usage.realm;
+          }
           var id = ExprAsIdentifier(usageContext, e.Obj);
-          if (id != null && (id.Var.IsLinear || id.Var.IsShared)) {
+          if (id != null && (id.Var.IsLinearKind || id.Var.IsSharedKind)) {
             if (inoutUsage) {
-              CheckIsCompilable(e.Obj, usageContext, Usage.Linear, true);
-              return linearDestructor ? Usage.Linear : Usage.Ordinary;
+              CheckIsCompilable(e.Obj, usageContext, Usage.Linear(LinearRealm.Physical), true);
+              return linearDestructor ? Usage.Linear(destructorRealm) : Usage.Ordinary;
             } else {
               // Try to share id
-              CheckIsCompilable(e.Obj, usageContext, Usage.Shared);
-              return linearDestructor ? Usage.Shared : Usage.Ordinary;
+              CheckIsCompilable(e.Obj, usageContext, Usage.Shared(LinearRealm.Physical));
+              return linearDestructor ? Usage.Shared(destructorRealm) : Usage.Ordinary;
             }
           } else if (linearDestructor) {
-            var expectedUsage = inoutUsage ? Usage.Linear : Usage.Shared;
+            var expectedUsage = inoutUsage ? Usage.Linear(LinearRealm.Physical) : Usage.Shared(LinearRealm.Physical);
             CheckIsCompilable(e.Obj, usageContext, expectedUsage, inoutUsage);
             return expectedUsage;
           } else {
             var u = CheckIsCompilable(e.Obj, usageContext, inoutUsage);
-            if (u != Usage.Shared && u != Usage.Ordinary && !inoutUsage) {
+            if (!u.IsSharedKind && !u.IsOrdinaryKind && !inoutUsage) {
               reporter.Error(MessageSource.Resolver, expr, "cannot select from linear expression");
             }
             return Usage.Ordinary;
@@ -17162,7 +17173,7 @@ namespace Microsoft.Dafny
           CheckIsCompilable(e.Receiver, usageContext, e.Function.Usage);
           for (int i = 0; i < e.Function.Formals.Count; i++) {
             var usage = e.Function.Formals[i].Usage;
-            if (usage != Usage.Ghost) {
+            if (!usage.IsGhostKind) {
               CheckIsCompilable(e.Args[i], usageContext, usage);
             }
           }
@@ -17179,11 +17190,11 @@ namespace Microsoft.Dafny
         // note that if resolution is successful, then |e.Arguments| == |e.Ctor.Formals|
         for (int i = 0; i < e.Arguments.Count; i++) {
           var usage = e.Ctor.Formals[i].Usage;
-          if (usage != Usage.Ghost) {
+          if (!usage.IsGhostKind) {
             CheckIsCompilable(e.Arguments[i], usageContext, usage);
           }
         }
-        return isLinear ? Usage.Linear : Usage.Ordinary;
+        return isLinear ? Usage.Linear(LinearRealm.Physical) : Usage.Ordinary;
 
       } else if (expr is OldExpr) {
         reporter.Error(MessageSource.Resolver, expr, "old expressions are allowed only in specification and ghost contexts");
@@ -17243,14 +17254,14 @@ namespace Microsoft.Dafny
               }
             }
 
-            if (!lhs.Vars.All(bv => bv.IsGhost) || e.Usage == Usage.Linear) {
+            if (!lhs.Vars.All(bv => bv.IsGhost) || e.Usage.IsLinearKind) {
               CheckIsCompilable(ee, usageContext, e.Usage);
             }
             i++;
           }
           var borrow = RemoveInnerBorrowed(uc0, usageContext);
           foreach (var x in e.BoundVars) {
-            if (x.Usage == Usage.Linear) {
+            if (x.Usage.IsLinearKind) {
               usageContext.available.Add(x, Available.Available);
             }
           }
@@ -17330,7 +17341,7 @@ namespace Microsoft.Dafny
             usageContext.available[x] = Available.Borrowed;
           }
         }
-        if (u1 != u2) {
+        if (!u1.IsEqualTo(u2)) {
           reporter.Error(MessageSource.Resolver, expr, "In conditional, left branch is {0}, right branch is {1} (both must be same)", UsageName(u1), UsageName(u2));
         }
         return u1;
@@ -17345,7 +17356,7 @@ namespace Microsoft.Dafny
         foreach (var c in e.Cases) {
           UsageContext uc2 = isFirst ? usageContext : UsageContext.Copy(uc1);
           foreach (var x in c.Arguments) {
-            if (x.Usage == Usage.Linear) {
+            if (x.Usage.IsLinearKind) {
               uc2.available.Add(x, Available.Available);
             }
           }
@@ -17355,7 +17366,7 @@ namespace Microsoft.Dafny
           if (isFirst) {
             usage = u;
           } else {
-            if (u != usage) {
+            if (!u.IsEqualTo(usage)) {
               reporter.Error(MessageSource.Resolver, c.tok, "In case, previous branch is {0}, current branch is {1} (both must be same)", UsageName(usage), UsageName(u));
             }
             MergeUsageContexts(e.tok, uc2, usageContext);

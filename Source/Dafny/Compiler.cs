@@ -2292,7 +2292,7 @@ namespace Microsoft.Dafny {
         Contract.Assert(pat.Arguments.Count == ctor.Formals.Count);  // follows from successful resolution
         Usage usage = Usage.Ordinary;
         if (pat.Ctor.EnclosingDatatype is IndDatatypeDecl idecl && idecl.IsLinear) {
-          usage = Usage.Linear;
+          usage = idecl.Usage;
         }
 
         // Create the temporary variable to hold G

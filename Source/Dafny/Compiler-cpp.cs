@@ -877,7 +877,10 @@ wmethodDecl = ws;
     // Because we use reference counting (via shared_ptr), the TypeName of a class differs
     // depending on whether we are declaring a variable or talking about the class itself.
     // Use class_name = true if you want the actual name of the class, not the type used when declaring variables/arguments/etc.
-    protected string TypeName(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member = null, bool class_name=false, Usage usage=Usage.Ordinary) {
+    protected string TypeName(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member = null, bool class_name = false, Usage? usage = null) {
+      return TypeName(type, wr, tok, member, class_name, Usage.DefaultToOrdinary(usage));
+    }
+    protected string TypeName(Type type, TextWriter wr, Bpl.IToken tok, MemberDecl/*?*/ member, bool class_name, Usage usage) {
       Contract.Ensures(Contract.Result<string>() != null);
       Contract.Assume(type != null);  // precondition; this ought to be declared as a Requires in the superclass
 
@@ -942,9 +945,9 @@ wmethodDecl = ws;
           Error(tok, "compilation of seq<TRAIT> is not supported; consider introducing a ghost", wr);
         }
 
-        if (usage == Usage.Linear) {
+        if (usage.IsLinearKind) {
           return DafnyLinearSeqClass + "<" + TypeName(argType, wr, tok) + ">";
-        } else if (usage == Usage.Shared) {
+        } else if (usage.IsSharedKind) {
           return DafnySharedSeqClass + "<" + TypeName(argType, wr, tok) + ">";
         } else {
           return DafnySeqClass + "<" + TypeName(argType, wr, tok) + ">";
@@ -999,9 +1002,9 @@ wmethodDecl = ws;
       } else if (xType is MultiSetType) {
         throw NotSupported("MultiSets");
       } else if (xType is SeqType) {
-        if (usage == Usage.Linear) {
+        if (usage.IsLinearKind) {
           return string.Format("{1}<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false), DafnyLinearSeqClass);
-        } else if (usage == Usage.Shared) {
+        } else if (usage.IsSharedKind) {
           return string.Format("{1}<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false), DafnySharedSeqClass);
         } else {
           return string.Format("DafnySequence<{0}>()", TypeName(xType.AsSeqType.Arg, wr, tok, null, false));

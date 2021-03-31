@@ -234,7 +234,7 @@ namespace Microsoft.Dafny {
 
     // Dafny doesn't seem ready to distinguish between (t)->t and (ghost t)->t, so suppress ghost in function types
     public static Usage Deghost(Usage u) {
-      return (u == Usage.Ghost) ? Usage.Ordinary : u;
+      return (u.IsGhostKind) ? Usage.Ordinary : u;
     }
 
     public static List<Usage> Deghosts(List<Usage> u) {
@@ -430,7 +430,7 @@ namespace Microsoft.Dafny {
       object key = MakeTupleKey(usages, dims);
       if (!tupleTypeDecls.TryGetValue(key, out tt)) {
         Contract.Assume(allowCreationOfNewType);  // the parser should ensure that all needed tuple types exist by the time of resolution
-        if (dims == 2 && usages.TrueForAll(u => u == Usage.Ordinary)) {
+        if (dims == 2 && usages.TrueForAll(u => u.IsOrdinaryKind)) {
           // tuple#2 is already defined in DafnyRuntime.cs
           tt = new TupleTypeDecl(usages, SystemModule, DontCompile());
         } else {
@@ -443,15 +443,25 @@ namespace Microsoft.Dafny {
     }
 
     public static char UsageChar(Usage u) {
-      return u == Usage.Linear ? 'L' : u == Usage.Shared ? 'S' : u == Usage.Ghost ? 'G' : 'O';
+      return
+        u.IsLinearKind ? (u.realm == LinearRealm.Physical ? 'L' : 'K') :
+        u.IsSharedKind ? (u.realm == LinearRealm.Physical ? 'S' : 'R') :
+        u.IsGhostKind ? 'G'
+        : 'O';
     }
 
     public static Usage UsageFromChar(char c) {
-      return c == 'L' ? Usage.Linear : c == 'S' ? Usage.Shared : c == 'G' ? Usage.Ghost : Usage.Ordinary;
+      return
+        c == 'L' ? Usage.Linear(LinearRealm.Physical) :
+        c == 'K' ? Usage.Linear(LinearRealm.Erased) :
+        c == 'S' ? Usage.Shared(LinearRealm.Physical) :
+        c == 'R' ? Usage.Shared(LinearRealm.Erased) :
+        c == 'G' ? Usage.Ghost :
+        Usage.Ordinary;
     }
 
     public static string UsagesString(Usage result, List<Usage> usages) {
-      return usages.Count + ((result == Usage.Ordinary && usages.All(u => u == Usage.Ordinary))
+      return usages.Count + ((result.IsOrdinaryKind && usages.All(u => u.IsOrdinaryKind))
         ? "" : UsageChar(result) + String.Concat(usages.ConvertAll(UsageChar)));
     }
 
@@ -2667,7 +2677,7 @@ namespace Microsoft.Dafny {
       if (arity != 1) {
         // 0 or 2-or-more arguments:  need parentheses
         domainNeedsParens = true;
-      } else if (typeArgs[0].IsBuiltinArrowType || usage.Item2[0] != Usage.Ordinary) {
+      } else if (typeArgs[0].IsBuiltinArrowType || !usage.Item2[0].IsOrdinaryKind) {
         // arrows are right associative, so we need parentheses around the domain type
         domainNeedsParens = true;
       } else {
@@ -4833,6 +4843,10 @@ namespace Microsoft.Dafny {
     public bool[] TypeParametersUsedInConstructionByGroundingCtor;  // set during resolution; has same length as the number of type arguments
     public bool IsLinear;
 
+    public Usage Usage {
+      get { return IsLinear ? Usage.Linear(LinearRealm.Physical) : Usage.Ordinary; }
+    }
+
     public enum ES { NotYetComputed, Never, ConsultTypeArguments }
     public ES EqualitySupport = ES.NotYetComputed;
 
@@ -4872,7 +4886,7 @@ namespace Microsoft.Dafny {
     }
 
     private TupleTypeDecl(ModuleDefinition systemModule, List<TypeParameter> typeArgs, List<Usage> usages, Attributes attributes)
-      : base(Token.NoToken, BuiltIns.TupleTypeName(usages), systemModule, typeArgs, CreateConstructors(typeArgs, usages), new List<MemberDecl>(), attributes, usages.Contains(Usage.Linear), false) {
+      : base(Token.NoToken, BuiltIns.TupleTypeName(usages), systemModule, typeArgs, CreateConstructors(typeArgs, usages), new List<MemberDecl>(), attributes, usages.Exists(u => u.IsLinearKind), false) {
       Contract.Requires(systemModule != null);
       Contract.Requires(typeArgs != null);
       Usages = usages;
@@ -5265,12 +5279,68 @@ namespace Microsoft.Dafny {
     }
   }
 
-  public enum Usage {
+  public enum UsageKind {
     Ordinary,
     Shared,
     Linear,
     Ghost,
-    Ignore,
+  }
+
+  // Linear variables are segregated into incompatible "realms".
+  // Variables in different realms can't be assigned to each other.
+  // This is used for some experimental work on concurrency.
+  public enum LinearRealm {
+    Physical, // regular linear variables
+    Erased, // intended to be used for concurrent resource capabilities, can be erased by compiler
+  }
+
+  public struct Usage {
+    public UsageKind kind;
+    public LinearRealm realm; // only used when kind in {Linear, Shared}
+    public bool ignore; // used by inout
+    Usage(UsageKind kind, LinearRealm realm, bool ignore) {
+      this.kind = kind;
+      this.realm = realm;
+      this.ignore = ignore;
+    }
+    public static Usage Ordinary {
+      get { return new Usage(UsageKind.Ordinary, LinearRealm.Physical, false); }
+    }
+    public static Usage Ghost {
+      get { return new Usage(UsageKind.Ghost, LinearRealm.Physical, false); }
+    }
+    public static Usage Linear(LinearRealm realm) {
+      return new Usage(UsageKind.Linear, realm, false);
+    }
+    public static Usage Shared(LinearRealm realm) {
+      return new Usage(UsageKind.Shared, realm, false);
+    }
+    public static Usage Ignore {
+      get { return new Usage(UsageKind.Linear, LinearRealm.Physical, true); }
+    }
+    public static Usage DefaultTo(Usage? usageOpt, Usage defaultTo) {
+      return (usageOpt != null) ? (Usage)usageOpt : defaultTo;
+    }
+    public static Usage DefaultToOrdinary(Usage? usageOpt) {
+      return DefaultTo(usageOpt, Usage.Ordinary);
+    }
+    public bool IsOrdinaryKind {
+      get { return kind == UsageKind.Ordinary; }
+    }
+    public bool IsLinearKind {
+      get { return kind == UsageKind.Linear; }
+    }
+    public bool IsSharedKind {
+      get { return kind == UsageKind.Shared; }
+    }
+    public bool IsGhostKind {
+      get { return kind == UsageKind.Ghost; }
+    }
+    // Note: Usage deliberately does not support equality (== or .Equals)
+    // In most cases, you should use IsGhostKind, IsLinearKind, etc., but for some cases IsEqualTo is appropriate:
+    public bool IsEqualTo(Usage that) {
+      return kind == that.kind && realm == that.realm && ignore == that.ignore;
+    }
   }
 
   public abstract class MemberDecl : Declaration {
@@ -5283,7 +5353,7 @@ namespace Microsoft.Dafny {
     }
     protected readonly Usage usage;
     public Usage Usage { get { return usage; } }
-    public bool IsGhost { get { return usage == Usage.Ghost; } }
+    public bool IsGhost { get { return usage.IsGhostKind; } }
     public bool IsInstanceIndependentConstant {
       get {
         var cf = this as ConstantField;
@@ -5595,7 +5665,7 @@ namespace Microsoft.Dafny {
     }
 
     //
-    public new bool IsGhost { get { return this.usage == Usage.Ghost; } }
+    public new bool IsGhost { get { return this.usage.IsGhostKind; } }
     public List<TypeParameter> TypeArgs { get { return new List<TypeParameter>(); } }
     public List<Formal> Ins { get { return new List<Formal>(); } }
     public ModuleDefinition EnclosingModule { get { return this.EnclosingClass.EnclosingModuleDefinition; } }
@@ -6027,10 +6097,10 @@ namespace Microsoft.Dafny {
     bool IsGhost {
       get;
     }
-    bool IsLinear {
+    bool IsLinearKind {
       get;
     }
-    bool IsShared {
+    bool IsSharedKind {
       get;
     }
     Usage Usage {
@@ -6097,12 +6167,12 @@ namespace Microsoft.Dafny {
     public void MakeGhost() {
       throw new NotImplementedException();
     }
-    public bool IsLinear {
+    public bool IsLinearKind {
       get {
         throw new NotImplementedException();
       }
     }
-    public bool IsShared {
+    public bool IsSharedKind {
       get {
         throw new NotImplementedException();
       }
@@ -6236,20 +6306,20 @@ namespace Microsoft.Dafny {
     }
     public bool IsGhost {
       get {
-        return Usage == Usage.Ghost;
+        return Usage.IsGhostKind;
       }
     }
     public void MakeGhost() {
       Usage = Usage.Ghost;
     }
-    public bool IsLinear {
+    public bool IsLinearKind {
       get {
-        return Usage == Usage.Linear;
+        return Usage.IsLinearKind;
       }
     }
-    public bool IsShared {
+    public bool IsSharedKind {
       get {
-        return Usage == Usage.Shared;
+        return Usage.IsSharedKind;
       }
     }
     public IToken Tok {
@@ -6340,8 +6410,8 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public BoundVar(IToken tok, string name, Type type, Usage usage = Usage.Ordinary)
-      : base(tok, name, type, usage) {
+    public BoundVar(IToken tok, string name, Type type, Usage? usage = null)
+      : base(tok, name, type, Usage.DefaultToOrdinary(usage)) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
       Contract.Requires(type != null);
@@ -6553,7 +6623,7 @@ namespace Microsoft.Dafny {
     public bool CallerMustBePure { get { return Attributes.Contains(Attributes, "caller_must_be_pure"); } }
     public bool ContextIsPure {
       get {
-        return CallerMustBePure || this.Result == null || this.Result.Usage != Usage.Shared;
+        return CallerMustBePure || this.Result == null || !this.Result.Usage.IsSharedKind;
       }
     }
     public Usage ResultUsage {
@@ -8031,22 +8101,22 @@ namespace Microsoft.Dafny {
     }
     public bool IsGhost {
       get {
-        return this.Usage == Usage.Ghost;
+        return this.Usage.IsGhostKind;
       }
     }
     bool IVariable.IsGhost {
       get {
-        return this.Usage == Usage.Ghost;
+        return this.Usage.IsGhostKind;
       }
     }
-    bool IVariable.IsLinear {
+    bool IVariable.IsLinearKind {
       get {
-        return this.Usage == Usage.Linear;
+        return this.Usage.IsLinearKind;
       }
     }
-    bool IVariable.IsShared {
+    bool IVariable.IsSharedKind {
       get {
-        return this.Usage == Usage.Shared;
+        return this.Usage.IsSharedKind;
       }
     }
     Usage IVariable.Usage {
@@ -12156,10 +12226,10 @@ namespace Microsoft.Dafny {
     public readonly IToken Tok;
     public Usage Usage;
 
-    public ExtendedPattern(IToken tok, Usage usage = Usage.Ordinary) {
+    public ExtendedPattern(IToken tok, Usage? usage = null) {
       Contract.Requires(tok != null);
       this.Tok = tok;
-      this.Usage = usage;
+      this.Usage = Usage.DefaultToOrdinary(usage);
     }
   }
   public class LitPattern : ExtendedPattern
@@ -12210,7 +12280,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    public LitPattern(IToken tok, Expression lit, Usage usage = Usage.Ordinary) : base(tok, usage) {
+    public LitPattern(IToken tok, Expression lit, Usage? usage = null) : base(tok, Usage.DefaultToOrdinary(usage)) {
       Contract.Requires(lit is LiteralExpr || lit is NegationExpression);
       this.OrigLit = lit;
     }
@@ -12231,7 +12301,7 @@ namespace Microsoft.Dafny {
       this.Arguments = new List<ExtendedPattern>();
     }
 
-    public IdPattern(IToken tok, String id, List<ExtendedPattern> arguments, Usage usage = Usage.Ordinary) : base(tok, usage) {
+    public IdPattern(IToken tok, String id, List<ExtendedPattern> arguments, Usage? usage = null) : base(tok, Usage.DefaultToOrdinary(usage)) {
       Contract.Requires(id != null);
       Contract.Requires(arguments != null); // Arguments can be empty, but shouldn't be null
       this.Id = id;
@@ -12239,13 +12309,13 @@ namespace Microsoft.Dafny {
       this.Arguments = arguments;
     }
 
-    public IdPattern(IToken tok, String id, Type type, List<ExtendedPattern> arguments, Usage usage = Usage.Ordinary) : base(tok, usage) {
+    public IdPattern(IToken tok, String id, Type type, List<ExtendedPattern> arguments, Usage? usage = null) : base(tok, Usage.DefaultToOrdinary(usage)) {
       Contract.Requires(id != null);
       Contract.Requires(arguments != null); // Arguments can be empty, but shouldn't be null
       this.Id = id;
       this.Type = type == null? new InferredTypeProxy(): type ;
       this.Arguments = arguments;
-      this.Usage = usage;
+      this.Usage = Usage.DefaultToOrdinary(usage);
     }
 
     public override string ToString() {

@@ -792,7 +792,7 @@ namespace Microsoft.Dafny {
         } else if (d is ArrowTypeDecl) {
           var ad = (ArrowTypeDecl)d;
           GetClassTyCon(ad);
-          if (ad.ResultUsage == Usage.Ordinary && ad.Usages.TrueForAll(u => u == Usage.Ordinary)) {
+          if (ad.ResultUsage.IsOrdinaryKind && ad.Usages.TrueForAll(u => u.IsOrdinaryKind)) {
             AddArrowTypeAxioms(ad);
           }
         } else if (d is ClassDecl) {
@@ -1386,7 +1386,7 @@ namespace Microsoft.Dafny {
         }
         Bpl.Variable resType = new Bpl.Formal(ctor.tok, new Bpl.TypedIdent(ctor.tok, Bpl.TypedIdent.NoName, predef.DatatypeType), false);
         Bpl.Function fn;
-        if (dt is TupleTypeDecl ttd && ttd.Dims == 2 && ttd.Usages.TrueForAll(u => u == Usage.Ordinary)) {
+        if (dt is TupleTypeDecl ttd && ttd.Dims == 2 && ttd.Usages.TrueForAll(u => u.IsOrdinaryKind)) {
           fn = predef.Tuple2Constructor;
         } else {
           fn = new Bpl.Function(ctor.tok, ctor.FullName, argTypes, resType, "Constructor function declaration");
@@ -9190,7 +9190,7 @@ namespace Microsoft.Dafny {
       // Create the type constructor
       if (td is ClassDecl cl && cl.IsObjectTrait) {
         // the type constructor for "object" is in DafnyPrelude.bpl
-      } else if (td is TupleTypeDecl ttd && ttd.Dims == 2 && ttd.Usages.TrueForAll(u => u == Usage.Ordinary)) {
+      } else if (td is TupleTypeDecl ttd && ttd.Dims == 2 && ttd.Usages.TrueForAll(u => u.IsOrdinaryKind)) {
         // the type constructor for "Tuple2" is in DafnyPrelude.bpl
       } else {
         Bpl.Variable tyVarOut = BplFormalVar(null, predef.Ty, false);

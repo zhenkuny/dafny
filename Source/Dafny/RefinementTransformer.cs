@@ -641,9 +641,9 @@ namespace Microsoft.Dafny
                 reporter.Error(MessageSource.RefinementTransformer, f, "a function method cannot be changed into a (ghost) function in a refining module: {0}", f.Name);
               } else if (prevFunction.IsGhost && !f.IsGhost && prevFunction.Body != null) {
                 reporter.Error(MessageSource.RefinementTransformer, f, "a function can be changed into a function method in a refining module only if the function has not yet been given a body: {0}", f.Name);
-              } else if (prevFunction.Usage != f.Usage && (Resolver.HasLinearity(prevFunction.Usage) || Resolver.HasLinearity(f.Usage))) {
+              } else if (!prevFunction.Usage.IsEqualTo(f.Usage) && (Resolver.HasLinearity(prevFunction.Usage) || Resolver.HasLinearity(f.Usage))) {
                 reporter.Error(MessageSource.RefinementTransformer, f, "function refinement must have same linear/shared declaration: {0}", f.Name);
-              } else if (prevFunction.ResultUsage != f.ResultUsage && (Resolver.HasLinearity(prevFunction.ResultUsage) || Resolver.HasLinearity(f.ResultUsage))) {
+              } else if (!prevFunction.ResultUsage.IsEqualTo(f.ResultUsage) && (Resolver.HasLinearity(prevFunction.ResultUsage) || Resolver.HasLinearity(f.ResultUsage))) {
                 reporter.Error(MessageSource.RefinementTransformer, f, "function result must have same ghost/linear/shared declaration: {0}", f.Name);
               }
               if (f.SignatureIsOmitted) {
@@ -707,7 +707,7 @@ namespace Microsoft.Dafny
                 reporter.Error(MessageSource.RefinementTransformer, m, "a method cannot be changed into a ghost method in a refining module: {0}", m.Name);
               } else if (!prevMethod.IsGhost && m.IsGhost) {
                 reporter.Error(MessageSource.RefinementTransformer, m, "a ghost method cannot be changed into a non-ghost method in a refining module: {0}", m.Name);
-              } else if (prevMethod.Usage != m.Usage) {
+              } else if (!prevMethod.Usage.IsEqualTo(m.Usage)) {
                 reporter.Error(MessageSource.RefinementTransformer, m, "method refinement must have same linear/shared declaration: {0}", m.Name);
               }
               if (m.SignatureIsOmitted) {
@@ -807,7 +807,7 @@ namespace Microsoft.Dafny
           var n = nw[i];
           if (o.Name != n.Name) {
             reporter.Error(MessageSource.RefinementTransformer, n.tok, "there is a difference in name of {0} {1} ('{2}' versus '{3}') of {4} {5} compared to corresponding {4} in the module it refines", parameterKind, i, n.Name, o.Name, thing, name);
-          } else if (o.Usage != n.Usage) {
+          } else if (!o.Usage.IsEqualTo(n.Usage)) {
             reporter.Error(MessageSource.RefinementTransformer, n.tok, "{0} '{1}' of {2} {3} cannot be changed, compared to the corresponding {2} in the module it refines, from {4} to {5}", parameterKind, n.Name, thing, name,
               Resolver.UsageNameNonGhost(o.Usage), Resolver.UsageNameNonGhost(n.Usage));
           } else if (!o.IsOld && n.IsOld) {
