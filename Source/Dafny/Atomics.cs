@@ -29,7 +29,7 @@ namespace Microsoft.Dafny.Linear
         }
 
         private const String EXECUTE_PREFIX = "execute__atomic__";
-        private const String FINISH_PREFIX = "finish__atomic__";
+        private const String FINISH_NAME = "finish__atomic";
 
         private bool is_open_stmt(CallStmt call)
         {
@@ -42,10 +42,10 @@ namespace Microsoft.Dafny.Linear
         {
             var name = call.Method.CompileName;
             var parts = name.Split(".");
-            return parts[^1].StartsWith(FINISH_PREFIX);
+            return parts[^1] == FINISH_NAME;
         }
 
-        private void check_names_match(IToken tok, String s1, String s2)
+        /*private void check_names_match(IToken tok, String s1, String s2)
         {
             var parts = s1.Split(".");
             Contract.Assert(parts[^1].StartsWith(EXECUTE_PREFIX));
@@ -58,7 +58,7 @@ namespace Microsoft.Dafny.Linear
                 reporter.Error(MessageSource.Rewriter, tok,
                     "Improper atomic statement nesting: close and open don't match");
             }
-        }
+        }*/
 
         private void check_open_close_match(
                     CallStmt openStmt,
@@ -68,7 +68,7 @@ namespace Microsoft.Dafny.Linear
             var call1 = openStmt;
             var call2 = closeStmt;
 
-            check_names_match(openStmt.Tok, call1.Method.CompileName, call2.Method.CompileName);
+            //check_names_match(openStmt.Tok, call1.Method.CompileName, call2.Method.CompileName);
 
             PreservedContents closedPreservedContents = get_preserved_contents_close_stmt(closeStmt);
 
@@ -178,15 +178,6 @@ namespace Microsoft.Dafny.Linear
                     }
                 }
             }
-
-            /*if (us.SubStatements.Count() == 1)
-            {
-                if (us.SubStatements[0] is CallStmt cs)
-                {
-                    return cs;
-                }
-            }
-            }*/
 
             return null;
         }
