@@ -890,7 +890,7 @@ TopDecl<. ModuleDefinition module, List<MemberDecl/*!*/> membersDefaultClass, bo
                     !isTopLevel && DafnyOptions.O.IronDafny && isAbstract>
   ) .
 
-// A.B(C,D).E
+// A(B(C,D).E,E.F.G)
 ModuleApplicationProd<out ModuleApplication modapp>
 =   (.
         IToken id = null;
@@ -906,6 +906,7 @@ ModuleApplicationProd<out ModuleApplication modapp>
     (.  modapp = new ModuleApplication(id, moduleParams); .)
     ).
 
+// A(B(C,D).E,E.F.G).H.I.J
 ModuleExpressionProd<out ModuleExpression modexp>
 = (.
         ModuleApplication modapp = null;
