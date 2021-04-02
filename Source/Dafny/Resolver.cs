@@ -1365,7 +1365,7 @@ namespace Microsoft.Dafny
       foreach (var top in m.TopLevelDecls) {
         if (top is AliasModuleDecl amd) {
           if (!amd.TargetModExp.application.IsSimple()) {
-            Console.Out.WriteLine("Need to substitute here.");
+            // TODO: Console.Out.WriteLine("Need to substitute here.");
           }
         }
       }

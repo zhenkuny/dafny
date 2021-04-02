@@ -818,7 +818,7 @@ namespace Microsoft.Dafny
     public ModuleApplicationCloner(ApplicationModuleView Application) {
       this.Application = Application;
     }
-    
+
     public override TopLevelDecl CloneDeclaration(TopLevelDecl d, ModuleDefinition m) {
       TopLevelDecl decl = base.CloneDeclaration(d, m);
       if (d == Application.Prototype.Decl) {
@@ -832,7 +832,7 @@ namespace Microsoft.Dafny
       }
       return decl;
     }
-    
+
     public static LiteralModuleDecl apply(ApplicationModuleView amv, ModuleDefinition parent, string declName = null) {
       ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
       ModuleDefinition def = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
@@ -865,7 +865,7 @@ namespace Microsoft.Dafny
       }
       // The formals are applied, so the result def no longer has formal slots.
       result.Formals = new List<FormalModuleDecl>();
-      Console.Out.WriteLine("Need to substitute here.");
+      // TODO: Console.Out.WriteLine("Need to substitute here.");
       return result;
     }
   }

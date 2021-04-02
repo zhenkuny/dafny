@@ -51,7 +51,7 @@ namespace Microsoft.Dafny
         List<ModuleView> actuals = new List<ModuleView>();
         foreach (ModuleExpression actualParam in modExp.application.moduleParams)
         {
-          Console.Out.WriteLine("XXX-TODO check {actualParam} refines its formal");
+          //Console.Out.WriteLine("XXX-TODO check {actualParam} refines its formal");
           actuals.Add(ModuleView.resolveModuleExpression(view, actualParam, reporter, requireApplication));
         }
 
@@ -236,7 +236,7 @@ namespace Microsoft.Dafny
         }
       }
 
-      Console.Out.WriteLine($"new {this.ToString()}");
+      //Console.Out.WriteLine($"new {this.ToString()}");
     }
 
     public override string ToString() {
@@ -293,7 +293,7 @@ namespace Microsoft.Dafny
       for (int i=0; i<prototype.Def.Formals.Count; i++) {
         Substitutions.Add(prototype.Def.Formals[i].Name.val, actuals[i]);
       }
-      Console.Out.WriteLine($"new {this.ToString()}");
+      //Console.Out.WriteLine($"new {this.ToString()}");
     }
 
     public override string ToString() {
