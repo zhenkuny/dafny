@@ -1,3 +1,6 @@
+// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint" "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
 abstract module A {
   datatype T = T
 }
@@ -20,7 +23,7 @@ abstract module F(e: E) {
 module G(a: A) refines E(C(a)) {
 }
 
-module H(a: A) refines F(G(a)) {
+abstract module H(a: A) refines F(G(a)) {
   import X = a
   import Y = e.c.a
   import Z = G(a).a
