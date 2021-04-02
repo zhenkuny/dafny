@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Numerics;
@@ -35,9 +36,9 @@ namespace Microsoft.Dafny
       String name = modExp.application.tok.val;
       ModuleView mv = view.lookup(name);
       if (mv == null) {
-        reporter.Error(MessageSource.Resolver, modExp.application.tok,
-          $"Module Could not find module name {name}");
-        return null;
+        var msg = $"Module Could not find module name {name}";
+        reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
+        return new ErrorModuleView();
       }
 
       ModuleView appliedView;
@@ -54,11 +55,10 @@ namespace Microsoft.Dafny
           actuals.Add(ModuleView.resolveModuleExpression(view, actualParam, reporter, requireApplication));
         }
 
-        if (dmv.Def.Formals.Count != actuals.Count)
-        {
-          reporter.Error(MessageSource.Resolver, modExp.application.tok,
-              $"Module {dmv.Def.Name} expects {dmv.Def.Formals.Count} parameters, got {actuals.Count}");
-          return null;
+        if (dmv.Def.Formals.Count != actuals.Count) {
+          var msg = $"Module {dmv.Def.Name} expects {dmv.Def.Formals.Count} parameters, got {actuals.Count}";
+          reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
+          return new ErrorModuleView();
         }
 
         appliedView = new ApplicationModuleView(dmv, actuals);
@@ -67,9 +67,9 @@ namespace Microsoft.Dafny
           // Is this the only way we can have unfilled formals? What if the thing we're referencing
           // is a previous actual that itself left its formals empty?
           if (requireApplication==RequireApplication.Yes && dmv.Def.Formals.Count > 0) {
-            reporter.Error(MessageSource.Resolver, modExp.application.tok,
-                $"Module {dmv.Def.Name} requires {dmv.Def.Formals.Count} parameters.");
-            return null;
+            var msg = $"Module {dmv.Def.Name} requires {dmv.Def.Formals.Count} parameters.";
+            reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
+            return new ErrorModuleView();
           }
         }
         appliedView = mv;
@@ -91,6 +91,25 @@ namespace Microsoft.Dafny
           }
       }
       return curView;
+    }
+  }
+
+  public class ErrorModuleView : ModuleView
+  {
+    public ModuleView lookup(string name) {
+      return null;
+    }
+
+    public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews) {
+      // Nothing to do
+    }
+
+    public ModuleDecl GetDecl() {
+      throw new NotImplementedException();
+    }
+
+    public ModuleDefinition GetDef() {
+      throw new NotImplementedException();
     }
   }
 
@@ -135,7 +154,7 @@ namespace Microsoft.Dafny
       Contract.Assert(false); // This class shouldn't survive into the type resolver.
       return null;
     }
-    
+
     public ModuleDefinition GetDef()
     {
       Contract.Assert(false);
@@ -172,7 +191,7 @@ namespace Microsoft.Dafny
       this.Decl = Decl;
       this.LocalViews = new Dictionary<string, Tuple<ModuleDecl, ModuleView>>();
       SymbolTableView context = new SymbolTableView(parentContext, Def.Name);
-      
+
       /*
        module A { type T }
        module B(a:A) {}
@@ -190,6 +209,7 @@ namespace Microsoft.Dafny
         // There's no TopLevelDecl here, so we'll roll up an AliasModuleDecl to make
         // the type resolver happy.
         ModuleDecl fd = new AliasModuleDecl(formal.ConstraintModExp, formal.Name, Def, false, null);
+        Debug.Assert(fv != null);
         LocalViews.Add(formal.Name.val, new Tuple<ModuleDecl,ModuleView>(fd,fv));
         context.Add(formal.Name.val, fv);
       }
@@ -206,15 +226,16 @@ namespace Microsoft.Dafny
       {
         if (decl is LiteralModuleDecl lmd) {
           ModuleView lv = new DefModuleView(context, lmd.ModuleDef, lmd, reporter);
+          Debug.Assert(lv != null);
           LocalViews.Add(lmd.Name, new Tuple<ModuleDecl,ModuleView>(lmd,lv));
           context.Add(lmd.Name, lv);
         } else if (decl is AliasModuleDecl amd) {
           ModuleView lv = ModuleView.resolveModuleExpression(context, amd.TargetModExp, reporter, ModuleView.RequireApplication.Yes);
-          LocalViews.Add(amd.Name, new Tuple<ModuleDecl,ModuleView>(amd,lv));
+          LocalViews.Add(amd.Name, new Tuple<ModuleDecl, ModuleView>(amd, lv));
           context.Add(amd.Name, lv);
         }
       }
-      
+
       Console.Out.WriteLine($"new {this.ToString()}");
     }
 
@@ -257,7 +278,7 @@ namespace Microsoft.Dafny
 
     public ModuleDefinition GetDef()
     {
-      return Def; 
+      return Def;
     }
   }
 

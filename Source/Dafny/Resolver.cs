@@ -455,13 +455,14 @@ namespace Microsoft.Dafny
       ResolveTopLevelDecls_Core(systemModuleClassesWithNonNullTypes, new Graph<IndDatatypeDecl>(), new Graph<CoDatatypeDecl>());
 
       var compilationModuleClones = new Dictionary<ModuleDefinition, ModuleDefinition>();
-      
+
       List<Tuple<ModuleDecl, ModuleView>> visitList = new List<Tuple<ModuleDecl, ModuleView>>();
       resolvedModuleView.BuildModuleVisitList(visitList);
-      
+
       foreach (var visit in visitList) {
         ModuleDecl decl = visit.Item1;
         ModuleView moduleView = visit.Item2;
+
         if (decl is LiteralModuleDecl literalDecl) {
 
           // VisibilityScopes: how do they work? And why do they get built here and there
@@ -1535,7 +1536,7 @@ namespace Microsoft.Dafny
 //        moduleDecl.TopLevelDecls.Add(subdecl);
 //        BindModuleName_LiteralModuleDecl(subdecl, prefixNamedModules.ConvertAll(ShortenPrefix), bindings);
 //      }
-//      
+//
 //      // Bind the formals
 //      foreach (FormalModuleDecl fmd in moduleDecl.Formals)
 //      {
@@ -2410,7 +2411,7 @@ namespace Microsoft.Dafny
 
 
     public bool GetSignatureForAlias(ModuleView moduleView, out ModuleDecl decl, string actualName, ErrorReporter reporter) {
-      
+
       // We've got this moduleView that represents the module or application that alias should point at.
       // If it's a DefModuleView, we could just sneak the ModuleDef out, grab its Signature, and call it a day, right?
       // If it's an ApplicationModuleView, we need to do a tricksy cloney thing and then recurse. I think.
@@ -2418,21 +2419,23 @@ namespace Microsoft.Dafny
         decl = dmv.Decl;
         return true;
         //return dmv.Def;
-      } else if (moduleView is ApplicationModuleView amv)
-      {
+      } else if (moduleView is ApplicationModuleView amv) {
         ModuleDefinition parent = amv.Prototype.Decl.EnclosingModuleDefinition; // XXX not right.
         LiteralModuleDecl cloneDecl = ModuleApplicationCloner.apply(amv, parent, actualName);
         cloneDecl.Signature = ConstructSignatureForModule(amv, cloneDecl.ModuleDef, /*useImports? I dunnoXXX */ false);
-        cloneDecl.DefaultExport = cloneDecl.Signature;  // XXX No idea when this is required or allowed.
+        cloneDecl.DefaultExport = cloneDecl.Signature; // XXX No idea when this is required or allowed.
         decl = cloneDecl;
         return true;
+      } else if (moduleView is ErrorModuleView) {
+        decl = null;
+        return false;
       } else {
         Contract.Assert(false); // I are too dumb
         decl = null;
         return false;
       }
     }
-      
+
 // PAVED
 //      Contract.Requires(Exports != null);
 //
