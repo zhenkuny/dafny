@@ -2424,6 +2424,8 @@ namespace Microsoft.Dafny
         LiteralModuleDecl cloneDecl = ModuleApplicationCloner.apply(amv, parent, actualName);
         cloneDecl.Signature = ConstructSignatureForModule(amv, cloneDecl.ModuleDef, /*useImports? I dunnoXXX */ false);
         cloneDecl.DefaultExport = cloneDecl.Signature; // XXX No idea when this is required or allowed.
+        // Cloning only copies portions of the module; it ignores fields that are filled in during resolution
+        ResolveModuleDefinition(cloneDecl.ModuleDef, cloneDecl.Signature, isAnExport: false /* REVIEW: ? */);
         decl = cloneDecl;
         return true;
       } else if (moduleView is ErrorModuleView) {
