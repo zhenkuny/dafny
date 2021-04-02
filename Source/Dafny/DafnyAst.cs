@@ -3802,7 +3802,7 @@ namespace Microsoft.Dafny {
     public static ModuleExpression From(List<IToken> idPath)
     {
       ModuleApplication application = new ModuleApplication(idPath[0], new List<ModuleExpression>());
-      List<IToken> path = idPath.GetRange(1, idPath.Count);
+      List<IToken> path = idPath.GetRange(1, idPath.Count-1);
       return new ModuleExpression(application, path);
     }
 
