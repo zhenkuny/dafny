@@ -15,6 +15,7 @@ namespace Microsoft.Dafny
 {
   public class Resolver {
     readonly BuiltIns builtIns;
+    public static List<Tuple<ModuleDecl, ModuleView>> visitListStash;
 
     ErrorReporter reporter;
     ModuleSignature moduleInfo = null;
@@ -458,6 +459,7 @@ namespace Microsoft.Dafny
 
       List<Tuple<ModuleDecl, ModuleView>> visitList = new List<Tuple<ModuleDecl, ModuleView>>();
       resolvedModuleView.BuildModuleVisitList(visitList);
+      visitListStash = visitList;
 
       foreach (var visit in visitList) {
         ModuleDecl decl = visit.Item1;

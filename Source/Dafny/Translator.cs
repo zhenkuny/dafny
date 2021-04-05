@@ -5,6 +5,7 @@
 //-----------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Diagnostics.Contracts;
@@ -134,6 +135,23 @@ namespace Microsoft.Dafny {
           var mdecl = (ModuleDecl)decl;
           currentScope.Augment(mdecl.AccessibleSignature().VisibilityScope);
         }
+      }
+
+      // Find the module view for this definition
+      ModuleView theModuleView = null;
+      foreach (var visit in Resolver.visitListStash) {
+        ModuleDecl decl = visit.Item1;
+        ModuleView moduleView = visit.Item2;
+        if (decl.Name == m.Name) {
+          theModuleView = moduleView;
+          break;
+        }
+      }
+      Debug.Assert(theModuleView != null);
+
+      foreach (FormalModuleDecl d in m.Formals) {
+        ModuleView formalView = theModuleView.lookup(d.Name.val);
+        currentScope.Augment(formalView.GetDef().VisibilityScope);
       }
 
     }
