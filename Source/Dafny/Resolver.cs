@@ -471,10 +471,12 @@ namespace Microsoft.Dafny
           // instead I'm going to just tamper with the def's VisibilityScope right here.
           // This is how spaghetti code accretes pasta: I can't make any sense of the rest
           // of the spaghetti.
+          /*
           foreach (FormalModuleDecl d in literalDecl.ModuleDef.Formals) {
             ModuleView formalView = moduleView.lookup(d.Name.val);
             literalDecl.ModuleDef.VisibilityScope.Augment(formalView.GetDef().VisibilityScope);
           }
+          */
 
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature
