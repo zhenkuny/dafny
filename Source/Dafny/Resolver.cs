@@ -479,6 +479,10 @@ namespace Microsoft.Dafny
             literalDecl.ModuleDef.VisibilityScope.Augment(formalView.GetDef().VisibilityScope);
           }
           */
+          //literalDecl.ModuleDef.ModuleViews[]
+          foreach (FormalModuleDecl d in literalDecl.ModuleDef.Formals) {
+            d.ModDef = moduleView.lookup(d.Name.val).GetDef();
+          }
 
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature

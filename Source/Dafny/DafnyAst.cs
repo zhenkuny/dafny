@@ -3577,6 +3577,7 @@ namespace Microsoft.Dafny {
     public readonly IToken Name;
     public readonly ModuleExpression ConstraintModExp;
     public readonly ModuleDefinition Parent;
+    public ModuleDefinition ModDef = null;
 
     public FormalModuleDecl(ModuleExpression constraintModExp, IToken name, ModuleDefinition parent) {
       this.Name = name;

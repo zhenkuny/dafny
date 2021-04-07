@@ -138,6 +138,7 @@ namespace Microsoft.Dafny {
       }
 
       // Find the module view for this definition
+      /*
       ModuleView theModuleView = null;
       foreach (var visit in Resolver.visitListStash) {
         ModuleDecl decl = visit.Item1;
@@ -152,6 +153,18 @@ namespace Microsoft.Dafny {
       foreach (FormalModuleDecl d in m.Formals) {
         ModuleView formalView = theModuleView.lookup(d.Name.val);
         currentScope.Augment(formalView.GetDef().VisibilityScope);
+      }
+      */
+      foreach (FormalModuleDecl d in m.Formals) {
+        currentScope.Augment(d.ModDef.VisibilityScope);
+      }
+
+      foreach (TopLevelDecl d in m.TopLevelDecls) {
+        if (d is ModuleDecl md) {
+          if (md.Signature != null) {
+            currentScope.Augment(md.Signature.VisibilityScope);
+          }
+        }
       }
 
     }
@@ -817,7 +830,8 @@ namespace Microsoft.Dafny {
       mods.Insert(0, forModule);
 
       foreach (ModuleDefinition m in mods) {
-        foreach (TopLevelDecl d in m.TopLevelDecls.FindAll(VisibleInScope)) {
+        var visible = m.TopLevelDecls.FindAll(VisibleInScope);
+        foreach (TopLevelDecl d in visible) {
           currentDeclaration = d;
           if (d is OpaqueTypeDecl) {
             var dd = (OpaqueTypeDecl)d;
