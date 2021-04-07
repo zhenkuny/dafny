@@ -28,8 +28,8 @@ abstract module SortMethodUtil(T: TotalOrder) {
     assume false;
   }
 }
-/*
-module Stuff {
+
+abstract module Stuff {
   import T = IntTotalOrder
   import W = SortMethodUtil(IntTotalOrder).S.T
 
@@ -38,7 +38,7 @@ module Stuff {
   {
   }
 }
-
+/*
 module ParameterizedStuff(T: TotalOrder) {
   import W = SortMethodUtil(T).S.T
 
