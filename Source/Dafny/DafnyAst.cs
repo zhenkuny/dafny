@@ -3983,6 +3983,7 @@ namespace Microsoft.Dafny {
         }
         return visibilityScope;
       }
+      set { visibilityScope = value; }
     }
 
     public virtual bool IsDefaultModule {

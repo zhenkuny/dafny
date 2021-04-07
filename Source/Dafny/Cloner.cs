@@ -835,7 +835,9 @@ namespace Microsoft.Dafny
 
     public static LiteralModuleDecl apply(ApplicationModuleView amv, ModuleDefinition parent, string declName = null) {
       ModuleApplicationCloner cloner = new ModuleApplicationCloner(amv);
-      ModuleDefinition def = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
+      //ModuleDefinition def = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.ToString());
+      ModuleDefinition def = cloner.CloneModuleDefinition(amv.Prototype.Def, amv.Prototype.ToString());
+      def.VisibilityScope = amv.Prototype.Def.VisibilityScope;
       def.SuccessfullyResolved = amv.Prototype.Def.SuccessfullyResolved; // XXX this is such a teetering pile
       return new LiteralModuleDecl(def, parent, declName ?? def.Name);
     }
