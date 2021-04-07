@@ -137,24 +137,6 @@ namespace Microsoft.Dafny {
         }
       }
 
-      // Find the module view for this definition
-      /*
-      ModuleView theModuleView = null;
-      foreach (var visit in Resolver.visitListStash) {
-        ModuleDecl decl = visit.Item1;
-        ModuleView moduleView = visit.Item2;
-        if (decl.Name == m.Name) {
-          theModuleView = moduleView;
-          break;
-        }
-      }
-      Debug.Assert(theModuleView != null);
-
-      foreach (FormalModuleDecl d in m.Formals) {
-        ModuleView formalView = theModuleView.lookup(d.Name.val);
-        currentScope.Augment(formalView.GetDef().VisibilityScope);
-      }
-      */
       foreach (FormalModuleDecl d in m.Formals) {
         currentScope.Augment(d.ModDef.VisibilityScope);
       }
@@ -166,7 +148,6 @@ namespace Microsoft.Dafny {
           }
         }
       }
-
     }
 
     // translation state

@@ -466,20 +466,7 @@ namespace Microsoft.Dafny
         ModuleView moduleView = visit.Item2;
 
         if (decl is LiteralModuleDecl literalDecl) {
-
-          // VisibilityScopes: how do they work? And why do they get built here and there
-          // and everywhere including the flippin' Transformer.cs!? How the heck could I get
-          // information about the formals from here to there even if I wanted to? I think
-          // instead I'm going to just tamper with the def's VisibilityScope right here.
-          // This is how spaghetti code accretes pasta: I can't make any sense of the rest
-          // of the spaghetti.
-          /*
-          foreach (FormalModuleDecl d in literalDecl.ModuleDef.Formals) {
-            ModuleView formalView = moduleView.lookup(d.Name.val);
-            literalDecl.ModuleDef.VisibilityScope.Augment(formalView.GetDef().VisibilityScope);
-          }
-          */
-          //literalDecl.ModuleDef.ModuleViews[]
+          // Stash the module definition for each formal, for use during translation (in EstablishModuleScope)
           foreach (FormalModuleDecl d in literalDecl.ModuleDef.Formals) {
             d.ModDef = moduleView.lookup(d.Name.val).GetDef();
           }
