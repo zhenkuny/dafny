@@ -8534,7 +8534,9 @@ namespace Microsoft.Dafny
                 usageContext.insidePureCall = isPureCall;
               }
               if (!callee.HasInoutThis) { // TODO(andrea) is it safe to entirely skip this check? is this check safe for pure calls?
-                resolver.CheckIsCompilable(s.Receiver, usageContext, callee.Usage);
+                if (!callee.IsStatic) {
+                  resolver.CheckIsCompilable(s.Receiver, usageContext, callee.Usage);
+                }
               }
               j = 0;
               foreach (var e in s.Args) {
@@ -8791,6 +8793,20 @@ namespace Microsoft.Dafny
       }
     }
 #endregion
+
+    class CheckGLinearMethod_Visitor : ResolverBottomUpVisitor
+    {
+      public CheckGLinearMethod_Visitor(Resolver resolver) : base(resolver) {}
+      protected override void VisitOneStmt(Statement stmt) {
+        if (stmt is CallStmt s) {
+          var u = s.Method.Usage;
+          if (!(u.IsGhostKind || ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased && s.Method.IsStatic))) {
+            resolver.reporter.Error(MessageSource.Resolver, s.Tok,
+              "glinear static methods can only call ghost or static glinear methods");
+          }
+        }
+      }
+    }
 
     // ------------------------------------------------------------------------------------------------------
     // ----- FillInDefaultLoopDecreases ---------------------------------------------------------------------
@@ -10226,6 +10242,28 @@ namespace Microsoft.Dafny
 
         // attributes are allowed to mention both in- and out-parameters (including the implicit _k, for greatest lemmas)
         ResolveAttributes(m.Attributes, m, new ResolveOpts(m, m is TwoStateLemma));
+
+        if (m.IsStatic && m.Usage.realm == LinearRealm.Erased) {
+          // glinear static method is an erasable method that can only perform ghost/glinear/gshared operations.
+          foreach (var p in m.Ins.Concat(m.Outs)) {
+            var u = p.Usage;
+            if (!(u.IsGhostKind || ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased))) {
+              reporter.Error(MessageSource.Resolver, p.tok,
+                $"{p.Name}: formals and returns of glinear static methods must be ghost, glinear, or gshared");
+            }
+          }
+          if (m.Mod.Expressions.Count > 0) {
+            reporter.Error(MessageSource.Resolver, m.tok,
+              "glinear static methods cannot use 'modifies'");
+          }
+          if (m.AllowsNontermination) {
+            reporter.Error(MessageSource.Resolver, m.tok,
+              "glinear static methods cannot use 'decreases *'");
+          }
+          if (m.Body != null) {
+            new CheckGLinearMethod_Visitor(this).Visit(m.Body);
+          }
+        }
 
         DafnyOptions.O.WarnShadowing = warnShadowingOption; // restore the original warnShadowing value
         scope.PopMarker();  // for the out-parameters and outermost-level locals

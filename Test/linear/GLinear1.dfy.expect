@@ -1,0 +1,4 @@
+GLinear1.dfy(9,0): Error: a datatype or codatatype cannot be declared 'glinear'.
+GLinear1.dfy(10,0): Error: a datatype or codatatype cannot be declared 'gshared'.
+GLinear1.dfy(11,0): Error: a datatype or codatatype cannot be declared 'shared'.
+3 parse errors detected in GLinear1.dfy

@@ -1484,8 +1484,8 @@ GIdentType<bool allowGhostKeyword, bool allowLinearKeyword, bool allowInoutKeywo
   | "inout"                    (. if (allowInoutKeyword) { inout = true; } else { SemErr(t, "formal cannot be declared 'inout' in this context"); } .)
   | "linear"                   (. if (allowLinearKeyword) { usage = Usage.Linear(LinearRealm.Physical); } else { SemErr(t, "formal cannot be declared 'linear' in this context"); } .)
   | "shared"                   (. if (allowLinearKeyword) { usage = Usage.Shared(LinearRealm.Physical); } else { SemErr(t, "formal cannot be declared 'shared' in this context"); } .)
-  | "glinear"                  (. if (allowLinearKeyword) { usage = Usage.Linear(LinearRealm.Erased); } else { SemErr(t, "formal cannot be declared 'linear' in this context"); } .)
-  | "gshared"                  (. if (allowLinearKeyword) { usage = Usage.Shared(LinearRealm.Erased); } else { SemErr(t, "formal cannot be declared 'shared' in this context"); } .)
+  | "glinear"                  (. if (allowLinearKeyword) { usage = Usage.Linear(LinearRealm.Erased); } else { SemErr(t, "formal cannot be declared 'glinear' in this context"); } .)
+  | "gshared"                  (. if (allowLinearKeyword) { usage = Usage.Shared(LinearRealm.Erased); } else { SemErr(t, "formal cannot be declared 'gshared' in this context"); } .)
   | "new"                      (. if (allowNewKeyword) { isOld = false; } else { SemErr(t, "formal cannot be declared 'new' in this context"); } .)
   }
   IdentType<out id, out ty, false>
