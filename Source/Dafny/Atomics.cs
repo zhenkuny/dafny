@@ -77,7 +77,9 @@ namespace Microsoft.Dafny.Linear
                 && openPreservedContents.Atomic != closedPreservedContents.Atomic)
             {
                 reporter.Error(MessageSource.Rewriter, closeStmt.Tok,
-                    "Improper atomic statement nesting: atomic field does not match");
+                    "Improper atomic statement nesting: 'atomic' field does not match: got '{0}' and '{1}'",
+                    openPreservedContents.Atomic,
+                    closedPreservedContents.Atomic);
             }
             
             if (openPreservedContents.NewValue != null
@@ -85,7 +87,9 @@ namespace Microsoft.Dafny.Linear
                 && openPreservedContents.NewValue != closedPreservedContents.NewValue)
             {
                 reporter.Error(MessageSource.Rewriter, closeStmt.Tok,
-                    "Improper atomic statement nesting: new_value field does not match");
+                    "Improper atomic statement nesting: 'new_value' field does not match: got '{0}' and '{1}'",
+                    openPreservedContents.NewValue,
+                    closedPreservedContents.NewValue);
             }
         }
 
@@ -225,6 +229,18 @@ namespace Microsoft.Dafny.Linear
                 }
             }
         }
+
+        private bool isGlinearStmt(Statement stmt)
+        {
+            var call_stmt = as_call_stmt(stmt);
+            if (call_stmt != null)
+            {
+                var u = call_stmt.Method.Usage;
+                return ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased && call_stmt.Method.IsStatic);
+            }
+
+            return false;
+        }
         
         private void RewriteMethod(Method m) {
             var body = m.Body?.Body;
@@ -269,7 +285,7 @@ namespace Microsoft.Dafny.Linear
                     {
                         if (openStmt != null)
                         {
-                            if (!stmt.IsGhost)
+                            if (!stmt.IsGhost && !isGlinearStmt(stmt))
                             {
                                 reporter.Error(MessageSource.Rewriter, stmt.Tok,
                                     "Only ghost statements can be within an atomic block");
