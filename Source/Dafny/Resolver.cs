@@ -10030,6 +10030,24 @@ namespace Microsoft.Dafny
       }
       SolveAllTypeConstraints();
 
+      if (f.IsStatic && !f.IsGhost && f.Usage.realm == LinearRealm.Erased) {
+        foreach (var p in f.Formals) {
+          var u = p.Usage;
+          if (!(u.IsGhostKind || u.IsLinearOrSharedErased)) {
+            reporter.Error(MessageSource.Resolver, p.tok,
+              $"{p.Name}: formals of glinear static function methods must be ghost, glinear, or gshared");
+          }
+        }
+        if (!(f.ResultUsage.IsGhostKind || f.ResultUsage.IsLinearOrSharedErased)) {
+          reporter.Error(MessageSource.Resolver, f.tok,
+            "result of glinear static function methods must be ghost, glinear, or gshared");
+        }
+        if (f.AllowsNontermination) {
+          reporter.Error(MessageSource.Resolver, f.tok,
+            "glinear static function methods cannot use 'decreases *'");
+        }
+      }
+
       if (f.Body != null) {
         var prevErrorCount = reporter.Count(ErrorLevel.Error);
         ResolveExpression(f.Body, new ResolveOpts(f, f is TwoStateFunction));
@@ -10235,7 +10253,7 @@ namespace Microsoft.Dafny
           // glinear static method is an erasable method that can only perform ghost/glinear/gshared operations.
           foreach (var p in m.Ins.Concat(m.Outs)) {
             var u = p.Usage;
-            if (!(u.IsGhostKind || ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased))) {
+            if (!(u.IsGhostKind || u.IsLinearOrSharedErased)) {
               reporter.Error(MessageSource.Resolver, p.tok,
                 $"{p.Name}: formals and returns of glinear static methods must be ghost, glinear, or gshared");
             }
@@ -13108,7 +13126,7 @@ namespace Microsoft.Dafny
         reporter.Error(MessageSource.Resolver, s, "a constructor is allowed to be called only when an object is being allocated");
       }
 
-      if (codeContext is Method m && m.IsStatic && m.Usage.IsLinearKind && m.Usage.realm == LinearRealm.Erased) {
+      if (codeContext is Method m && m.IsStatic && m.Usage.realm == LinearRealm.Erased) {
         var u = callee.Usage;
         if (!(u.IsGhostKind || ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased && callee.IsStatic))) {
           reporter.Error(MessageSource.Resolver, s.Tok,

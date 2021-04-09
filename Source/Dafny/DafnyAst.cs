@@ -5339,6 +5339,12 @@ namespace Microsoft.Dafny {
     public bool IsGhostKind {
       get { return kind == UsageKind.Ghost; }
     }
+    public bool IsLinearErased {
+      get { return IsLinearKind && realm == LinearRealm.Erased; }
+    }
+    public bool IsLinearOrSharedErased {
+      get { return (IsLinearKind || IsSharedKind) && realm == LinearRealm.Erased; }
+    }
     // Note: Usage deliberately does not support equality (== or .Equals)
     // In most cases, you should use IsGhostKind, IsLinearKind, etc., but for some cases IsEqualTo is appropriate:
     public bool IsEqualTo(Usage that) {
