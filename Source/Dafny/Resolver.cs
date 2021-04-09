@@ -2750,15 +2750,17 @@ namespace Microsoft.Dafny
           } else if (d is DatatypeDecl) {
             var dt = (DatatypeDecl)d;
             var idt = d as IndDatatypeDecl;
-            bool isLinear = idt != null && idt.IsLinear;
+            Usage idtUsage = (idt == null) ? Usage.Ordinary : idt.Usage;
             foreach (var ctor in dt.Ctors) {
               foreach (var formal in ctor.Formals) {
                 if (formal.IsLinearKind) {
-                  if (!isLinear) {
+                  if (!idtUsage.IsLinearKind || (formal.Usage.realm == LinearRealm.Physical && idtUsage.realm != LinearRealm.Physical)) {
                     reporter.Error(MessageSource.Resolver, formal, "use 'linear datatype' to allow linear fields", UsageName(formal.Usage));
                   }
                 } else if (HasLinearity(formal.Usage)) {
                   reporter.Error(MessageSource.Resolver, formal, "{0} not allowed", UsageName(formal.Usage));
+                } else if (idtUsage.realm == LinearRealm.Erased && !formal.IsGhost) {
+                  reporter.Error(MessageSource.Resolver, formal, "'glinear datatype' can only contain glinear and ghost fields", UsageName(formal.Usage));
                 }
                 AddTypeDependencyEdges((ICallable)d, formal.Type);
               }
@@ -17163,16 +17165,20 @@ namespace Microsoft.Dafny
           var id = ExprAsIdentifier(usageContext, e.Obj);
           if (id != null && (id.Var.IsLinearKind || id.Var.IsSharedKind)) {
             if (inoutUsage) {
-              CheckIsCompilable(e.Obj, usageContext, Usage.Linear(LinearRealm.Physical), true);
+              CheckIsCompilable(e.Obj, usageContext, Usage.Linear(id.Var.Usage.realm), true);
               return linearDestructor ? Usage.Linear(destructorRealm) : Usage.Ordinary;
             } else {
               // Try to share id
-              CheckIsCompilable(e.Obj, usageContext, Usage.Shared(LinearRealm.Physical));
+              CheckIsCompilable(e.Obj, usageContext, Usage.Shared(id.Var.Usage.realm));
               return linearDestructor ? Usage.Shared(destructorRealm) : Usage.Ordinary;
             }
           } else if (linearDestructor) {
-            var expectedUsage = inoutUsage ? Usage.Linear(LinearRealm.Physical) : Usage.Shared(LinearRealm.Physical);
-            CheckIsCompilable(e.Obj, usageContext, expectedUsage, inoutUsage);
+            var usage = CheckIsCompilable(e.Obj, usageContext, inoutUsage);
+            var expectedUsage = inoutUsage ? Usage.Linear(usage.realm) : Usage.Shared(usage.realm);
+            if (!usage.IsEqualTo(expectedUsage)) {
+              reporter.Error(MessageSource.Resolver, e.Obj, "expected {0} expression, found {1} expression",
+                UsageName(expectedUsage), UsageName(usage));
+            }
             return expectedUsage;
           } else {
             var u = CheckIsCompilable(e.Obj, usageContext, inoutUsage);
@@ -17223,7 +17229,6 @@ namespace Microsoft.Dafny
       } else if (expr is DatatypeValue) {
         var e = (DatatypeValue)expr;
         var dt = e.Ctor.EnclosingDatatype as IndDatatypeDecl;
-        bool isLinear = dt != null && dt.IsLinear;
         // check all NON-ghost arguments
         // note that if resolution is successful, then |e.Arguments| == |e.Ctor.Formals|
         for (int i = 0; i < e.Arguments.Count; i++) {
@@ -17232,7 +17237,7 @@ namespace Microsoft.Dafny
             CheckIsCompilable(e.Arguments[i], usageContext, usage);
           }
         }
-        return isLinear ? Usage.Linear(LinearRealm.Physical) : Usage.Ordinary;
+        return (dt == null) ? Usage.Ordinary : dt.Usage;
 
       } else if (expr is OldExpr) {
         reporter.Error(MessageSource.Resolver, expr, "old expressions are allowed only in specification and ghost contexts");

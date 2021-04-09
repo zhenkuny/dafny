@@ -36,3 +36,6 @@ glinear method Gf(linear y: int)
 glinear method Gg(y: int)
 {
 }
+
+glinear datatype Wrong1 = Wrong1(glinear a:int, linear b:int)
+glinear datatype Wrong2 = Wrong2(glinear a:int, b:int)

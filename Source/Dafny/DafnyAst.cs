@@ -4841,17 +4841,13 @@ namespace Microsoft.Dafny {
     }
 
     public bool[] TypeParametersUsedInConstructionByGroundingCtor;  // set during resolution; has same length as the number of type arguments
-    public bool IsLinear;
-
-    public Usage Usage {
-      get { return IsLinear ? Usage.Linear(LinearRealm.Physical) : Usage.Ordinary; }
-    }
+    public Usage Usage; // must be ordinary, linear, or glinear
 
     public enum ES { NotYetComputed, Never, ConsultTypeArguments }
     public ES EqualitySupport = ES.NotYetComputed;
 
     public IndDatatypeDecl(IToken tok, string name, ModuleDefinition module, List<TypeParameter> typeArgs,
-      [Captured] List<DatatypeCtor> ctors, List<MemberDecl> members, Attributes attributes, bool linear, bool isRefining)
+      [Captured] List<DatatypeCtor> ctors, List<MemberDecl> members, Attributes attributes, Usage usage, bool isRefining)
       : base(tok, name, module, typeArgs, ctors, members, attributes, isRefining) {
       Contract.Requires(tok != null);
       Contract.Requires(name != null);
@@ -4860,7 +4856,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(cce.NonNullElements(ctors));
       Contract.Requires(cce.NonNullElements(members));
       Contract.Requires(1 <= ctors.Count);
-      IsLinear = linear;
+      Usage = usage;
     }
   }
 
@@ -4885,8 +4881,15 @@ namespace Microsoft.Dafny {
       }
     }
 
+    private static Usage MakeUsage(List<Usage> usages) {
+      return
+        usages.Exists(u => u.IsLinearKind && u.realm == LinearRealm.Physical) ? Usage.Linear(LinearRealm.Physical) :
+        usages.Exists(u => u.IsLinearKind && u.realm == LinearRealm.Erased) ? Usage.Linear(LinearRealm.Erased) :
+        Usage.Ordinary;
+    }
+
     private TupleTypeDecl(ModuleDefinition systemModule, List<TypeParameter> typeArgs, List<Usage> usages, Attributes attributes)
-      : base(Token.NoToken, BuiltIns.TupleTypeName(usages), systemModule, typeArgs, CreateConstructors(typeArgs, usages), new List<MemberDecl>(), attributes, usages.Exists(u => u.IsLinearKind), false) {
+      : base(Token.NoToken, BuiltIns.TupleTypeName(usages), systemModule, typeArgs, CreateConstructors(typeArgs, usages), new List<MemberDecl>(), attributes, MakeUsage(usages), false) {
       Contract.Requires(systemModule != null);
       Contract.Requires(typeArgs != null);
       Usages = usages;

@@ -251,13 +251,13 @@ bool IsGets() {
 bool IsMatch() {
   scanner.ResetPeek();
   IToken x = scanner.Peek();
-  return la.kind == _match || (x.kind == _match && (la.kind == _linear || la.kind == _shared || x.kind == _glinear || x.kind == _gshared));
+  return la.kind == _match || (x.kind == _match && (la.kind == _linear || la.kind == _shared || la.kind == _glinear || la.kind == _gshared));
 }
 
 bool IsVar() {
   scanner.ResetPeek();
   IToken x = scanner.Peek();
-  return la.kind == _var || (x.kind == _var && (la.kind == _ghost || la.kind == _linear || la.kind == _shared || x.kind == _glinear || x.kind == _gshared));
+  return la.kind == _var || (x.kind == _var && (la.kind == _ghost || la.kind == _linear || la.kind == _shared || la.kind == _glinear || la.kind == _gshared));
 }
 
 // an existential guard starts with an identifier and is then followed by
@@ -1267,7 +1267,7 @@ DatatypeDecl<DeclModifierData dmod, ModuleDefinition/*!*/ module, out DatatypeDe
      IToken bodyStart = Token.NoToken;  // dummy assignment
      bool isRefining = false;
      bool co = false;
-     CheckDeclModifiers(dmod, "datatype or codatatype", AllowedDeclModifiers.Linear);
+     CheckDeclModifiers(dmod, "datatype or codatatype", AllowedDeclModifiers.Linear | AllowedDeclModifiers.GLinear);
      var members = new List<MemberDecl>();
   .)
   SYNC
@@ -1286,7 +1286,7 @@ DatatypeDecl<DeclModifierData dmod, ModuleDefinition/*!*/ module, out DatatypeDe
   (. if (co) {
        dt = new CoDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs, isRefining);
      } else {
-       dt = new IndDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs, dmod.Usage.IsLinearKind && dmod.Usage.realm == LinearRealm.Physical, isRefining);
+       dt = new IndDatatypeDecl(id, id.val, module, typeArgs, ctors, members, attrs, dmod.Usage, isRefining);
      }
      dt.BodyStartTok = bodyStart;
      dt.BodyEndTok = t;

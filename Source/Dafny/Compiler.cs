@@ -2291,7 +2291,7 @@ namespace Microsoft.Dafny {
         Contract.Assert(ctor != null);  // follows from successful resolution
         Contract.Assert(pat.Arguments.Count == ctor.Formals.Count);  // follows from successful resolution
         Usage usage = Usage.Ordinary;
-        if (pat.Ctor.EnclosingDatatype is IndDatatypeDecl idecl && idecl.IsLinear) {
+        if (pat.Ctor.EnclosingDatatype is IndDatatypeDecl idecl) {
           usage = idecl.Usage;
         }
 
