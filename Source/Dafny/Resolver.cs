@@ -8796,20 +8796,6 @@ namespace Microsoft.Dafny
     }
 #endregion
 
-    class CheckGLinearMethod_Visitor : ResolverBottomUpVisitor
-    {
-      public CheckGLinearMethod_Visitor(Resolver resolver) : base(resolver) {}
-      protected override void VisitOneStmt(Statement stmt) {
-        if (stmt is CallStmt s) {
-          var u = s.Method.Usage;
-          if (!(u.IsGhostKind || ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased && s.Method.IsStatic))) {
-            resolver.reporter.Error(MessageSource.Resolver, s.Tok,
-              "glinear static methods can only call ghost or static glinear methods");
-          }
-        }
-      }
-    }
-
     // ------------------------------------------------------------------------------------------------------
     // ----- FillInDefaultLoopDecreases ---------------------------------------------------------------------
     // ------------------------------------------------------------------------------------------------------
@@ -10261,9 +10247,6 @@ namespace Microsoft.Dafny
           if (m.AllowsNontermination) {
             reporter.Error(MessageSource.Resolver, m.tok,
               "glinear static methods cannot use 'decreases *'");
-          }
-          if (m.Body != null) {
-            new CheckGLinearMethod_Visitor(this).Visit(m.Body);
           }
         }
 
@@ -13123,6 +13106,14 @@ namespace Microsoft.Dafny
       Contract.Assert(callee != null);  // follows from the invariant of CallStmt
       if (!isInitCall && callee is Constructor) {
         reporter.Error(MessageSource.Resolver, s, "a constructor is allowed to be called only when an object is being allocated");
+      }
+
+      if (codeContext is Method m && m.IsStatic && m.Usage.IsLinearKind && m.Usage.realm == LinearRealm.Erased) {
+        var u = callee.Usage;
+        if (!(u.IsGhostKind || ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased && callee.IsStatic))) {
+          reporter.Error(MessageSource.Resolver, s.Tok,
+            "glinear static methods can only call ghost or static glinear methods");
+        }
       }
 
       // resolve left-hand sides
