@@ -57,3 +57,30 @@ method M3(glinear x:int) returns(glinear y:D0)
 {
   y := M2(x);
 }
+
+glinear datatype D = D(glinear i:int)
+
+function method F1(gshared d:D):bool {
+  gshared var D(i) := d;
+  true
+}
+
+function method F2(gshared d:D):bool {
+  gshared match d { case D(i) => true }
+}
+
+method X1(gshared d:D)
+{
+  gshared var i := d.i;
+}
+
+method X2(gshared d:D)
+{
+  gshared var D(i) := d;
+}
+
+method X3(gshared d:D)
+{
+  gshared match d { case D(i) => {} }
+}
+

@@ -8406,6 +8406,13 @@ namespace Microsoft.Dafny
               usageContext.available[local] = Available.Available;
             }
           }
+          if (s.LHS.Ctor != null && s.LHS.Ctor.EnclosingDatatype is IndDatatypeDecl ind) {
+            if (ind.Usage.realm == LinearRealm.Erased) {
+              if (!IsGLinearContext(codeContext)) {
+                Error(s, "can only use glinear/gshared pattern inside 'static glinear' function or method");
+              }
+            }
+          }
 
         } else if (stmt is AssignStmt) {
           var s = (AssignStmt)stmt;
@@ -8747,6 +8754,11 @@ namespace Microsoft.Dafny
           s.IsGhost = mustBeErasable || resolver.UsesSpecFeatures(s.Source);
           if (!mustBeErasable && s.IsGhost) {
             resolver.reporter.Info(MessageSource.Resolver, s.Tok, "ghost match");
+          }
+          if (s.Usage.realm == LinearRealm.Erased) {
+            if (!IsGLinearContext(codeContext)) {
+              Error(s.Source, "can only use glinear/gshared match inside 'static glinear' function or method");
+            }
           }
           if (!s.IsGhost) {
             resolver.CheckIsCompilable(s.Source, usageContext, s.Usage);
@@ -16946,6 +16958,16 @@ namespace Microsoft.Dafny
       }
     }
 
+    static bool IsGLinearContext(ICodeContext context) {
+      if (context is Method m) {
+        return m.IsStatic && m.Usage.IsLinearErased;
+      }
+      if (context is Function f) {
+        return f.IsStatic && f.Usage.IsLinearErased;
+      }
+      return false;
+    }
+
     void MaybeIntroduceLetBang(IToken tok, Usage usage, UsageContext usageContext, List<IVariable> borrow) {
       foreach (var x in borrow) {
         if (usageContext.available[x] == Available.Consumed) {
@@ -17171,6 +17193,14 @@ namespace Microsoft.Dafny
           if (linearDestructor) {
             destructorRealm = d.CorrespondingFormals.Find(x => x.IsLinearKind).Usage.realm;
           }
+          if (e.Obj.Type.IsIndDatatype) {
+            var u = e.Obj.Type.AsIndDatatype.Usage;
+            if (u.IsLinearKind && u.realm == LinearRealm.Erased) {
+              if (usageContext == null || !IsGLinearContext(usageContext.codeContext)) {
+                reporter.Error(MessageSource.Resolver, e.tok, "can only use glinear/gshared datatype selection inside 'static glinear' function or method");
+              }
+            }
+          }
           var id = ExprAsIdentifier(usageContext, e.Obj);
           if (id != null && (id.Var.IsLinearKind || id.Var.IsSharedKind)) {
             if (inoutUsage) {
@@ -17223,7 +17253,9 @@ namespace Microsoft.Dafny
             }
           }
           // function is okay, so check all NON-ghost arguments
-          CheckIsCompilable(e.Receiver, usageContext, e.Function.Usage);
+          if (!e.Function.IsStatic) {
+            CheckIsCompilable(e.Receiver, usageContext, e.Function.Usage);
+          }
           for (int i = 0; i < e.Function.Formals.Count; i++) {
             var usage = e.Function.Formals[i].Usage;
             if (!usage.IsGhostKind) {
@@ -17297,6 +17329,13 @@ namespace Microsoft.Dafny
           var uc0 = UsageContext.Copy(usageContext);
           foreach (var ee in e.RHSs) {
             var lhs = e.LHSs[i];
+            if (lhs.Ctor != null && lhs.Ctor.EnclosingDatatype is IndDatatypeDecl ind) {
+              if (ind.Usage.realm == LinearRealm.Erased) {
+                if (usageContext == null || !IsGLinearContext(usageContext.codeContext)) {
+                  reporter.Error(MessageSource.Resolver, lhs.tok, "can only use glinear/gshared pattern inside 'static glinear' function or method");
+                }
+              }
+            }
             // Make LHS vars ghost if the RHS is a ghost
             if (UsesSpecFeatures(ee)) {
               foreach (var bv in lhs.Vars) {
@@ -17399,6 +17438,11 @@ namespace Microsoft.Dafny
         return u1;
       } else if (expr is MatchExpr) {
         MatchExpr e = (MatchExpr)expr;
+        if (e.Usage.realm == LinearRealm.Erased) {
+          if (usageContext == null || !IsGLinearContext(usageContext.codeContext)) {
+            reporter.Error(MessageSource.Resolver, e.tok, "can only use glinear/gshared match inside 'static glinear' function or method");
+          }
+        }
         var uc0 = UsageContext.Copy(usageContext);
         CheckIsCompilable(e.Source, usageContext, e.Usage);
         var borrow = RemoveInnerBorrowed(uc0, usageContext);

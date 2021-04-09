@@ -6,4 +6,9 @@ GLinear3.dfy(43,45): Error: expected gshared expression, found shared expression
 GLinear3.dfy(48,10): Error: expected glinear expression, found linear expression
 GLinear3.dfy(53,2): Error: variable must be linear
 GLinear3.dfy(58,10): Error: expected linear expression, found glinear expression
-8 resolution/type errors detected in GLinear3.dfy
+GLinear3.dfy(64,14): Error: can only use glinear/gshared pattern inside 'static glinear' function or method
+GLinear3.dfy(69,10): Error: can only use glinear/gshared match inside 'static glinear' function or method
+GLinear3.dfy(74,21): Error: can only use glinear/gshared datatype selection inside 'static glinear' function or method
+GLinear3.dfy(79,22): Error: can only use glinear/gshared pattern inside 'static glinear' function or method
+GLinear3.dfy(84,16): Error: can only use glinear/gshared match inside 'static glinear' function or method
+13 resolution/type errors detected in GLinear3.dfy
