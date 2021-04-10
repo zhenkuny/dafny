@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics.Contracts;
 using System.Linq;
-using Microsoft.Boogie;
 
 namespace Microsoft.Dafny.Linear
 {
@@ -65,9 +64,8 @@ namespace Microsoft.Dafny.Linear
                     CallStmt closeStmt,
                     PreservedContents openPreservedContents)
         {
-            var call1 = openStmt;
-            var call2 = closeStmt;
-
+            //var call1 = openStmt;
+            //var call2 = closeStmt;
             //check_names_match(openStmt.Tok, call1.Method.CompileName, call2.Method.CompileName);
 
             PreservedContents closedPreservedContents = get_preserved_contents_close_stmt(closeStmt);
@@ -155,7 +153,7 @@ namespace Microsoft.Dafny.Linear
                 call_get_arg(closeStmt, 1));
         }
 
-        private CallStmt as_call_stmt(Statement stmt)
+        private static CallStmt as_call_stmt(Statement stmt)
         {
             if (stmt is VarDeclStmt vds)
             {
@@ -230,13 +228,38 @@ namespace Microsoft.Dafny.Linear
             }
         }
 
-        private bool isGlinearStmt(Statement stmt)
+        public static bool IsGlinearStmt(Statement stmt)
         {
-            var call_stmt = as_call_stmt(stmt);
-            if (call_stmt != null)
+            var callStmt = as_call_stmt(stmt);
+            if (callStmt != null)
             {
-                var u = call_stmt.Method.Usage;
-                return ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased && call_stmt.Method.IsStatic);
+                var u = callStmt.Method.Usage;
+                return ((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased && callStmt.Method.IsStatic);
+            }
+
+            if (stmt is VarDeclStmt vds)
+            {
+                return IsGlinearStmt(vds.Update);
+            } else if (stmt is UpdateStmt us)
+            {
+                foreach (Statement sub in us.SubStatements)
+                {
+                    if (!IsGlinearStmt(sub))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            } else if (stmt is AssignStmt ast)
+            {
+                if (ast.Lhs is IdentifierExpr ie)
+                {
+                    var u = ie.Var.Usage;
+                    return (u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased;
+                }
+
+                return false;
             }
 
             return false;
@@ -285,7 +308,7 @@ namespace Microsoft.Dafny.Linear
                     {
                         if (openStmt != null)
                         {
-                            if (!stmt.IsGhost && !isGlinearStmt(stmt))
+                            if (!stmt.IsGhost && !IsGlinearStmt(stmt))
                             {
                                 reporter.Error(MessageSource.Rewriter, stmt.Tok,
                                     "Only ghost statements can be within an atomic block");
