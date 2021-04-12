@@ -391,12 +391,13 @@ namespace Microsoft.Dafny
     }
 
     public ModuleDecl GetDecl() {
-      Contract.Assert(false); // unimpl! Do Travis' tricksy substitution.
-      return null;
+      // Need to apply all of our substitutions at this point
+      return ModuleApplicationCloner.apply(this, Prototype.GetDef());
     }
 
     public ModuleDefinition GetDef()
     {
+      // TODO: Update to apply substitutions here
       return Prototype.GetDef();
     }
 

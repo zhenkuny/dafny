@@ -4,10 +4,10 @@ abstract module L {
 abstract module U(l: L) {
 }
 
-module A(u: U(L)) {
+abstract module A(u: U(L)) {
   import E = u.l
 }
-
+/*
 module W(x: L) refines U(x) {
 }
 
@@ -26,3 +26,4 @@ module Stuff {
   lemma stuff()
   ensures X.the_int() == 5
 }
+*/
