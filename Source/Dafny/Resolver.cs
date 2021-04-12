@@ -8360,9 +8360,15 @@ namespace Microsoft.Dafny
         } else if (stmt is VarDeclStmt) {
           var s = (VarDeclStmt)stmt;
           if (mustBeErasable) {
-            foreach (var local in s.Locals) {
+            foreach (var local in s.Locals)
+            {
               // a local variable in a specification-only context might as well be ghost
-              local.MakeGhost();
+              // skip this step for glinear and inout tmp variables
+              var u = local.Usage;
+              if (!((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased) && !u.ignore)
+              {
+                local.MakeGhost();
+              }
             }
           }
           foreach (var local in s.Locals) {
@@ -8379,8 +8385,13 @@ namespace Microsoft.Dafny
           var s = (VarDeclPattern)stmt;
 
           if (mustBeErasable) {
-            foreach (var local in s.LocalVars) {
-              local.MakeGhost();
+            foreach (var local in s.LocalVars)
+            {
+              var u = local.Usage;
+              if (!((u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased))
+              {
+                local.MakeGhost();
+              }
             }
           }
           if (!s.IsAutoGhost || mustBeErasable) {
@@ -8435,9 +8446,40 @@ namespace Microsoft.Dafny
             }
           } else if (gk == AssignStmt.NonGhostKind.Variable && codeContext.IsGhost) {
             // cool
-          } else if (mustBeErasable) {
-            Error(stmt, "Assignment to {0} is not allowed in this context (because this is a ghost method or because the statement is guarded by a specification-only expression)",
-              AssignStmt.NonGhostKind_To_String(gk));
+          } else if (mustBeErasable && !Linear.AtomicRewriter.IsGlinearStmt(stmt)) {
+            //if (!Linear.AtomicRewriter.IsGlinearStmt(stmt))
+            //{
+              Error(stmt,
+                "Assignment to {0} is not allowed in this context (because this is a ghost method or because the statement is guarded by a specification-only expression)",
+                AssignStmt.NonGhostKind_To_String(gk));
+            //}
+            /*else
+            {
+              var x = lhs as IdentifierExpr;
+
+              if (s.Rhs is ExprRhs rhs)
+              {
+                if ((!AssignStmt.LhsIsToGhost(lhs) || !madeGhost) && !assumeRhsCompilable)
+                {
+                  resolver.CheckIsCompilable(rhs.Expr, usageContext, x.Var.Usage);
+                }
+
+                if (x != null && x.Var.IsLinearKind)
+                {
+                  // TODO(andrea) with new assignment syntax, use this again to check correct rewriting for inout?
+                  if (usageContext.available[x.Var] != Available.Consumed && !assumeRhsCompilable)
+                  {
+                    Error(x, "variable must be unavailable before assignment");
+                  }
+
+                  usageContext.available[x.Var] = Available.Available;
+                }
+                else if (x != null && x.Var.IsSharedKind && usageContext.Borrows())
+                {
+                  Error(rhs.Expr, "cannot borrow variable because expression returns a shared result");
+                }
+              }
+            }*/
           } else {
             if (gk == AssignStmt.NonGhostKind.Field) {
               var mse = (MemberSelectExpr) lhs;
@@ -8529,9 +8571,9 @@ namespace Microsoft.Dafny
           Contract.Assert(callee != null);  // follows from the invariant of CallStmt
           s.IsGhost = callee.IsGhost;
           // check in-parameters
-          if (mustBeErasable) {
+          if (mustBeErasable && !Linear.AtomicRewriter.IsGlinearStmt(stmt)) {
             if (!s.IsGhost) {
-              Error(s, "only ghost methods can be called from this context");
+                Error(s, "only ghost methods can be called from this context");
             }
           } else {
             int j;

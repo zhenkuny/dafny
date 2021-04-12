@@ -179,6 +179,9 @@ namespace Microsoft.Dafny.Linear
                         return cs;
                     }
                 }
+            } else if (stmt is CallStmt cs)
+            {
+                return cs;
             }
 
             return null;
