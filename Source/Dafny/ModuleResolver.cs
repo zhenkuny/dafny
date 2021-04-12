@@ -32,6 +32,18 @@ namespace Microsoft.Dafny
 
     enum RequireApplication { Yes, No }
 
+    static bool equalsOrRefines(ModuleDefinition m0, string m1) {
+      if (m0.Name == m1) {
+        return true;
+      }
+
+      if (m0.RefinementBaseModExp.Def != null) { // m0 has a refinement
+        return equalsOrRefines(m0.RefinementBaseModExp.Def, m1);
+      }
+
+      return false;
+    }
+
     static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter, RequireApplication requireApplication) {
       String name = modExp.application.tok.val;
       ModuleView mv = view.lookup(name);
@@ -59,6 +71,17 @@ namespace Microsoft.Dafny
           var msg = $"Module {dmv.Def.Name} expects {dmv.Def.Formals.Count} parameters, got {actuals.Count}";
           reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
           return new ErrorModuleView();
+        }
+
+        // Check that each actual parameter has the appropriate module "type"
+        foreach (var item in dmv.Def.Formals.Zip(actuals)) {
+          var formal = item.First;
+          var actual = item.Second;
+          if (!equalsOrRefines(actual.GetDef(), formal.ConstraintModExp.application.tok.val)) {
+            var msg = $"Module {dmv.Def.Name} expects {formal.ModDef.Name}, got {actual.GetDef().Name}";
+            reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
+            return new ErrorModuleView();
+          }
         }
 
         appliedView = new ApplicationModuleView(dmv, actuals);
