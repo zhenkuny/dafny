@@ -37,7 +37,11 @@ namespace Microsoft.Dafny
         return true;
       }
 
-      if (m0.RefinementBaseModExp.Def != null) { // m0 has a refinement
+      if (m0.RefinementBaseModExp != null && m0.RefinementBaseModExp.application != null && m0.RefinementBaseModExp.application.tok.val == m1) {
+        return true;
+      }
+
+      if (m0.RefinementBaseModExp != null && m0.RefinementBaseModExp.Def != null) { // m0 has a refinement
         return equalsOrRefines(m0.RefinementBaseModExp.Def, m1);
       }
 
@@ -78,7 +82,7 @@ namespace Microsoft.Dafny
           var formal = item.First;
           var actual = item.Second;
           if (!equalsOrRefines(actual.GetDef(), formal.ConstraintModExp.application.tok.val)) {
-            var msg = $"Module {dmv.Def.Name} expects {formal.ModDef.Name}, got {actual.GetDef().Name}";
+            var msg = $"Module {dmv.Def.Name} expects {formal.ConstraintModExp.application.tok.val}, got {actual.GetDef().Name}";
             reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
             return new ErrorModuleView();
           }
