@@ -4,7 +4,7 @@ abstract module L {
 abstract module U(l: L) {
 }
 
-module A(u: U) {
+module A(u: U(L)) {
   import E = u.l
 }
 

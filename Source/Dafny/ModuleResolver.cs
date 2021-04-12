@@ -284,7 +284,7 @@ namespace Microsoft.Dafny
           List<ModuleView> actuals = new List<ModuleView>();
           foreach (var formal in amv.GetDef().Formals) {
             ModuleView actual = null;
-            if (context.TryGetValue(formal.Name.val, out actual)) {
+            if (context != null && context.TryGetValue(formal.Name.val, out actual)) {
               actuals.Add(actual);
             } else {
               actuals.Add(amv.Substitutions.GetValueOrDefault(formal.Name.val));
