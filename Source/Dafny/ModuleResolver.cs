@@ -20,7 +20,7 @@ namespace Microsoft.Dafny
   }
 
   public interface ModuleView {
-    public ModuleView lookup(string name);
+    public ModuleView lookup(string name, Dictionary<string, ModuleView> context = null);
 
     // Construct the of modules to resolve, in dependency order (postorder tree walk).
     public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews);
@@ -96,7 +96,7 @@ namespace Microsoft.Dafny
 
   public class ErrorModuleView : ModuleView
   {
-    public ModuleView lookup(string name) {
+    public ModuleView lookup(string name, Dictionary<string, ModuleView> context = null) {
       return null;
     }
 
@@ -129,19 +129,19 @@ namespace Microsoft.Dafny
       return $"Syms({DebugContext})";
     }
 
-    public ModuleView lookup(string name) {
+    public ModuleView lookup(string name, Dictionary<string, ModuleView> context = null) {
       ModuleView mv;
       if (Underway.TryGetValue(name, out mv)) {
         return mv;
       }
       if (RefinementView != null) {
-        mv = RefinementView.lookup(name);
+        mv = RefinementView.lookup(name, context);
         if (mv != null) {
           return mv;
         }
       }
       if (Parent != null) {
-        return Parent.lookup(name);
+        return Parent.lookup(name, context);
       }
       return null;
     }
@@ -243,13 +243,26 @@ namespace Microsoft.Dafny
       return Def.Name;
     }
 
-    public ModuleView lookup(string name) {
+    public ModuleView lookup(string name, Dictionary<string, ModuleView> context = null) {
       Tuple<ModuleDecl,ModuleView> lvt;
       if (LocalViews.TryGetValue(name, out lvt)) {
-        return lvt.Item2;
+        ModuleView view = lvt.Item2;
+        if (view is ApplicationModuleView amv) {
+          List<ModuleView> actuals = new List<ModuleView>();
+          foreach (var formal in amv.GetDef().Formals) {
+            ModuleView actual = null;
+            if (context.TryGetValue(formal.Name.val, out actual)) {
+              actuals.Add(actual);
+            } else {
+              actuals.Add(amv.Substitutions.GetValueOrDefault(formal.Name.val));
+            }
+          }
+          view = new ApplicationModuleView(amv.Prototype, actuals);
+        }
+        return view;
       }
       if (RefinementView != null) {
-        return RefinementView.lookup(name);
+        return RefinementView.lookup(name, context);
       }
       return null;
     }
@@ -283,8 +296,8 @@ namespace Microsoft.Dafny
   }
 
   public class ApplicationModuleView : ModuleView {
-    internal readonly DefModuleView Prototype;
-    internal readonly Dictionary<string, ModuleView> Substitutions;
+    public DefModuleView Prototype;
+    public Dictionary<string, ModuleView> Substitutions;
 
     public ApplicationModuleView(DefModuleView prototype, List<ModuleView> actuals) {
       this.Prototype = prototype;
@@ -310,12 +323,30 @@ namespace Microsoft.Dafny
       return sb.ToString();
     }
 
-    public ModuleView lookup(string name) {
+    // Merges two dictionaries, preferring the values from dictA
+    // Based on https://stackoverflow.com/a/25213088/11132282
+    public static Dictionary<TKey, TValue> Merge<TKey, TValue>(Dictionary<TKey, TValue> dictA, Dictionary<TKey, TValue> dictB)
+      where TValue : class
+    {
+      if (dictA == null) {
+        return dictB;
+      }
+
+      if (dictB == null) {
+        return dictA;
+      }
+
+      return dictA.Keys.Union(dictB.Keys).ToDictionary(k => k, k => dictA.ContainsKey(k) ? dictA[k] : dictB[k]);
+    }
+
+    public ModuleView lookup(string name, Dictionary<string, ModuleView> context = null) {
       ModuleView mv;
       if (Substitutions.TryGetValue(name, out mv)) {
         return mv;
       }
-      return Prototype.lookup(name);
+
+      Dictionary<string, ModuleView> newContext = Merge(Substitutions, context);
+      return Prototype.lookup(name, newContext);
     }
 
     public void BuildModuleVisitList(List<Tuple<ModuleDecl, ModuleView>> outModuleViews) {

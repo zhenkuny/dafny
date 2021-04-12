@@ -1,3 +1,6 @@
+// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint" "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
 abstract module TotalOrder {
   type K(==,!new)
   predicate lt(a: K, b: K)
@@ -38,8 +41,8 @@ abstract module Stuff {
   {
   }
 }
-/*
-module ParameterizedStuff(T: TotalOrder) {
+
+abstract module ParameterizedStuff(T: TotalOrder) {
   import W = SortMethodUtil(T).S.T
 
   lemma same_types(x: T.K, y: W.K)
@@ -47,4 +50,4 @@ module ParameterizedStuff(T: TotalOrder) {
   {
   }
 }
-*/
+

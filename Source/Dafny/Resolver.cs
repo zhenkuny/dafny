@@ -501,7 +501,8 @@ namespace Microsoft.Dafny
           // set up environment
           var preResolveErrorCount = reporter.Count(ErrorLevel.Error);
 
-          SubstituteApplications(m);
+          // Already did substitutions during module resolution
+          //SubstituteApplications(m);
 
           ResolveModuleExport(literalDecl, sig);
           var good = ResolveModuleDefinition(m, sig);
@@ -1353,17 +1354,17 @@ namespace Microsoft.Dafny
         }
       }
     }
-
+/*
     private void SubstituteApplications(ModuleDefinition m) {
       foreach (var top in m.TopLevelDecls) {
         if (top is AliasModuleDecl amd) {
           if (!amd.TargetModExp.application.IsSimple()) {
-            // TODO: Console.Out.WriteLine("Need to substitute here.");
+            Console.Out.WriteLine("Need to substitute here.");
           }
         }
       }
     }
-
+*/
     //check for export consistency by resolving internal modules
     //this should be effect-free, as it only operates on clones
     private void CheckModuleExportConsistency(DefModuleView moduleView, ModuleDefinition m) {
