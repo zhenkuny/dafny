@@ -30,19 +30,17 @@ namespace Microsoft.Dafny
 
     public ModuleDefinition GetDef();
 
+    public ModuleView GetRefinementView();
+
     enum RequireApplication { Yes, No }
 
-    static bool equalsOrRefines(ModuleDefinition m0, string m1) {
-      if (m0.Name == m1) {
+    static bool equalsOrRefines(ModuleView m0, string m1) {
+      if (m0.GetDef().Name == m1) {
         return true;
       }
 
-      if (m0.RefinementBaseModExp != null && m0.RefinementBaseModExp.application != null && m0.RefinementBaseModExp.application.tok.val == m1) {
-        return true;
-      }
-
-      if (m0.RefinementBaseModExp != null && m0.RefinementBaseModExp.Def != null) { // m0 has a refinement
-        return equalsOrRefines(m0.RefinementBaseModExp.Def, m1);
+      if (m0.GetRefinementView() != null) {
+        return equalsOrRefines(m0.GetRefinementView(), m1);
       }
 
       return false;
@@ -81,7 +79,7 @@ namespace Microsoft.Dafny
         foreach (var item in dmv.Def.Formals.Zip(actuals)) {
           var formal = item.First;
           var actual = item.Second;
-          if (!equalsOrRefines(actual.GetDef(), formal.ConstraintModExp.application.tok.val)) {
+          if (!equalsOrRefines(actual, formal.ConstraintModExp.application.tok.val)) {
             var msg = $"Module {dmv.Def.Name} expects {formal.ConstraintModExp.application.tok.val}, got {actual.GetDef().Name}";
             reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
             return new ErrorModuleView();
@@ -138,6 +136,10 @@ namespace Microsoft.Dafny
     public ModuleDefinition GetDef() {
       throw new NotImplementedException();
     }
+
+    public ModuleView GetRefinementView() {
+      throw new NotImplementedException();
+    }
   }
 
   public class SymbolTableView : ModuleView {
@@ -186,6 +188,10 @@ namespace Microsoft.Dafny
     {
       Contract.Assert(false);
       return null;
+    }
+
+    public ModuleView GetRefinementView() {
+      return this.RefinementView;
     }
 
     public void Add(string name, ModuleView mv) {
@@ -320,6 +326,10 @@ namespace Microsoft.Dafny
     {
       return Def;
     }
+
+    public ModuleView GetRefinementView() {
+      return this.RefinementView;
+    }
   }
 
   public class ApplicationModuleView : ModuleView {
@@ -388,6 +398,10 @@ namespace Microsoft.Dafny
     public ModuleDefinition GetDef()
     {
       return Prototype.GetDef();
+    }
+
+    public ModuleView GetRefinementView() {
+      return Prototype.GetRefinementView();
     }
   }
 }
