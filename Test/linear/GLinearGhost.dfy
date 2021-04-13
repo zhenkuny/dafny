@@ -183,9 +183,21 @@ returns (glinear x': F)
   x' := x;
 }
 
-datatype FInt = FInt(x: int)
+datatype FInt = FInt(num: int)
 
 method bad_glinear_inout_update(glinear inout x: FInt)
 {
-  inout x.x := 5; // ERROR /// XXX current fails
+  inout x.num := 5; // probably should be error?
+}
+
+method bad_glinear_field_update(glinear x: FInt)
+returns (glinear x': FInt)
+{
+  x' := x.(num := 5); // ERROR
+}
+
+method bad_glinear_field_access(glinear x: FInt)
+returns (glinear y: int)
+{
+  y := x.num; // ERROR
 }

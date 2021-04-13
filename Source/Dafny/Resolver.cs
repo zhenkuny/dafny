@@ -17187,6 +17187,11 @@ namespace Microsoft.Dafny
       Contract.Requires(expr != null);
       Contract.Requires(expr.WasResolved());  // this check approximates the requirement that "expr" be resolved
 
+      /*if (expr is DatatypeUpdateExpr due)
+      {
+        if (expr.Root.Usage )
+      }*/
+      
       if (expr is IdentifierExpr) {
         var e = (IdentifierExpr)expr;
         if (e.Var != null && e.Var.IsLinearKind) {
