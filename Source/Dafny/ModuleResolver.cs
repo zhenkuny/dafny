@@ -46,7 +46,7 @@ namespace Microsoft.Dafny
       return false;
     }
 
-    static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter, RequireApplication requireApplication) {
+    static ModuleView resolveModuleExpression(ModuleView view, ModuleExpression modExp, ErrorReporter reporter, RequireApplication requireApplication, Resolver resolver) {
       String name = modExp.application.tok.val;
       ModuleView mv = view.lookup(name);
       if (mv == null) {
@@ -66,7 +66,7 @@ namespace Microsoft.Dafny
         foreach (ModuleExpression actualParam in modExp.application.moduleParams)
         {
           //Console.Out.WriteLine("XXX-TODO check {actualParam} refines its formal");
-          actuals.Add(ModuleView.resolveModuleExpression(view, actualParam, reporter, requireApplication));
+          actuals.Add(ModuleView.resolveModuleExpression(view, actualParam, reporter, requireApplication, resolver));
         }
 
         if (dmv.Def.Formals.Count != actuals.Count) {
@@ -86,7 +86,7 @@ namespace Microsoft.Dafny
           }
         }
 
-        appliedView = new ApplicationModuleView(dmv, actuals);
+        appliedView = new ApplicationModuleView(dmv, actuals, resolver);
       } else {
         if (mv is DefModuleView dmv) {
           // Is this the only way we can have unfilled formals? What if the thing we're referencing
@@ -211,18 +211,20 @@ namespace Microsoft.Dafny
     public Dictionary<string, Tuple<ModuleDecl,ModuleView>> LocalViews; // XXX LocalViews is redundant with context.
     public Dictionary<string, ModuleDecl> LocalDecls;
     public readonly ModuleView RefinementView;
+    private Resolver resolver;
 
-    public static DefModuleView FromTopDecl(ModuleDecl defaultModule, ErrorReporter reporter)
+    public static DefModuleView FromTopDecl(ModuleDecl defaultModule, ErrorReporter reporter, Resolver resolver)
     {
       LiteralModuleDecl lmd = (LiteralModuleDecl) defaultModule;
-      return new DefModuleView(null, lmd.ModuleDef, lmd, reporter);
+      return new DefModuleView(null, lmd.ModuleDef, lmd, reporter, resolver);
     }
 
-    internal DefModuleView(ModuleView parentContext, ModuleDefinition Def, LiteralModuleDecl Decl, ErrorReporter reporter)
+    internal DefModuleView(ModuleView parentContext, ModuleDefinition Def, LiteralModuleDecl Decl, ErrorReporter reporter, Resolver resolver)
     {
       this.Def = Def;
       this.Decl = Decl;
       this.LocalViews = new Dictionary<string, Tuple<ModuleDecl, ModuleView>>();
+      this.resolver = resolver;
       SymbolTableView context = new SymbolTableView(parentContext, Def.Name);
 
       /*
@@ -238,7 +240,7 @@ namespace Microsoft.Dafny
 
       // Add the formals first; they're reachable from the refinement expression.
       foreach (FormalModuleDecl formal in Def.Formals) {
-        ModuleView fv = ModuleView.resolveModuleExpression(context, formal.ConstraintModExp, reporter, ModuleView.RequireApplication.No);
+        ModuleView fv = ModuleView.resolveModuleExpression(context, formal.ConstraintModExp, reporter, ModuleView.RequireApplication.No, resolver);
         // There's no TopLevelDecl here, so we'll roll up an AliasModuleDecl to make
         // the type resolver happy.
         ModuleDecl fd = new AliasModuleDecl(formal.ConstraintModExp, formal.Name, Def, false, null);
@@ -250,7 +252,7 @@ namespace Microsoft.Dafny
       // Evaluate the refinement expression next.
       RefinementView = null;
       if (Def.RefinementBaseModExp != null) {
-        RefinementView = ModuleView.resolveModuleExpression(context, Def.RefinementBaseModExp, reporter, ModuleView.RequireApplication.Yes);
+        RefinementView = ModuleView.resolveModuleExpression(context, Def.RefinementBaseModExp, reporter, ModuleView.RequireApplication.Yes, resolver);
         context.SetRefinementView(RefinementView);  // XXX and now RefinementView is, too.
       }
 
@@ -258,12 +260,12 @@ namespace Microsoft.Dafny
       foreach (TopLevelDecl decl in Def.TopLevelDecls)
       {
         if (decl is LiteralModuleDecl lmd) {
-          ModuleView lv = new DefModuleView(context, lmd.ModuleDef, lmd, reporter);
+          ModuleView lv = new DefModuleView(context, lmd.ModuleDef, lmd, reporter, resolver);
           Debug.Assert(lv != null);
           LocalViews.Add(lmd.Name, new Tuple<ModuleDecl,ModuleView>(lmd,lv));
           context.Add(lmd.Name, lv);
         } else if (decl is AliasModuleDecl amd) {
-          ModuleView lv = ModuleView.resolveModuleExpression(context, amd.TargetModExp, reporter, ModuleView.RequireApplication.Yes);
+          ModuleView lv = ModuleView.resolveModuleExpression(context, amd.TargetModExp, reporter, ModuleView.RequireApplication.Yes, resolver);
           LocalViews.Add(amd.Name, new Tuple<ModuleDecl, ModuleView>(amd, lv));
           context.Add(amd.Name, lv);
         }
@@ -282,7 +284,7 @@ namespace Microsoft.Dafny
         ModuleView view = lvt.Item2;
         if (view is ApplicationModuleView amv) {
           List<ModuleView> actuals = new List<ModuleView>();
-          foreach (var formal in amv.GetDef().Formals) {
+          foreach (var formal in amv.GetFormals()) {
             ModuleView actual = null;
             if (context != null && context.TryGetValue(formal.Name.val, out actual)) {
               actuals.Add(actual);
@@ -290,7 +292,7 @@ namespace Microsoft.Dafny
               actuals.Add(amv.Substitutions.GetValueOrDefault(formal.Name.val));
             }
           }
-          view = new ApplicationModuleView(amv.Prototype, actuals);
+          view = new ApplicationModuleView(amv.Prototype, actuals, resolver);
         }
         return view;
       }
@@ -335,10 +337,12 @@ namespace Microsoft.Dafny
   public class ApplicationModuleView : ModuleView {
     public DefModuleView Prototype;
     public Dictionary<string, ModuleView> Substitutions;
+    private Resolver resolver;  // We need this to resolve our applications
 
-    public ApplicationModuleView(DefModuleView prototype, List<ModuleView> actuals) {
+    public ApplicationModuleView(DefModuleView prototype, List<ModuleView> actuals, Resolver resolver) {
       this.Prototype = prototype;
       this.Substitutions = new Dictionary<string, ModuleView>();
+      this.resolver = resolver;
       Contract.Assert(prototype.Def.Formals.Count == actuals.Count);
       for (int i=0; i<prototype.Def.Formals.Count; i++) {
         Substitutions.Add(prototype.Def.Formals[i].Name.val, actuals[i]);
@@ -390,15 +394,32 @@ namespace Microsoft.Dafny
       // All modules referenced by this application must already have been visited
     }
 
-    public ModuleDecl GetDecl() {
-      // Need to apply all of our substitutions at this point
-      return ModuleApplicationCloner.apply(this, Prototype.GetDef());
+    public List<FormalModuleDecl> GetFormals() {
+      return Prototype.GetDef().Formals;
     }
 
-    public ModuleDefinition GetDef()
-    {
-      // TODO: Update to apply substitutions here
-      return Prototype.GetDef();
+    private LiteralModuleDecl GetLiteralDecl() {
+      // Need to apply all of our substitutions at this point
+      ModuleDefinition parent = this.Prototype.Decl.EnclosingModuleDefinition; // XXX not right.
+      LiteralModuleDecl cloneDecl = ModuleApplicationCloner.apply(this, parent);
+      cloneDecl.Signature = resolver.ConstructSignatureForModule(this, cloneDecl.ModuleDef, /*useImports? I dunnoXXX */ false);
+      cloneDecl.DefaultExport = cloneDecl.Signature; // XXX No idea when this is required or allowed.
+      // Cloning only copies portions of the module; it ignores fields that are filled in during resolution
+      resolver.ResolveModuleDefinition(cloneDecl.ModuleDef, cloneDecl.Signature, isAnExport: false /* REVIEW: ? */);
+      return cloneDecl;
+    }
+
+    public ModuleDecl GetDecl() {
+      return GetLiteralDecl();
+      //return ModuleApplicationCloner.apply(this, Prototype.GetDef());
+    }
+
+    public ModuleDefinition GetDef() {
+      //return Prototype.GetDef();
+      return GetLiteralDecl().ModuleDef;
+      //LiteralModuleDecl decl = ModuleApplicationCloner.apply(this, Prototype.GetDef());
+      //return decl.ModuleDef;
+
     }
 
     public ModuleView GetRefinementView() {

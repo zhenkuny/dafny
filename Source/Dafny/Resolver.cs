@@ -380,7 +380,7 @@ namespace Microsoft.Dafny
       Type.EnableScopes();
       var origErrorCount = reporter.Count(ErrorLevel.Error); //TODO: This is used further below, but not in the >0 comparisons in the next few lines. Is that right?
 
-      DefModuleView resolvedModuleView = DefModuleView.FromTopDecl(prog.DefaultModule, reporter);
+      DefModuleView resolvedModuleView = DefModuleView.FromTopDecl(prog.DefaultModule, reporter, this);
 
 ////////////////////////////////////////////////////////////////////////////////
 /////Begin paving
@@ -980,7 +980,7 @@ namespace Microsoft.Dafny
     /// resolved, a caller has to check for both a change in error count and a "false"
     /// return value.
     /// </summary>
-    private bool ResolveModuleDefinition(ModuleDefinition m, ModuleSignature sig, bool isAnExport = false) {
+    public bool ResolveModuleDefinition(ModuleDefinition m, ModuleSignature sig, bool isAnExport = false) {
       Contract.Requires(AllTypeConstraints.Count == 0);
       Contract.Ensures(AllTypeConstraints.Count == 0);
 
@@ -1873,7 +1873,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    ModuleSignature ConstructSignatureForModule(ModuleView dmv, ModuleDefinition moduleDef, bool useImports) {
+    public ModuleSignature ConstructSignatureForModule(ModuleView dmv, ModuleDefinition moduleDef, bool useImports) {
       Contract.Assert(dmv==null
         || ((dmv is DefModuleView) && ((DefModuleView) dmv).Def == moduleDef)
         || (dmv is ApplicationModuleView)
