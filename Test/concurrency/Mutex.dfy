@@ -1,3 +1,6 @@
+// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint" /autoTriggers:0 "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
 module Mutexes {
   type {:extern "Mutex"} Mutex<V>
   {
@@ -28,7 +31,7 @@ module Client {
     x: int,
     glinear gx: int)
 
-  method doStuff(m: Mutex<Value>, glinear new_gx: int)
+  method doStuff(m: Mutex<Value>, glinear new_gx: int, glinear new_gx2: int)
   returns (glinear old_gx: int)
   requires new_gx == 5
   requires m.inv == ((t: Value) => t.x == t.gx)
@@ -43,5 +46,7 @@ module Client {
     old_gx := gx;
 
     m.release(Value(5, new_gx), handle);
+
+    m.release(Value(5, new_gx2), handle); // ERROR
   }
 }

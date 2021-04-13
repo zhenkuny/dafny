@@ -1,3 +1,6 @@
+// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint" /autoTriggers:0 "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
 module Atomics {
   type Atomic<G>
 
@@ -10,7 +13,7 @@ module Atomics {
 
   glinear method finish_atomic<G>(ghost a: Atomic<G>, ghost new_value: int, glinear g': G)
 
-  /*method f(a: Atomic<int>, haha: Atomic<int>) {
+  method f(a: Atomic<int>, haha: Atomic<int>) {
     var ret;
     ghost var b, c;
     glinear var d;
@@ -52,7 +55,6 @@ module Atomics {
     c, foo := two_out_method(); // ERROR - can't update c
     finish_atomic(a, c, d);
   }
-  */
 
   method some_rando_nonghost_method()
   { }
@@ -89,7 +91,7 @@ module Atomics {
     finish_atomic(a, c, d);
   }
 
-  method f_do_ghost_stuff(a: Atomic<int>, haha: Atomic<int>) {
+  method f_do_ghost_stuff(a: Atomic<int>, haha: Atomic<int>, ghost some_ghost_bool: bool) {
     ghost var some_var := 5;
 
     var ret;
@@ -108,10 +110,11 @@ module Atomics {
     some_rando_glinear_method3(y);
     glinear var monkey := d;
     d := monkey;
+    if some_ghost_bool {
+      glinear var d' := d;
+      d := d';
+    }
 
     finish_atomic(a, c, d);
   }
-
-
-
 }
