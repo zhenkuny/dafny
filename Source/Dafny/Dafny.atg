@@ -4113,7 +4113,7 @@ CasePattern<.out CasePattern<BoundVar> pat.>
                                           usages = new List<Usage>();
                                        .)
       [ [ "linear"                     (. usage = Usage.Linear; .)
-        | "ghost"                      (. usage = Usage.Linear; .)
+        | "ghost"                      (. usage = Usage.Ghost; .)
         ]
         CasePattern<out pat>           (. arguments.Add(pat); usages.Add(usage); .)
         { ","                          (. usage = Usage.Ordinary; .)
@@ -4166,12 +4166,12 @@ CasePatternLocal<.out CasePattern<LocalVariable> pat, Usage usage.>
                                                  .)
       [
         [ "linear"                     (. u = Usage.Linear; .)
-        | "ghost"                      (. u = Usage.Linear; .)
+        | "ghost"                      (. u = Usage.Ghost; .)
         ]
         CasePatternLocal<out pat, usage>       (. arguments.Add(pat); usages.Add(u); .)
         { ","                            (. u = Usage.Ordinary; .)
           [ "linear"                     (. u = Usage.Linear; .)
-          | "ghost"                      (. u = Usage.Linear; .)
+          | "ghost"                      (. u = Usage.Ghost; .)
           ]
           CasePatternLocal<out pat, usage> (. arguments.Add(pat); usages.Add(u); .)
         }
