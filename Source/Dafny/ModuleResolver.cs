@@ -34,8 +34,8 @@ namespace Microsoft.Dafny
 
     enum RequireApplication { Yes, No }
 
-    static bool equalsOrRefines(ModuleView m0, string m1) {
-      if (m0.GetDef().Name == m1) {
+    static bool equalsOrRefines(ModuleView m0, ModuleView m1) {
+      if (m0 == m1) {
         return true;
       }
 
@@ -79,7 +79,7 @@ namespace Microsoft.Dafny
         foreach (var item in dmv.Def.Formals.Zip(actuals)) {
           var formal = item.First;
           var actual = item.Second;
-          if (!equalsOrRefines(actual, formal.ConstraintModExp.application.tok.val)) {
+          if (!equalsOrRefines(actual, view.lookup(formal.ConstraintModExp.application.tok.val))) {
             var msg = $"Module {dmv.Def.Name} expects {formal.ConstraintModExp.application.tok.val}, got {actual.GetDef().Name}";
             reporter.Error(MessageSource.Resolver, modExp.application.tok, msg);
             return new ErrorModuleView();
