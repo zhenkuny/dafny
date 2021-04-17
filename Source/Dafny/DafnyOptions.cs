@@ -100,6 +100,7 @@ namespace Microsoft.Dafny
     public bool DisableScopes = false;
     public int Allocated = 3;
     public bool OxideDebug = false;
+    public bool UseStdin = false;
 
     protected override bool ParseOption(string name, Bpl.CommandLineOptionEngine.CommandLineParseState ps) {
       var args = ps.args;  // convenient synonym
@@ -399,6 +400,11 @@ namespace Microsoft.Dafny
 
         case "oxideDebug": {
             OxideDebug = true;
+            return true;
+          }
+
+        case "stdin": {
+            UseStdin = true;
             return true;
           }
 
@@ -850,6 +856,13 @@ namespace Microsoft.Dafny
     Immediate and Transitive will exit after printing.
 /disableScopes
     Treat all export sets as 'export reveal *'. i.e. don't hide function bodies
-    or type definitions during translation.";
+    or type definitions during translation.
+/stdin
+    Read standard input and treat it as an input .dfy file.
+
+Dafny generally accepts Boogie options and passes these on to Boogie. However,
+some Boogie options, like /loopUnroll, may not be sound for Dafny or may not
+have the same meaning for a Dafny program as it would for a similar Boogie
+program.";
   }
 }

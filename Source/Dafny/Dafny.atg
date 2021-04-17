@@ -128,11 +128,11 @@ bool IsAssumeTypeKeyword(IToken la) {
 /// Returns the number of parsing errors encountered.
 /// Note: first initialize the Scanner.
 ///</summary>
-public static int Parse (string/*!*/ filename, Include include, ModuleDecl module, BuiltIns builtIns, Errors/*!*/ errors, bool verifyThisFile=true, bool compileThisFile=true) /* throws System.IO.IOException */ {
+public static int Parse (bool useStdin, string/*!*/ filename, Include include, ModuleDecl module, BuiltIns builtIns, Errors/*!*/ errors, bool verifyThisFile=true, bool compileThisFile=true) /* throws System.IO.IOException */ {
   Contract.Requires(filename != null);
   Contract.Requires(module != null);
   string s;
-  if (filename == "stdin.dfy") {
+  if (useStdin) {
     s = Microsoft.Boogie.ParserHelper.Fill(System.Console.In, new List<string>());
     return Parse(s, filename, filename, include, module, builtIns, errors, verifyThisFile, compileThisFile);
   } else {
@@ -525,6 +525,7 @@ bool IsGenericInstantiation(bool inExpressionContext) {
     case _openparen:  // it was probably a type instantiation of a function/method
     case _lbracket:  // it is possible that it was a type instantiation
     case _lbrace:  // it was probably a type instantiation of a function/method
+    case _at:
     // In the following cases, we're sure we must have read a type instantiation that just ended an expression
     case _closeparen:
     case _rbracket:
@@ -868,6 +869,7 @@ TOKENS
   neq = "!=".
   neqAlt = '\u2260'.
   star = '*'.
+  at = '@'.
   notIn = "!in" CONTEXT (nonidchar).
   ellipsis = "...".
   reveal = "reveal".
@@ -1091,7 +1093,8 @@ ModuleExport<ModuleDefinition parent, out ModuleDecl submodule>
   .
 
 /*------------------------------------------------------------------------*/
-// TODO - this is somewhat a hack because it relies on TypeNameOrCtorSuffix
+// Note - before the "." only Type names are permitted (no 'digits'), but name resolution sorts that
+// out, since the parser does not know (without adding lookahead) when it has seen the last dot
 // matching any permitted member name
 
 ExportSignature<bool opaque, out ExportSignature exsig>
@@ -4197,19 +4200,23 @@ CasePatternLocal<.out CasePattern<LocalVariable> pat, Usage usage.>
 /*------------------------------------------------------------------------*/
 NameSegment<out Expression e>
 = (. IToken id;
-     IToken openParen = null;  List<Type> typeArgs = null;  List<Expression> args = null;
+     IToken openParen = null; IToken atLabel = null;
+     List<Type> typeArgs = null; List<Expression> args = null;
   .)
   Ident<out id>
   ( IF(IsGenericInstantiation(true))
     (. typeArgs = new List<Type>(); .)
     GenericInstantiation<typeArgs>
+    [ AtCall<out atLabel, out openParen, out args> ]
   | HashCall<id, out openParen, out typeArgs, out args>
-  | /* empty */
+  | [ AtCall<out atLabel, out openParen, out args> ]
   )
   /* Note, since HashCall updates id.val, we make sure not to use id.val until after the possibility of calling HashCall. */
   (. e = new NameSegment(id, id.val, typeArgs);
      if (openParen != null) {
-       e = new ApplySuffix(openParen, e, args);
+       e = new ApplySuffix(openParen, atLabel, e, args);
+     } else {
+       Contract.Assert(atLabel == null);
      }
   .)
   .
@@ -4241,6 +4248,18 @@ HashCall<.IToken id, out IToken openParen, out List<Type> typeArgs, out List<Exp
     GenericInstantiation<typeArgs>
   ]
   "[" Expression<out k, true, true> "]"    (. args.Add(k); .)
+  "("                                      (. openParen = t; .)
+    [ Expressions<args> ]
+  ")"
+  .
+
+/*------------------------------------------------------------------------*/
+AtCall<.out IToken atLabel, out IToken openParen, out List<Expression> args.>
+= (. atLabel = null;
+     openParen = null;
+     args = new List<Expression>();
+  .)
+  "@" LabelName<out atLabel>
   "("                                      (. openParen = t; .)
     [ Expressions<args> ]
   ")"
@@ -4282,18 +4301,21 @@ Suffix<ref Expression e>
                                                     id = x;  // move to the next Suffix
                                                   }
                                                   IToken openParen = null;  List<Type> typeArgs = null;  List<Expression> args = null;
+                                                  IToken atLabel = null;
                                                .)
-
 
       ( IF(IsGenericInstantiation(true))
         (. typeArgs = new List<Type>(); .)
         GenericInstantiation<typeArgs>
+        [ AtCall<out atLabel, out openParen, out args> ]
       | HashCall<id, out openParen, out typeArgs, out args>
-      | /* empty */
+      | [ AtCall<out atLabel, out openParen, out args> ]
       )
       (. e = new ExprDotName(id, e, id.val, typeArgs);
          if (openParen != null) {
-           e = new ApplySuffix(openParen, e, args);
+           e = new ApplySuffix(openParen, atLabel, e, args);
+         } else {
+           Contract.Assert(atLabel == null);
          }
       .)
     )
@@ -4365,7 +4387,7 @@ Suffix<ref Expression e>
     "]"
   | "("                                    (. IToken openParen = t; var args = new List<ApplySuffixArg>(); .)
     [ SuffixArgumentExpressions<args> ]
-    ")"                                    (. e = new ApplySuffix(openParen, e, args); .)
+    ")"                                    (. e = new ApplySuffix(openParen, null, e, args); .)
   )
   .
 

@@ -308,7 +308,7 @@ namespace Microsoft.Dafny{
       var className = TransformToClassName(baseName);
       wr = wr.NewBlock($"public class {className}");
 
-      var companion = TypeName_Companion(mainMethod.EnclosingClass as ClassDecl, wr, mainMethod.tok);
+      var companion = TypeName_Companion(UserDefinedType.FromTopLevelDeclWithAllBooleanTypeParameters(mainMethod.EnclosingClass), wr, mainMethod.tok, mainMethod);
       var wBody = wr.NewNamedBlock("public static void main(String[] args)");
       var modName = mainMethod.EnclosingClass.EnclosingModuleDefinition.CompileName == "_module" ? "_System." : "";
       companion = modName + companion;
@@ -1479,7 +1479,7 @@ namespace Microsoft.Dafny{
 
     protected override void EmitSeqSelectRange(Expression source, Expression lo, Expression hi, bool fromArray, bool inLetExprBody, TargetWriter wr) {
       if (fromArray) {
-        wr.Write($"{DafnySeqClass}.fromRawArrayRange({TypeDescriptor(source.Type.TypeArgs[0], wr, source.tok)}, ");
+        wr.Write($"{DafnySeqClass}.fromRawArrayRange({TypeDescriptor(source.Type.NormalizeExpand().TypeArgs[0], wr, source.tok)}, ");
       }
       TrParenExpr(source, wr, inLetExprBody);
       if (fromArray) {
@@ -1873,9 +1873,6 @@ namespace Microsoft.Dafny{
           }
         }
       }
-      if (ctor.Formals.Count > 0){
-        wr.WriteLine($"public {DtCtorDeclarationName(ctor)}() {{ }}");
-      }
       if (dt is CoDatatypeDecl) {
         string typeParams = TypeParameters(dt.TypeArgs);
         wr.WriteLine($"public {dt.CompileName}{typeParams} Get() {{ return this; }}");
@@ -1887,27 +1884,23 @@ namespace Microsoft.Dafny{
         w.WriteLine("if (this == other) return true;");
         w.WriteLine("if (other == null) return false;");
         w.WriteLine("if (getClass() != other.getClass()) return false;");
-        if(ctor.Formals.Count > 0){string typeParams = TypeParameters(dt.TypeArgs);
-          w.WriteLine("{0} o = ({0})other;", DtCtorDeclarationName(ctor, dt.TypeArgs));
-          w.Write("return ");
-          i = 0;
-          foreach (Formal arg in ctor.Formals) {
-            if (!arg.IsGhost) {
-              string nm = FormalName(arg, i);
-              if(i!= 0)
-                w.Write(" && ");
-              if (IsDirectlyComparable(arg.Type)) {
-                w.Write($"this.{nm} == o.{nm}");
-              } else {
-                w.Write($"java.util.Objects.equals(this.{nm}, o.{nm})");
-              }
-              i++;
+        string typeParams = TypeParameters(dt.TypeArgs);
+        w.WriteLine("{0} o = ({0})other;", DtCtorDeclarationName(ctor, dt.TypeArgs));
+        w.Write("return true");
+        i = 0;
+        foreach (Formal arg in ctor.Formals) {
+          if (!arg.IsGhost) {
+            string nm = FormalName(arg, i);
+            w.Write(" && ");
+            if (IsDirectlyComparable(arg.Type)) {
+              w.Write($"this.{nm} == o.{nm}");
+            } else {
+              w.Write($"java.util.Objects.equals(this.{nm}, o.{nm})");
             }
+            i++;
           }
-          w.WriteLine(";");
-        } else {
-          w.WriteLine("return true;");
         }
+        w.WriteLine(";");
       }
       // GetHashCode method (Uses the djb2 algorithm)
       wr.WriteLine("@Override");

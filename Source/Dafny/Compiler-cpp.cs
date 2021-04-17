@@ -728,7 +728,7 @@ wmethodDecl = ws;
       if (nonGhostOuts.Count == 1) {
         targetReturnTypeReplacement = TypeName(nonGhostOuts[0].Type, wr, nonGhostOuts[0].tok, usage:nonGhostOuts[0].Usage);
       } else if (nonGhostOuts.Count > 1) {
-        targetReturnTypeReplacement = String.Format("struct Tuple{0}{1}", nonGhostOuts.Count, InstantiateTemplate(nonGhostOuts.ConvertAll(n => n.Type)));
+        targetReturnTypeReplacement = String.Format("struct Tuple{0}", InstantiateTemplate(nonGhostOuts.ConvertAll(n => n.Type)));
       }
 
       if (!createBody) {
@@ -1084,7 +1084,7 @@ wmethodDecl = ws;
         }
       } else if (cl is DatatypeDecl) {
         var dt = (DatatypeDecl)cl;
-        var s = dt is TupleTypeDecl ? "Tuple" + (dt as TupleTypeDecl).Dims : FullTypeName(udt);
+        var s = dt is TupleTypeDecl ? "Tuple" : FullTypeName(udt);
         var w = new TargetWriter();
         w.Write("{0}{1}()", s, InstantiateTemplate(udt.TypeArgs));
         return w.ToString();
@@ -1213,7 +1213,7 @@ wmethodDecl = ws;
         EmitAssignment(actualOutParamNames[0], null, outCollector, null, wr);
       } else {
         for (var i = 0; i < actualOutParamNames.Count; i++) {
-          wr.WriteLine("{0} = {1}.get_{2}();", actualOutParamNames[i], outCollector, i);
+          wr.WriteLine("{0} = {1}.get<{2}>();", actualOutParamNames[i], outCollector, i);
         }
       }
     }
@@ -1261,7 +1261,7 @@ wmethodDecl = ws;
       } else if (outParams.Count == 1) {
         wr.WriteLine("return {0};", IdName(outParams[0]));
       } else {
-        wr.WriteLine("return Tuple{0}{1}({2});", outParams.Count, InstantiateTemplate(outParams.ConvertAll(o => o.Type)), Util.Comma(outParams, IdName));
+        wr.WriteLine("return Tuple{0}({1});", InstantiateTemplate(outParams.ConvertAll(o => o.Type)), Util.Comma(outParams, IdName));
       }
     }
 
@@ -1597,8 +1597,7 @@ wmethodDecl = ws;
       } else if (Attributes.Contains(cl.Attributes, "extern")) {
         return IdProtect(cl.EnclosingModuleDefinition.CompileName) + "::" + IdProtect(cl.Name);
       } else if (cl is TupleTypeDecl) {
-        var tuple = cl as TupleTypeDecl;
-        return "Tuple" + tuple.Dims;
+        return "Tuple";
       } else {
         return IdProtect(cl.EnclosingModuleDefinition.CompileName) + "::" + IdProtect(cl.CompileName);
       }
@@ -1626,7 +1625,7 @@ wmethodDecl = ws;
         foreach (var arg in dtv.Arguments) {
           types.Add(arg.Type);
         }
-        wr.Write("Tuple{0}{1}({2})", tuple.Dims, InstantiateTemplate(types), arguments);
+        wr.Write("Tuple{0}({1})", InstantiateTemplate(types), arguments);
       } else if (!isCoCall) {
         // Ordinary constructor (that is, one that does not guard any co-recursive calls)
         // Generate:  Dt.create_Ctor(arguments)
@@ -1705,7 +1704,7 @@ wmethodDecl = ws;
           wr.Write("{0}::{1}", IdProtect(member.EnclosingClass.CompileName) , IdProtect(member.CompileName));
         });
       } else if (member is DatatypeDestructor dtor && dtor.EnclosingClass is TupleTypeDecl) {
-        return SuffixLvalue(obj, ".get_{0}()", dtor.Name);
+        return SuffixLvalue(obj, ".get<{0}>()", dtor.Name);
       } else if (member is SpecialField sf2 && sf2.SpecialId == SpecialField.ID.UseIdParam && sf2.IdParam is string fieldName
                  && fieldName.StartsWith("is_")) {
         // Ugly hack of a check to figure out if this is a datatype query: f.Constructor?
@@ -1907,7 +1906,7 @@ wmethodDecl = ws;
 
     protected override void EmitDestructor(string source, Formal dtor, int formalNonGhostIndex, DatatypeCtor ctor, List<Type> typeArgs, Type bvType, TargetWriter wr) {
       if (ctor.EnclosingDatatype is TupleTypeDecl) {
-        wr.Write("({0}).get_{1}()", source, formalNonGhostIndex);
+        wr.Write("({0}).get<{1}>()", source, formalNonGhostIndex);
       } else {
         var dtorName = FormalName(dtor, formalNonGhostIndex);
         if (dtor.Type is UserDefinedType udt && udt.ResolvedClass == ctor.EnclosingDatatype) {
@@ -2396,7 +2395,7 @@ wmethodDecl = ws;
       var codebase = System.IO.Path.GetDirectoryName(assemblyLocation);
       Contract.Assert(codebase != null);
       var exeName = ComputeExeName(targetFilename);
-      var args = $"-g -Wall -Wextra -Wpedantic -Wno-unused-variable -std=c++17 -I{codebase} -o {exeName} {targetFilename}";
+      var args = $"-g -Wall -Wextra -Wpedantic -Wno-unused-variable -Wno-deprecated-copy -Wno-unknown-warning-option -std=c++17 -I{codebase} -o {exeName} {targetFilename}";
       compilationResult = null;
       var psi = new ProcessStartInfo("g++", args) {
         CreateNoWindow = true,
@@ -2422,12 +2421,14 @@ wmethodDecl = ws;
     public override bool RunTargetProgram(string dafnyProgramName, string targetProgramText, string/*?*/ callToMain, string targetFilename, ReadOnlyCollection<string> otherFileNames,
       object compilationResult, TextWriter outputWriter) {
       var exeName = ComputeExeName(targetFilename);
-      var psi = new ProcessStartInfo(exeName) {
+      var dir = Path.GetDirectoryName(Path.GetFullPath(targetFilename));
+      var exePath = Path.Combine(dir, exeName);
+      var psi = new ProcessStartInfo(exePath) {
         CreateNoWindow = true,
         UseShellExecute = false,
         RedirectStandardOutput = true,
         RedirectStandardError = true,
-        WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(targetFilename))
+        WorkingDirectory = dir
       };
       var proc = Process.Start(psi);
       while (!proc.StandardOutput.EndOfStream) {
