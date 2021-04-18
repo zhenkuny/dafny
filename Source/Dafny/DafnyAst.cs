@@ -4020,12 +4020,15 @@ namespace Microsoft.Dafny {
   }
 
   public class FunctorApplication {
-    public readonly IToken tok;                            // Functor name
-    public readonly List<ModuleQualifiedId> moduleParams;  // Functor args
+    public readonly IToken tok;                                // Functor name
+    public readonly List<ModuleQualifiedId> moduleParamNames;  // Functor arg names (not yet resolved into actual module arguments)
 
-    public FunctorApplication(IToken tok, List<ModuleQualifiedId> moduleParams) {
+    public Functor functor;  // Actual functor being applied.  Filled in during resolution
+    public List<ModuleDefinition> moduleParams;  // Actual module arguments to the functor.  Filled in during resolution
+
+    public FunctorApplication(IToken tok, List<ModuleQualifiedId> moduleParamNames) {
       this.tok = tok;
-      this.moduleParams = moduleParams;
+      this.moduleParamNames = moduleParamNames;
     }
 
     public override string ToString() {
@@ -4034,6 +4037,27 @@ namespace Microsoft.Dafny {
         result += "(" + Util.Comma(", ", moduleParams, exp => exp.ToString()) + ")";
       }
       return result;
+    }
+
+    public override bool Equals(object obj) {
+      if (obj is FunctorApplication fa) {
+        if (!functor.Equals(fa.functor)) {
+          return moduleParams.SequenceEqual(fa.moduleParams);
+        } else {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+
+    public override int GetHashCode() {
+      var hash = new HashCode();
+      hash.Add(functor.GetHashCode());
+      foreach (var param in moduleParams) {
+        hash.Add(param.GetHashCode());
+      }
+      return hash.ToHashCode();
     }
   }
 
@@ -4067,11 +4091,19 @@ namespace Microsoft.Dafny {
     }
 
     public string rootName() {
-      return Path[0].val;
+      if (Functor != null) {
+        return Functor.ToString();
+      } else {
+        return Path[0].val;
+      }
     }
 
     public IToken rootToken() {
-      return Path[0];
+      if (Functor != null) {
+        return Functor.tok;
+      } else {
+        return Path[0];
+      }
     }
 
     override public string ToString() {
@@ -4104,7 +4136,7 @@ namespace Microsoft.Dafny {
     // as it is needed to determine dependency relationships.
     // Then later the rest of the path is resolved, at which point all of the
     // ids in the path have been fully resolved
-    // Note also that the resolution of the root depends on the syntactice location
+    // Note also that the resolution of the root depends on the syntactic location
     // of the qualified id; the resolution of subsequent ids depends on the
     // default export set of the previous id.
     public ModuleDecl Root; // the module corresponding to Path[0].val
@@ -4415,13 +4447,14 @@ namespace Microsoft.Dafny {
   public class ModuleFormal
   {
     public readonly IToken Name;
-    public readonly ModuleQualifiedId Type;
-    public readonly ModuleDefinition Parent;
+    public readonly ModuleQualifiedId TypeName;  // The non-canonical (b/c it uses strings) name for this module "type"
+    public Functor Parent;            // Functor that declares this formal.  Filled in during resolution
+    public ModuleDefinition TypeDef;  // The actual module "type" of the formal.  Filled in during resolution
     //public ModuleDefinition ModDef = null;
 
     public ModuleFormal(IToken name, ModuleQualifiedId type) {
       this.Name = name;
-      this.Type = type;
+      this.TypeName = type;
       this.Parent = null;
     }
   }

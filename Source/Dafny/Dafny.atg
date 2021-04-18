@@ -1135,15 +1135,15 @@ FunctorApplication<out FunctorApplication funcapp>
 =   (.
         IToken id = null;
         ModuleQualifiedId param = null;
-        List<ModuleQualifiedId> moduleParams = new List<ModuleQualifiedId>();
+        List<ModuleQualifiedId> moduleParamNames = new List<ModuleQualifiedId>();
     .)
     (
     NoUSIdent<out id>
-    [ "(" ModuleQualifiedName<out param>  (. moduleParams.Add(param); .)
-        { "," ModuleQualifiedName<out param> (. moduleParams.Add(param); .) }
+    [ "(" ModuleQualifiedName<out param>  (. moduleParamNames.Add(param); .)
+        { "," ModuleQualifiedName<out param> (. moduleParamNames.Add(param); .) }
       ")"
     ]
-    (.  funcapp = new FunctorApplication(id, moduleParams); .)
+    (.  funcapp = new FunctorApplication(id, moduleParamNames); .)
     ).
 
 /*------------------------------------------------------------------------*/
@@ -1155,7 +1155,7 @@ ModuleQualifiedName<.out ModuleQualifiedId qID.>
   FunctorApplication<out FunctorApplication funcapp>
   { "." ModuleName<out id> (. ids.Add(id); .) }
   (.
-    if (funcapp.moduleParams.Count == 0) {
+    if (funcapp.moduleParamNames.Count == 0) {
         // No actual application here
         ids.Insert(0, funcapp.tok);
         funcapp = null;
