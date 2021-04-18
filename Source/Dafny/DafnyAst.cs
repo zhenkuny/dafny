@@ -4019,19 +4019,43 @@ namespace Microsoft.Dafny {
     }
   }
 
+  public class FunctorApplication {
+    public readonly IToken tok;                            // Functor name
+    public readonly List<ModuleQualifiedId> moduleParams;  // Functor args
+
+    public FunctorApplication(IToken tok, List<ModuleQualifiedId> moduleParams) {
+      this.tok = tok;
+      this.moduleParams = moduleParams;
+    }
+
+    public override string ToString() {
+      string result = tok.val;
+      if (moduleParams.Count > 0) {
+        result += "(" + Util.Comma(", ", moduleParams, exp => exp.ToString()) + ")";
+      }
+      return result;
+    }
+  }
+
   public class ModuleQualifiedId {
-    public readonly List<IToken> Path; // Path != null && Path.Count > 0
+    public readonly FunctorApplication Functor = null;
+    public readonly List<IToken> Path; // Functor = null ==> Path != null && Path.Count > 0
 
     public ModuleQualifiedId(List<IToken> path) {
       Contract.Assert(path != null && path.Count > 0);
       this.Path = path; // note that the list is aliased -- not to be modified after construction
     }
 
+    public ModuleQualifiedId(FunctorApplication functor, List<IToken> path) {
+      this.Functor = functor;
+      this.Path = path;
+    }
+
     // Creates a clone, including a copy of the list;
     // if the argument is true, resolution information is included
     public ModuleQualifiedId Clone(bool includeResInfo) {
       List<IToken> newlist = new List<IToken>(Path);
-      ModuleQualifiedId cl = new ModuleQualifiedId(newlist);
+      ModuleQualifiedId cl = new ModuleQualifiedId(this.Functor, newlist);
       if (includeResInfo) {
         cl.Root = this.Root;
         cl.Decl = this.Decl;
@@ -4385,6 +4409,33 @@ namespace Microsoft.Dafny {
         return false;
       }
       return true;
+    }
+  }
+
+  public class ModuleFormal
+  {
+    public readonly IToken Name;
+    public readonly ModuleQualifiedId Type;
+    public readonly ModuleDefinition Parent;
+    //public ModuleDefinition ModDef = null;
+
+    public ModuleFormal(IToken name, ModuleQualifiedId type) {
+      this.Name = name;
+      this.Type = type;
+      this.Parent = null;
+    }
+  }
+
+  public class Functor : ModuleDefinition
+  {
+    public List<ModuleFormal> Formals;
+
+    public Functor(IToken tok, string name, List<IToken> prefixIds, bool isAbstract, bool isFacade,
+      ModuleQualifiedId refinementQId, ModuleDefinition parent, Attributes attributes, bool isBuiltinName,
+      bool isToBeVerified, bool isToBeCompiled, List<ModuleFormal> formals) :
+      base(tok, name, prefixIds, isAbstract, isFacade, refinementQId, parent, attributes, isBuiltinName,
+        isToBeVerified, isToBeCompiled) {
+      this.Formals = formals;
     }
   }
 
