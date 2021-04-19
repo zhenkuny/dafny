@@ -4023,7 +4023,7 @@ namespace Microsoft.Dafny {
     public readonly IToken tok;                                // Functor name
     public readonly List<ModuleQualifiedId> moduleParamNames;  // Functor arg names (not yet resolved into actual module arguments)
 
-    public Functor functor;  // Actual functor being applied.  Filled in during resolution
+    public Functor functor = null;  // Actual functor being applied.  Filled in during resolution
     public List<ModuleDefinition> moduleParams;  // Actual module arguments to the functor.  Filled in during resolution
 
     public FunctorApplication(IToken tok, List<ModuleQualifiedId> moduleParamNames) {
@@ -4062,7 +4062,7 @@ namespace Microsoft.Dafny {
   }
 
   public class ModuleQualifiedId {
-    public readonly FunctorApplication Functor = null;
+    public readonly FunctorApplication FunctorApp = null;
     public readonly List<IToken> Path; // Functor = null ==> Path != null && Path.Count > 0
 
     public ModuleQualifiedId(List<IToken> path) {
@@ -4071,7 +4071,7 @@ namespace Microsoft.Dafny {
     }
 
     public ModuleQualifiedId(FunctorApplication functor, List<IToken> path) {
-      this.Functor = functor;
+      this.FunctorApp = functor;
       this.Path = path;
     }
 
