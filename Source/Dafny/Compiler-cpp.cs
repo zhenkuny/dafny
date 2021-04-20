@@ -516,7 +516,7 @@ wmethodDecl = ws;
                   // This is a recursive destuctor, so return a pointer
                   returnType = String.Format("std::shared_ptr<{0}>", returnType);
                 }
-                using (var wDtor = ws.NewNamedBlock("{0} dtor_{1}()", returnType,
+                using (var wDtor = ws.NewNamedBlock("{0}& dtor_{1}()", returnType,
                   arg.CompileName)) {
                   if (dt.IsRecordType) {
                     wDtor.WriteLine("return this.{0};", IdName(arg));

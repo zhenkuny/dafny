@@ -167,7 +167,63 @@ method CarTest() {
   c.Free();
 }
 
+linear datatype Tree = Leaf(val: bool) | Node(linear left: Tree, linear right: Tree){
+  linear method Free(){
+    if this.Leaf?{
+      linear var Leaf(_) := this;
+    } else {
+      linear var Node(left, right) := this;
+      left.Free();
+      right.Free();
+    }
+  }
+}
+
+
+method Show(linear shared lineTree: Tree){
+  if lineTree.Leaf?{
+    var temp := lineTree.val;
+    print "leaf (", temp, ")";
+  } else {
+    print "node (";
+    Show(lineTree.left);
+    print ", ";
+    Show(lineTree.right);
+    print ")";
+  }
+}
+
+method Flip(linear inout lineTree: Tree){
+  if lineTree.Leaf?{
+    if lineTree.val{
+      inout lineTree.val := false;
+    } else {
+      inout lineTree.val := true;
+    }
+  } else {
+    Flip(inout lineTree.left);
+    Flip(inout lineTree.right);
+  }
+}
+
+method TestMultCons(){
+  linear var l1 := Leaf(false);
+  linear var l2 := Leaf(true);
+  linear var n1 := Node(l1, l2);
+  linear var l3 := Leaf(false);
+  linear var l4 := Leaf(true);
+  linear var n2 := Node(l3, l4);
+  linear var n3 := Node(n1,n2);
+  Show(n3);
+  print "\n";
+  Flip(inout n3);
+  Show(n3);
+  print "\n";
+  n3.Free();
+}
+
 method Main() {
+  TestMultCons();
   var e1 := Example1(22, false);
   var e2 := Ex2a(42);
   Callee(e2);
