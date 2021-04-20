@@ -8,25 +8,29 @@ module ABase {
 abstract module P(A: ABase) {
 }
 
-abstract module B refines P(ABase) {
-}
+//abstract module B refines P(ABase) {
+//}
+//
+//abstract module C {
+//  import X = P(ABase)
+//}
 
-abstract module C {
-  import X = P(ABase)
-}
-
-
-/*
-abstract module MissingParameter {
-    import P    // Fails with: P expects 1 arguments
+module InnocentA refines ABase {
+    type Key = int
 }
 
 abstract module B_good {
     import P1 = P(InnocentA)
     import P2 = P(InnocentA)
     lemma foo(a: P1.A.Key, b: P2.A.Key)
-        ensures a == b  // succeeds, as it should
-    { }
+//        ensures a == b  // succeeds, as it should
+//    { }
+}
+
+
+/*
+abstract module MissingParameter {
+    import P    // Fails with: P expects 1 arguments
 }
 
 abstract module B_bad_compare_to_abstract {

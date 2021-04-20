@@ -1578,6 +1578,7 @@ namespace Microsoft.Dafny
         qid.FunctorApp.functor = f;
         // Caller will take care of adding the dependency for functorDecl, since we return it via result
         result = functorDecl;
+        qid.Root = functorDecl;
       } else {
         reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, "Attempted to apply non-functor: {0}",
           qid.FunctorApp.tok.val);
