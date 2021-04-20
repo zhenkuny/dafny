@@ -1560,79 +1560,95 @@ namespace Microsoft.Dafny
       }
     }
 
+    private bool ResolveQualifiedModuleIdRootFunctor(Graph<ModuleDecl> dependencies, ModuleDecl source,
+      Func<ModuleDecl,bool> filter, ModuleBindings bindings, ModuleQualifiedId qid,
+      out ModuleDecl result) {
+      Contract.Assert(qid != null && qid.FunctorApp != null);
+
+      // Find the definition of this functor.  It should exist at this point,
+      // since functors are always LiteralModuleDecls; i.e., there are no virtual functors
+      ModuleDecl functorDecl = null;
+      bool res = bindings.TryLookupFilter(qid.FunctorApp.tok, out functorDecl, filter);
+      if (!res) {
+        result = null;
+        return false;
+      }
+
+      if (functorDecl is LiteralModuleDecl lmd && (lmd.ModuleDef is Functor f)) {
+        qid.FunctorApp.functor = f;
+        // Caller will take care of adding the dependency for functorDecl, since we return it via result
+        result = functorDecl;
+      } else {
+        reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, "Attempted to apply non-functor: {0}",
+          qid.FunctorApp.tok.val);
+        result = null;
+        return false;
+      }
+
+      // Fill in the module params
+      qid.FunctorApp.moduleParams = new List<ModuleDefinition>();
+      foreach (ModuleQualifiedId id in qid.FunctorApp.moduleParamNames) {
+        ModuleDecl moduleParamDecl;
+        res = ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, id, out moduleParamDecl);
+        if (moduleParamDecl is LiteralModuleDecl ld) {
+          qid.FunctorApp.moduleParams.Add(ld.ModuleDef);
+          // We take responsibility for adding edges to arguments
+          dependencies.AddEdge(source, moduleParamDecl);
+        } else {
+          reporter.Error(MessageSource.Resolver, qid.rootToken(),
+            "Could not resolve module argument to a literal module declaration: {0}", id.ToString());
+          result = null;
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    private bool ResolveQualifiedModuleIdRoot(Graph<ModuleDecl> dependencies, ModuleDecl source,
+      Func<ModuleDecl, bool> filter, ModuleBindings bindings, ModuleQualifiedId qid,
+      out ModuleDecl result) {
+      if (qid.FunctorApp != null) {
+        return ResolveQualifiedModuleIdRootFunctor(dependencies, source, filter, bindings, qid, out result);
+      } else {
+        IToken root = qid.Path[0];
+        result = null;
+        bool res = bindings.TryLookupFilter(root, out result, filter);
+        qid.Root = result;
+        return res;
+      }
+    }
+
     private bool ResolveQualifiedModuleIdRootRefines(Graph<ModuleDecl> dependencies, ModuleDecl source, ModuleDefinition context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
       Contract.Assert(qid != null);
       result = null;
-      if (qid.FunctorApp != null) {
-
-        // Find the definition of this functor.  It should exist at this point,
-        // since functors are always LiteralModuleDecls; i.e., there are no virtual functors
-        ModuleDecl functorDecl = null;
-        bool res = bindings.TryLookupFilter(qid.FunctorApp.tok, out functorDecl, m => m.EnclosingModuleDefinition != context);
-        if (!res) {
-          result = null;
-          return false;
-        }
-
-        if (functorDecl is LiteralModuleDecl lmd && (lmd.ModuleDef is Functor f)) {
-          qid.FunctorApp.functor = f;
-          // Caller will take care of adding the dependency for functorDecl, since we return it via result
-          result = functorDecl;
-        } else {
-          reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, "Attempted to apply non-functor: {0}", qid.FunctorApp.tok.val);
-          return false;
-        }
-
-        // Fill in the module params
-        qid.FunctorApp.moduleParams = new List<ModuleDefinition>();
-        foreach (ModuleQualifiedId id in qid.FunctorApp.moduleParamNames) {
-          ModuleDecl moduleParamDecl;
-          res = ResolveQualifiedModuleIdRootRefines(dependencies, source, context, bindings, id, out moduleParamDecl);
-          if (moduleParamDecl is LiteralModuleDecl ld) {
-            qid.FunctorApp.moduleParams.Add(ld.ModuleDef);
-            // We take responsibility for adding edges to arguments
-            dependencies.AddEdge(source, moduleParamDecl);
-          } else {
-            reporter.Error(MessageSource.Resolver, qid.rootToken() ,
-              "Could not resolve module argument to a literal module declaration: {0}", id.ToString());
-            return false;
-          }
-        }
-        return true;
-      } else {
-        IToken root = qid.Path[0];
-        result = null;
-        bool res = bindings.TryLookupFilter(root, out result, m => m.EnclosingModuleDefinition != context);
-        qid.Root = result;
-        return res;
-      }
+      Func<ModuleDecl, bool> filter = m => m.EnclosingModuleDefinition != context;
+      return ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, qid, out result);
     }
 
     // Find a matching module for the root of the QualifiedId, ignoring
     // (a) the module (context) itself and (b) any local imports
     // The latter is so that if one writes 'import A`E  import F = A`F' the second A does not
     // resolve to the alias produced by the first import
-    private bool ResolveQualifiedModuleIdRootImport(AliasModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
+    private bool ResolveQualifiedModuleIdRootImport(Graph<ModuleDecl> dependencies, ModuleDecl source, AliasModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
       Contract.Assert(qid != null);
-      IToken root = qid.Path[0];
-      result = null;
-      bool res = bindings.TryLookupFilter(root, out result,
-        m => context != m && ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition && context.Exports.Count == 0) || m is LiteralModuleDecl));
-      qid.Root = result;
-      return res;
+      Func<ModuleDecl, bool> filter = m => context != m &&
+                                           ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition &&
+                                             context.Exports.Count == 0) ||
+                                            m is LiteralModuleDecl);
+      return ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, qid, out result);
     }
 
-    private bool ResolveQualifiedModuleIdRootAbstract(AbstractModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
+    private bool ResolveQualifiedModuleIdRootAbstract(Graph<ModuleDecl> dependencies, ModuleDecl source, AbstractModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
       Contract.Assert(qid != null);
-      IToken root = qid.Path[0];
-      result = null;
-      bool res = bindings.TryLookupFilter(root, out result,
-        m => context != m && ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition && context.Exports.Count == 0) || m is LiteralModuleDecl));
-      qid.Root = result;
-      return res;
+      Func<ModuleDecl, bool> filter = m =>
+        context != m &&
+        ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition && context.Exports.Count == 0) ||
+         m is LiteralModuleDecl);
+      return ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, qid, out result);
     }
 
     private void ProcessDependenciesDefinition(ModuleDecl decl, ModuleDefinition m, ModuleBindings bindings,
@@ -1697,7 +1713,7 @@ namespace Microsoft.Dafny
         ModuleDecl root;
         // TryLookupFilter works outward, looking for a match to the filter for
         // each enclosing module.
-        if (!ResolveQualifiedModuleIdRootImport(alias, bindings, alias.TargetQId, out root)) {
+        if (!ResolveQualifiedModuleIdRootImport(dependencies, moduleDecl, alias, bindings, alias.TargetQId, out root)) {
 //        if (!bindings.TryLookupFilter(alias.TargetQId.rootToken(), out root, m => alias != m)
           reporter.Error(MessageSource.Resolver, alias.tok, ModuleNotFoundErrorMessage(0, alias.TargetQId.Path));
         }  else {
@@ -1706,7 +1722,7 @@ namespace Microsoft.Dafny
       } else if (moduleDecl is AbstractModuleDecl) {
         var abs = moduleDecl as AbstractModuleDecl;
         ModuleDecl root;
-        if (!ResolveQualifiedModuleIdRootAbstract(abs, bindings, abs.QId, out root)) {
+        if (!ResolveQualifiedModuleIdRootAbstract(dependencies, moduleDecl, abs, bindings, abs.QId, out root)) {
           //if (!bindings.TryLookupFilter(abs.QId.rootToken(), out root,
           //  m => abs != m && (((abs.EnclosingModuleDefinition == m.EnclosingModuleDefinition) && (abs.Exports.Count == 0)) || m is LiteralModuleDecl)))
           reporter.Error(MessageSource.Resolver, abs.tok, ModuleNotFoundErrorMessage(0, abs.QId.Path));

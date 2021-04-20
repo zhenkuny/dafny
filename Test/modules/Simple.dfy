@@ -8,6 +8,14 @@ module ABase {
 abstract module P(A: ABase) {
 }
 
+abstract module B refines P(ABase) {
+}
+
+abstract module C {
+  import X = P(ABase)
+}
+
+
 /*
 abstract module MissingParameter {
     import P    // Fails with: P expects 1 arguments
