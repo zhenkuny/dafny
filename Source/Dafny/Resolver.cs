@@ -1560,48 +1560,53 @@ namespace Microsoft.Dafny
       }
     }
 
-      // TODO: This should take the graph as input and recursively add dependencies on the
-      //       functors and arguments that it finds.  We'll only resolve the functors'
-      //       definitions at this time, not the result of applying the functor,
-      //       since we're not yet far enough into resolution to have all of the necessary info.
-      //       That means no reading/writing to this.virtualModules
-    private bool ResolveQualifiedModuleIdRootRefines(ModuleDefinition context, ModuleBindings bindings, ModuleQualifiedId qid,
+    private bool ResolveQualifiedModuleIdRootRefines(Graph<ModuleDecl> dependencies, ModuleDecl source, ModuleDefinition context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
       Contract.Assert(qid != null);
+      result = null;
       if (qid.FunctorApp != null) {
-        if (qid.FunctorApp.functor == null) {
-          // Find the definition of this functor
-          ModuleDecl functorDecl = null;
-          bool res = bindings.TryLookupFilter(qid.FunctorApp.tok.val, out functorDecl, m => m.EnclosingModuleDefinition != context);
-          if (!res) {
+
+        // Find the definition of this functor.  It should exist at this point,
+        // since functors are always LiteralModuleDecls; i.e., there are no virtual functors
+        ModuleDecl functorDecl = null;
+        bool res = bindings.TryLookupFilter(qid.FunctorApp.tok, out functorDecl, m => m.EnclosingModuleDefinition != context);
+        if (!res) {
+          result = null;
+          return false;
+        }
+
+        if (functorDecl is LiteralModuleDecl lmd && (lmd.ModuleDef is Functor f)) {
+          qid.FunctorApp.functor = f;
+          // Caller will take care of adding the dependency for functorDecl, since we return it via result
+          result = functorDecl;
+        } else {
+          reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, "Attempted to apply non-functor: {0}", qid.FunctorApp.tok.val);
+          return false;
+        }
+
+        // Fill in the module params
+        qid.FunctorApp.moduleParams = new List<ModuleDefinition>();
+        foreach (ModuleQualifiedId id in qid.FunctorApp.moduleParamNames) {
+          ModuleDecl moduleParamDecl;
+          res = ResolveQualifiedModuleIdRootRefines(dependencies, source, context, bindings, id, out moduleParamDecl);
+          if (moduleParamDecl is LiteralModuleDecl ld) {
+            qid.FunctorApp.moduleParams.Add(ld.ModuleDef);
+            // We take responsibility for adding edges to arguments
+            dependencies.AddEdge(source, moduleParamDecl);
+          } else {
+            reporter.Error(MessageSource.Resolver, qid.rootToken() ,
+              "Could not resolve module argument to a literal module declaration: {0}", id.ToString());
             return false;
           }
-
-          if (functorDecl is LiteralModuleDecl lmd && (lmd.ModuleDef is Functor f))) {
-            qid.FunctorApp.functor = f;
-          } else {
-            reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, "Attempted to apply non-functor: {0}", qid.FunctorApp.tok.val);
-          }
-
-          // Fill in the module params
-          qid.FunctorApp.moduleParams = new List<ModuleDefinition>();
-          foreach (ModuleQualifiedId id in qid.FunctorApp.moduleParamNames) {
-            ModuleDecl moduleParamDecl;
-            bool res = ResolveQualifiedModuleIdRootRefines(context, bindings, id, out moduleParamDecl);
-            qid.FunctorApp.moduleParams.Add();
-          }
-
-          // Compute (and cache) the result of doing the functor application
         }
-        qid.Root = this.virtualModules[qid.FunctorApp];
+        return true;
       } else {
         IToken root = qid.Path[0];
         result = null;
         bool res = bindings.TryLookupFilter(root, out result, m => m.EnclosingModuleDefinition != context);
         qid.Root = result;
+        return res;
       }
-
-      return res;
     }
 
     // Find a matching module for the root of the QualifiedId, ignoring
@@ -1633,9 +1638,10 @@ namespace Microsoft.Dafny
     private void ProcessDependenciesDefinition(ModuleDecl decl, ModuleDefinition m, ModuleBindings bindings,
       Graph<ModuleDecl> dependencies) {
       Contract.Assert(decl is LiteralModuleDecl);
+      Contract.Assert(((LiteralModuleDecl)decl).ModuleDef == m);
       if (m.RefinementQId != null) {
         ModuleDecl other;
-        bool res = ResolveQualifiedModuleIdRootRefines(((LiteralModuleDecl)decl).ModuleDef, bindings, m.RefinementQId, out other);
+        bool res = ResolveQualifiedModuleIdRootRefines(dependencies, decl, m, bindings, m.RefinementQId, out other);
         if (!res) {
           reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(),
             $"module {m.RefinementQId.ToString()} named as refinement base does not exist");
@@ -1649,13 +1655,14 @@ namespace Microsoft.Dafny
       }
 
       if (m is Functor f) {
+        // We need to create dependencies on each formal's module type
         foreach (ModuleFormal formal in f.Formals) {
           // Might as well fill in parent information while we're here
           formal.Parent = f;
 
           // Now add the formal's type as a dependency
           ModuleDecl other = null;
-          bool res = ResolveQualifiedModuleIdRootRefines(((LiteralModuleDecl)decl).ModuleDef, bindings, formal.TypeName, out other);
+          bool res = ResolveQualifiedModuleIdRootRefines(dependencies, decl, m, bindings, formal.TypeName, out other);
           if (!res) {
             reporter.Error(MessageSource.Resolver, formal.TypeName.rootToken(),
               $"module {formal.TypeName.ToString()} named as formal type does not exist");

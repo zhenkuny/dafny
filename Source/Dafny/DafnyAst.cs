@@ -4079,7 +4079,7 @@ namespace Microsoft.Dafny {
     // if the argument is true, resolution information is included
     public ModuleQualifiedId Clone(bool includeResInfo) {
       List<IToken> newlist = new List<IToken>(Path);
-      ModuleQualifiedId cl = new ModuleQualifiedId(this.Functor, newlist);
+      ModuleQualifiedId cl = new ModuleQualifiedId(this.FunctorApp, newlist);
       if (includeResInfo) {
         cl.Root = this.Root;
         cl.Decl = this.Decl;
@@ -4091,16 +4091,16 @@ namespace Microsoft.Dafny {
     }
 
     public string rootName() {
-      if (Functor != null) {
-        return Functor.ToString();
+      if (FunctorApp != null) {
+        return FunctorApp.ToString();
       } else {
         return Path[0].val;
       }
     }
 
     public IToken rootToken() {
-      if (Functor != null) {
-        return Functor.tok;
+      if (FunctorApp != null) {
+        return FunctorApp.tok;
       } else {
         return Path[0];
       }
