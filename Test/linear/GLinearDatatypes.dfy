@@ -22,5 +22,5 @@ linear datatype LSucceed =
 glinear datatype GFail_Linear =
   | GFail_Linear(linear x: LSimple)
 
-//glinear datatype GFail_Normal =
-//  | GFail_Normal(x: int)
+glinear datatype GFail_Normal =
+  | GFail_Normal(x: int)

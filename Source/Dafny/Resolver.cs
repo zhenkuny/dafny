@@ -2760,6 +2760,8 @@ namespace Microsoft.Dafny
                   }
                 } else if (HasLinearity(formal.Usage)) {
                   reporter.Error(MessageSource.Resolver, formal, "{0} not allowed", UsageName(formal.Usage));
+                } else if (idtUsage.realm == LinearRealm.Erased && !formal.IsGhost) {
+                  reporter.Error(MessageSource.Resolver, formal, "'glinear datatype' can only contain glinear and ghost fields", UsageName(formal.Usage));
                 }
                 AddTypeDependencyEdges((ICallable)d, formal.Type);
               }
