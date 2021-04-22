@@ -737,6 +737,10 @@ wmethodDecl = ws;
 
       if (typeArgs.Count != 0) {
         var formalTypeParameters = TypeArgumentInstantiation.ToFormals(ForTypeParameters(typeArgs, m, lookasideBody));
+        // Filter out type parameters we've already emitted at the class level, to avoid shadowing
+        // the class' template parameter (which C++ treats as an error)
+        formalTypeParameters = formalTypeParameters.Where(param =>
+          m.EnclosingClass.TypeArgs == null || !m.EnclosingClass.TypeArgs.Contains(param)).ToList();
         wdr.WriteLine(DeclareTemplate(formalTypeParameters));
         wr.WriteLine(DeclareTemplate(formalTypeParameters));
       }

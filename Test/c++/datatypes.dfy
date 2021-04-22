@@ -167,6 +167,13 @@ method CarTest() {
   c.Free();
 }
 
+// Test generic datatype methods
+datatype Foo<A> = Foo(a: A) {
+  static method Alloc(a: A) returns (f: Foo<A>) {
+    f := Foo(a);
+  }
+}
+
 method Main() {
   var e1 := Example1(22, false);
   var e2 := Ex2a(42);
@@ -183,3 +190,4 @@ method Main() {
   var len := IntListLen(Cons(15, Cons(18, Cons(330, Nil))));
   print len;
 }
+
