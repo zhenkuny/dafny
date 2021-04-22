@@ -1119,7 +1119,7 @@ wmethodDecl = ws;
     // ----- Declarations -------------------------------------------------------------
     protected override void DeclareExternType(OpaqueTypeDecl d, Expression compileTypeHint, TargetWriter wr) {
       if (compileTypeHint.AsStringLiteral() == "struct") {
-        modDeclWr.WriteLine("// Extern declaration of {1}\n{0} struct {1} {2};", DeclareTemplate(d.TypeArgs), d.Name, InstantiateTemplate(d.TypeArgs));
+        modDeclWr.WriteLine("// Extern declaration of {1}\n{0} struct {1};", DeclareTemplate(d.TypeArgs), d.Name);
       } else if (compileTypeHint.AsStringLiteral() == "predefined") {
         // This type already exists, so no declaration needed
       } else {
