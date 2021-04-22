@@ -4,10 +4,10 @@ CPPS=$(subst .dfy,.cpp,$(DAFNYS))
 DOT_H_S=$(subst .dfy,.h,$(DAFNYS))
 EXECS=$(subst .dfy,,$(DAFNYS))
 DAFNY_DIR=../..
-DAFNY=$(DAFNY_DIR)/Binaries/dafny
+DAFNY=$(DAFNY_DIR)/Scripts/dafny
 DAFNY_RUNTIME_DIR=$(DAFNY_DIR)/Binaries
 DAFNY_RUNTIME_CPP=$(DAFNY_RUNTIME_DIR)/DafnyRuntime.h
-DAFNY_DEPS=$(DAFNY) $(DAFNY_RUNTIME_DIR)/Dafny.exe $(DAFNY_RUNTIME_DIR)/DafnyPipeline.dll $(DAFNY_RUNTIME_CPP)
+DAFNY_DEPS=$(DAFNY) $(DAFNY_RUNTIME_DIR)/DafnyPipeline.dll $(DAFNY_RUNTIME_CPP)
 TEST_LOG=tests.log
 
 CXXFLAGS += -g -Wall -Wextra -Wpedantic -std=c++17 -I$(DAFNY_RUNTIME_DIR)
