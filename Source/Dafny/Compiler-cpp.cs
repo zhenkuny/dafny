@@ -1021,9 +1021,9 @@ wmethodDecl = ws;
           // Assume the external definition includes a default value
           return String.Format("{1}::get_{0}_default{2}()", IdProtect(udt.Name), udt.ResolvedClass.EnclosingModuleDefinition.CompileName, InstantiateTemplate(udt.TypeArgs));
         } else if (usePlaceboValue && !udt.ResolvedParam.Characteristics.HasCompiledValue) {
-          return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
+          return String.Format("get_default<{0}>::call()", IdProtect(udt.CompileName));
         } else {
-          return String.Format("get_default<{0}>::call()", IdProtect(udt.Name));
+          return String.Format("get_default<{0}>::call()", IdProtect(udt.CompileName));
         }
       }
       var cl = udt.ResolvedClass;
