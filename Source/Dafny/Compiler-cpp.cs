@@ -1633,7 +1633,12 @@ wmethodDecl = ws;
         foreach (var arg in dtv.Arguments) {
           types.Add(arg.Type);
         }
-        wr.Write("Tuple{0}({1})", InstantiateTemplate(types), arguments);
+
+        if (types.Count == 0) {
+          wr.Write("Tuple0()");
+        } else {
+          wr.Write("Tuple{0}({1})", InstantiateTemplate(types), arguments);
+        }
       } else if (!isCoCall) {
         // Ordinary constructor (that is, one that does not guard any co-recursive calls)
         // Generate:  Dt.create_Ctor(arguments)

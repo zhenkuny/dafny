@@ -8,10 +8,12 @@ method ReturnTuple() returns (x:(uint32,uint32))
   return (1, 2);
 }
 
-function method {:extern "Extern", "NoReturn"} NoReturn(b:bool) : ()
+function method EmptyTuple() : () {
+  ()
+}
 
-function method NoReturnCaller() : () {
-  NoReturn(true)
+function method GetEmptyTuple() : () {
+  EmptyTuple()
 }
 
 function method Test() : (bool, bool) {
