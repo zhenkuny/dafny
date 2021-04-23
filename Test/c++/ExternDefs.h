@@ -35,6 +35,11 @@ namespace Extern {
       ExternClass2(uint64 x) { (void)x; }
   };
 
+  Tuple0 NoReturn(bool b) {
+    Tuple0 t;
+    (void)b;
+    return t;
+  }
 
   uint64 Caller(uint64 (*inc)(uint64), uint64 x) {
     return inc(x);

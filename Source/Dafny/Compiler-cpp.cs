@@ -1601,7 +1601,11 @@ wmethodDecl = ws;
       } else if (Attributes.Contains(cl.Attributes, "extern")) {
         return IdProtect(cl.EnclosingModuleDefinition.CompileName) + "::" + IdProtect(cl.Name);
       } else if (cl is TupleTypeDecl) {
-        return "Tuple";
+        if (udt.TypeArgs.Count > 0) {
+          return "Tuple";
+        } else {
+          return "Tuple0"; // Need to special case this, as C++ won't infer the correct type arguments
+        }
       } else {
         return IdProtect(cl.EnclosingModuleDefinition.CompileName) + "::" + IdProtect(cl.CompileName);
       }

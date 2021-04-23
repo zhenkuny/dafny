@@ -8,6 +8,16 @@ method ReturnTuple() returns (x:(uint32,uint32))
   return (1, 2);
 }
 
+function method {:extern "Extern", "NoReturn"} NoReturn(b:bool) : ()
+
+function method NoReturnCaller() : () {
+  NoReturn(true)
+}
+
+function method Test() : (bool, bool) {
+  (false, true)
+}
+
 method Main() {
   var x := ReturnTuple();
   var y := x.0;
