@@ -821,7 +821,7 @@ wmethodDecl = ws;
     }
 
     protected override void TypeArgDescriptorUse(bool isStatic, bool lookasideBody, TopLevelDeclWithMembers cl, out bool needsTypeParameter, out bool needsTypeDescriptor) {
-      needsTypeParameter = isStatic;
+      needsTypeParameter = !isStatic;
       needsTypeDescriptor = false;
     }
 

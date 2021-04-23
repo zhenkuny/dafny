@@ -174,6 +174,17 @@ datatype Foo<A> = Foo(a: A) {
   }
 }
 
+datatype Test<A> = Test(a:A) | Empty
+{
+  static method Alloc() returns (t:Test<A>) {
+    return Empty;
+  }
+
+  static method Invoke() {
+    var a := Alloc();
+  }
+}
+
 method Main() {
   var e1 := Example1(22, false);
   var e2 := Ex2a(42);
