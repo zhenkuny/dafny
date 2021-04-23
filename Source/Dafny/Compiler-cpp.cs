@@ -1217,7 +1217,7 @@ wmethodDecl = ws;
         EmitAssignment(actualOutParamNames[0], null, outCollector, null, wr);
       } else {
         for (var i = 0; i < actualOutParamNames.Count; i++) {
-          wr.WriteLine("{0} = {1}.get<{2}>();", actualOutParamNames[i], outCollector, i);
+          wr.WriteLine("{0} = {1}.template get<{2}>();", actualOutParamNames[i], outCollector, i);
         }
       }
     }
@@ -1914,7 +1914,7 @@ wmethodDecl = ws;
 
     protected override void EmitDestructor(string source, Formal dtor, int formalNonGhostIndex, DatatypeCtor ctor, List<Type> typeArgs, Type bvType, TargetWriter wr) {
       if (ctor.EnclosingDatatype is TupleTypeDecl) {
-        wr.Write("({0}).get<{1}>()", source, formalNonGhostIndex);
+        wr.Write("({0}).template get<{1}>()", source, formalNonGhostIndex);
       } else {
         var dtorName = FormalName(dtor, formalNonGhostIndex);
         if (dtor.Type is UserDefinedType udt && udt.ResolvedClass == ctor.EnclosingDatatype) {
