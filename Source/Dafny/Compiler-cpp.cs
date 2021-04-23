@@ -1718,7 +1718,7 @@ wmethodDecl = ws;
         // This used to work, but now obj comes in wanting to use TypeName on the class, which results in (std::shared_ptr<_module::MyClass>)::c;
         //return SuffixLvalue(obj, "::{0}", member.CompileName);
         return SimpleLvalue(wr => {
-          wr.Write("{0}::{1}", IdProtect(member.EnclosingClass.CompileName) , IdProtect(member.CompileName));
+          wr.Write("{0}::{1}::{2}", IdProtect(member.EnclosingClass.EnclosingModuleDefinition.CompileName), IdProtect(member.EnclosingClass.CompileName) , IdProtect(member.CompileName));
         });
       } else if (member is DatatypeDestructor dtor && dtor.EnclosingClass is TupleTypeDecl) {
         return SuffixLvalue(obj, ".get<{0}>()", dtor.Name);
