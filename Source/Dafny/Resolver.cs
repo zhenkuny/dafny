@@ -459,7 +459,7 @@ namespace Microsoft.Dafny
 
       var compilationModuleClones = new Dictionary<ModuleDefinition, ModuleDefinition>();
       foreach (var decl in sortedDecls) {
-        if (decl is LiteralModuleDecl) {
+        if (decl is LiteralModuleDecl lmd) {
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature
           // of the module. This is the public, externally visible signature. Then we add in
@@ -1677,6 +1677,16 @@ namespace Microsoft.Dafny
           // Might as well fill in parent information while we're here
           formal.Parent = f;
 
+
+          // Insert each of the functor's formals as an abstract decl,
+          // so the normal resolution will take place, and we can later
+          // update the formals with their actuals
+
+          // REVIEW: What should the "exports" list (final argument) be?
+          f.TopLevelDecls.Add(new AliasModuleDecl(formal.TypeName, formal.Name, f, opened:false, new List<IToken>()));
+
+
+          /*
           // Now add the formal's type as a dependency
           ModuleDecl other = null;
           bool res = ResolveQualifiedModuleIdRootRefines(dependencies, decl, m, bindings, formal.TypeName, out other);
@@ -1687,6 +1697,7 @@ namespace Microsoft.Dafny
             Contract.Assert(other != null); // follows from postcondition of TryGetValue
             dependencies.AddEdge(decl, other);
           }
+          */
         }
       }
 

@@ -5,7 +5,22 @@ module ABase {
     type Key
 }
 
+abstract module P_normal {
+  import A : ABase
+
+  method Test(a:A.Key)
+}
+
+// Use an element of a formal parameter
+// Morally equivalent to P_normal above
 abstract module P(A: ABase) {
+  method Test(a:A.Key)
+}
+
+// Try simple functor application
+abstract module Apply {
+  import Output = P(ABase)
+
 }
 
 //abstract module B refines P(ABase) {
@@ -15,17 +30,17 @@ abstract module P(A: ABase) {
 //  import X = P(ABase)
 //}
 
-module InnocentA refines ABase {
-    type Key = int
-}
-
-abstract module B_good {
-    import P1 = P(InnocentA)
-    import P2 = P(InnocentA)
-    lemma foo(a: P1.A.Key, b: P2.A.Key)
-//        ensures a == b  // succeeds, as it should
-//    { }
-}
+//module InnocentA refines ABase {
+//    type Key = int
+//}
+//
+//abstract module B_good {
+//    import P1 = P(InnocentA)
+//    import P2 = P(InnocentA)
+//    lemma foo(a: P1.A.Key, b: P2.A.Key)
+////        ensures a == b  // succeeds, as it should
+////    { }
+//}
 
 
 /*
