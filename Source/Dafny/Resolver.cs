@@ -1587,17 +1587,17 @@ namespace Microsoft.Dafny
       }
 
       // Fill in the module params
-      qid.FunctorApp.moduleParams = new List<ModuleDefinition>();
+      qid.FunctorApp.moduleParams = new List<ModuleDecl>();
       foreach (ModuleQualifiedId id in qid.FunctorApp.moduleParamNames) {
         ModuleDecl moduleParamDecl;
         res = ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, id, out moduleParamDecl);
-        if (moduleParamDecl is LiteralModuleDecl ld) {
-          qid.FunctorApp.moduleParams.Add(ld.ModuleDef);
+        if (res) {
+          qid.FunctorApp.moduleParams.Add(moduleParamDecl);
           // We take responsibility for adding edges to arguments
           dependencies.AddEdge(source, moduleParamDecl);
         } else {
           reporter.Error(MessageSource.Resolver, qid.rootToken(),
-            "Could not resolve module argument to a literal module declaration: {0}", id.ToString());
+            "Could not resolve module argument {0} to a valid module declaration", id.ToString());
           result = null;
           return false;
         }
@@ -2474,17 +2474,14 @@ namespace Microsoft.Dafny
           ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
 
           // 2)
-          //List<TopLevelDecl> staleAliasDecls = new List<TopLevelDecl>();
-
           foreach (var pair in System.Linq.Enumerable.Zip(qid.FunctorApp.functor.Formals, qid.FunctorApp.moduleParams)) {
             ModuleFormal formal = pair.Item1;
-            ModuleDefinition actual = pair.Item2;
+            ModuleDecl actual = pair.Item2;
 
             // Find the artificial alias decl we created, and update it with the actual
             foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
               if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
-                // REVIEW: Is the setting for useImports correct?
-                amd.Signature = RegisterTopLevelDecls(actual, useImports: true);
+                amd.Signature = actual.Signature;
                 // TODO: Need this?
                 // amd.Signature.Refines = refinementTransformer.RefinedSig;
                 // or this?
@@ -2500,6 +2497,12 @@ namespace Microsoft.Dafny
           // sig.Refines = refinementTransformer.RefinedSig;
           // or this?
           // prog.ModuleSigs[m] = sig;
+
+          // 4) Combine everything into a ModuleDecl we can return
+          LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, root.EnclosingModuleDefinition);
+          newDecl.Signature = sig;
+          newDecl.DefaultExport = sig;
+          decl = newDecl;
         }
 
         p = this.virtualModules[qid.FunctorApp];

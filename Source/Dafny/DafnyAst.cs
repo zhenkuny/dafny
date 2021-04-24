@@ -4024,7 +4024,7 @@ namespace Microsoft.Dafny {
     public readonly List<ModuleQualifiedId> moduleParamNames;  // Functor arg names (not yet resolved into actual module arguments)
 
     public Functor functor = null;  // Actual functor being applied.  Filled in during resolution
-    public List<ModuleDefinition> moduleParams;  // Actual module arguments to the functor.  Filled in during resolution
+    public List<ModuleDecl> moduleParams;  // Actual module arguments to the functor.  Filled in during resolution
 
     public FunctorApplication(IToken tok, List<ModuleQualifiedId> moduleParamNames) {
       this.tok = tok;
@@ -4041,7 +4041,7 @@ namespace Microsoft.Dafny {
 
     public override bool Equals(object obj) {
       if (obj is FunctorApplication fa) {
-        if (!functor.Equals(fa.functor)) {
+        if (functor.Equals(fa.functor)) {
           return moduleParams.SequenceEqual(fa.moduleParams);
         } else {
           return false;
