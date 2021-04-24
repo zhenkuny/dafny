@@ -22,8 +22,8 @@ namespace Microsoft.Dafny
     ErrorReporter reporter;
     ModuleSignature moduleInfo = null;
 
-    private Dictionary<FunctorApplication, ModuleDefinition> virtualModules =
-      new Dictionary<FunctorApplication, ModuleDefinition>();
+    private Dictionary<FunctorApplication, ModuleSignature> virtualModules =
+      new Dictionary<FunctorApplication, ModuleSignature>();
 
     private bool RevealedInScope(Declaration d) {
       Contract.Requires(d != null);
@@ -2453,22 +2453,72 @@ namespace Microsoft.Dafny
     public ModuleDecl ResolveModuleQualifiedId(ModuleDecl root, ModuleQualifiedId qid, ErrorReporter reporter) {
 
       Contract.Requires(qid != null);
-      Contract.Requires(qid.Path.Count > 0);
+      Contract.Requires(qid.FunctorApp != null || qid.Path.Count > 0);
 
       List<IToken> Path = qid.Path;
       ModuleDecl decl = root;
-      ModuleSignature p;
-      for (int k = 1; k < Path.Count; k++) {
-        if (decl is LiteralModuleDecl) {
-          p = ((LiteralModuleDecl)decl).DefaultExport;
-          if (p == null) {
-            reporter.Error(MessageSource.Resolver, Path[k],
-              ModuleNotFoundErrorMessage(k, Path, $" because {decl.Name} does not have a default export"));
-            return null;
+      ModuleSignature p = null;
+      int k = 1;
+
+      if (qid.FunctorApp != null) {
+        k = 0;  // Starting point in the Path iteration
+        if (!this.virtualModules.ContainsKey(qid.FunctorApp)) {
+          // Apply the functor
+          // 1) Clone the base module definition
+          // 2) For each formal, update the AliasModuleDecl we introduced
+          //    to point at the actual module parameter
+
+          // 1)
+          LiteralModuleDecl literalRoot = (LiteralModuleDecl) root;
+          ScopeCloner cloner = new ScopeCloner(literalRoot.DefaultExport.VisibilityScope);
+          ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
+
+          // 2)
+          //List<TopLevelDecl> staleAliasDecls = new List<TopLevelDecl>();
+
+          foreach (var pair in System.Linq.Enumerable.Zip(qid.FunctorApp.functor.Formals, qid.FunctorApp.moduleParams)) {
+            ModuleFormal formal = pair.Item1;
+            ModuleDefinition actual = pair.Item2;
+
+            // Find the artificial alias decl we created, and update it with the actual
+            foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
+              if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
+                // REVIEW: Is the setting for useImports correct?
+                amd.Signature = RegisterTopLevelDecls(actual, useImports: true);
+                // TODO: Need this?
+                // amd.Signature.Refines = refinementTransformer.RefinedSig;
+                // or this?
+                // prog.ModuleSigs[m] = amd.Signature;
+              }
+            }
           }
-        } else {
-          p = decl.Signature;
+
+          // 3) Compute the new signature
+          ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
+          this.virtualModules[qid.FunctorApp] = sig;
+          // TODO: Need this?
+          // sig.Refines = refinementTransformer.RefinedSig;
+          // or this?
+          // prog.ModuleSigs[m] = sig;
         }
+
+        p = this.virtualModules[qid.FunctorApp];
+      }
+
+
+      for (; k < Path.Count; k++) {
+        if (!(qid.FunctorApp != null && k == 0)) {
+          if (decl is LiteralModuleDecl) {
+            p = ((LiteralModuleDecl) decl).DefaultExport;
+            if (p == null) {
+              reporter.Error(MessageSource.Resolver, Path[k],
+                ModuleNotFoundErrorMessage(k, Path, $" because {decl.Name} does not have a default export"));
+              return null;
+            }
+          } else {
+            p = decl.Signature;
+          }
+        } // else we already computed the initial p when applying the Functor
 
         var tld = p.TopLevels.GetValueOrDefault(Path[k].val, null);
         if (!(tld is ModuleDecl dd)) {
@@ -2496,7 +2546,7 @@ namespace Microsoft.Dafny
     public bool ResolveExport(ModuleDecl alias, ModuleDefinition parent, ModuleQualifiedId qid,
       List<IToken> Exports, out ModuleSignature p, ErrorReporter reporter) {
       Contract.Requires(qid != null);
-      Contract.Requires(qid.Path.Count > 0);
+      Contract.Requires(qid.FunctorApp != null || qid.Path.Count > 0);
       Contract.Requires(Exports != null);
 
       ModuleDecl root = qid.Root;

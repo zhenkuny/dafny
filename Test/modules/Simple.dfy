@@ -5,11 +5,11 @@ module ABase {
     type Key
 }
 
-abstract module P_normal {
-  import A : ABase
-
-  method Test(a:A.Key)
-}
+//abstract module P_normal {
+//  import A : ABase
+//
+//  method Test(a:A.Key)
+//}
 
 // Use an element of a formal parameter
 // Morally equivalent to P_normal above
@@ -21,6 +21,9 @@ abstract module P(A: ABase) {
 abstract module Apply {
   import Output = P(ABase)
 
+  method More(a:Output.Key) {
+    P.Test(a);
+  }
 }
 
 //abstract module B refines P(ABase) {
