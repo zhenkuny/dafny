@@ -2497,6 +2497,9 @@ namespace Microsoft.Dafny
           // sig.Refines = refinementTransformer.RefinedSig;
           // or this?
           // prog.ModuleSigs[m] = sig;
+          // REVIEW: Should isAnExport be true?
+          var b = ResolveModuleDefinition(newDef, sig, isAnExport:false);
+          Contract.Assert(b);  // TODO: Better error handling
 
           // 4) Combine everything into a ModuleDecl we can return
           LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, root.EnclosingModuleDefinition);

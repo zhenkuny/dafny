@@ -21,8 +21,8 @@ abstract module P(A: ABase) {
 abstract module Apply {
   import Output = P(ABase)
 
-  method More(a:Output.Key) {
-    P.Test(a);
+  method More(a:Output.A.Key) {
+    Output.Test(a);
   }
 }
 
