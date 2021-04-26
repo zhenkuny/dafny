@@ -17,14 +17,14 @@ abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
 
-//// Try simple functor application
-//abstract module Apply {
-//  import Output = P(ABase)
-//
-//  method More(a:Output.A.Key) {
-//    Output.Test(a);
-//  }
-//}
+// Try simple functor application
+abstract module Apply {
+  import Output = P(ABase)
+
+  method More(a:Output.A.Key) {
+    Output.Test(a);
+  }
+}
 
 //// Make sure functors behave applicatively
 //abstract module Apply2 {
@@ -37,32 +37,32 @@ abstract module P(A: ABase) {
 //    Output1.Test(a);
 //  }
 //}
+//
+// Try passing a refinement to a functor
+abstract module B refines ABase {
+  method BTest()
+}
 
-//// Try passing a refinement to a functor
-//abstract module B refines ABase {
-//  method BTest()
-//}
-//
-//abstract module ApplyRefinement {
-//  import Output = P(B)
-//
-//  method UseB() {
-//    Output.A.BTest();
-//  }
-//
-//  method KeyTest(b:Output.A.Key)
-//  {
-//    Output.Test(b);
-//  }
-//}
+abstract module ApplyRefinement {
+  import Output = P(B)
+
+  method UseB() {
+    Output.A.BTest();
+  }
+
+  method KeyTest(b:Output.A.Key)
+  {
+    Output.Test(b);
+  }
+}
 
 // Try passing module of the wrong type to a functor
-abstract module NoBase {
-}
-
-abstract module BadApplication {
-  import ShouldFail = P(NoBase)
-}
+//abstract module NoBase {
+//}
+//
+//abstract module BadApplication {
+//  import ShouldFail = P(NoBase)
+//}
 
 
 

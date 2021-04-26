@@ -2447,6 +2447,16 @@ namespace Microsoft.Dafny
       }
     }
 
+    private bool EqualsOrRefines(ModuleSignature actual, ModuleDefinition formal) {
+      if (actual == null) {
+        return false;
+      } else if (actual.ModuleDef == formal) {
+        return true;
+      } else {
+        return EqualsOrRefines(actual.Refines, formal);
+      }
+    }
+    /*
     private bool EqualsOrRefines(ModuleDecl actual, ModuleDefinition formal) {
       if (actual is LiteralModuleDecl lmd) {
         if (lmd.ModuleDef == formal) {
@@ -2463,6 +2473,20 @@ namespace Microsoft.Dafny
       } // TODO: else if (actual is ModuleExportDecl med) { ... }
 
 
+    }
+    */
+
+    private ModuleDefinition GetDefFromDecl(ModuleDecl decl) {
+      if (decl is LiteralModuleDecl lmd) {
+        return lmd.ModuleDef;
+      } else if (decl is AliasModuleDecl amd) {
+        return amd.Signature.ModuleDef;
+      } else if (decl is AbstractModuleDecl am) {
+        return am.Signature.ModuleDef;
+      } else if (decl is ModuleExportDecl med) {
+        return med.Signature.ModuleDef;
+      }
+      return null;
     }
 
     // Returns the resolved Module declaration corresponding to the qualified module id
@@ -2504,7 +2528,11 @@ namespace Microsoft.Dafny
             ModuleFormal formal = pair.Item1;
             ModuleDecl actual = pair.Item2;
 
-            if (!equalsOrRefines(actual, formal.TypeDef)) {
+            if (formal.TypeDef == null) {
+              formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
+            }
+
+            if (!EqualsOrRefines(actual.Signature, formal.TypeDef)) {
               var msg = $"Module {decl.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
               reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, msg);
               return null;
