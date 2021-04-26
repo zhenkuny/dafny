@@ -22,7 +22,7 @@ namespace Microsoft.Dafny
     ErrorReporter reporter;
     ModuleSignature moduleInfo = null;
 
-    private Dictionary<FunctorApplication, ModuleSignature> virtualModules =
+    public static Dictionary<FunctorApplication, ModuleSignature> virtualModules =
       new Dictionary<FunctorApplication, ModuleSignature>();
 
     private bool RevealedInScope(Declaration d) {
@@ -2462,7 +2462,7 @@ namespace Microsoft.Dafny
 
       if (qid.FunctorApp != null) {
         k = 0;  // Starting point in the Path iteration
-        if (!this.virtualModules.ContainsKey(qid.FunctorApp)) {
+        if (!Resolver.virtualModules.ContainsKey(qid.FunctorApp)) {
           // Apply the functor
           // 1) Clone the base module definition
           // 2) For each formal, update the AliasModuleDecl we introduced
@@ -2472,6 +2472,8 @@ namespace Microsoft.Dafny
           LiteralModuleDecl literalRoot = (LiteralModuleDecl) root;
           ScopeCloner cloner = new ScopeCloner(literalRoot.DefaultExport.VisibilityScope);
           ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
+          // Should have the same scope, not a clone, as cloning allocates new tokens
+          newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
 
           // 2)
           foreach (var pair in System.Linq.Enumerable.Zip(qid.FunctorApp.functor.Formals, qid.FunctorApp.moduleParams)) {
@@ -2492,7 +2494,7 @@ namespace Microsoft.Dafny
 
           // 3) Compute the new signature
           ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
-          this.virtualModules[qid.FunctorApp] = sig;
+          Resolver.virtualModules[qid.FunctorApp] = sig;
           // TODO: Need this?
           // sig.Refines = refinementTransformer.RefinedSig;
           // or this?
@@ -2508,7 +2510,7 @@ namespace Microsoft.Dafny
           decl = newDecl;
         }
 
-        p = this.virtualModules[qid.FunctorApp];
+        p = Resolver.virtualModules[qid.FunctorApp];
       }
 
 

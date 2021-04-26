@@ -810,11 +810,24 @@ namespace Microsoft.Dafny {
 
       //translate us first
       List<ModuleDefinition> mods = program.RawModules().ToList();
+      List<ModuleDefinition> virtual_mods = Resolver.virtualModules.Values.ToList().ConvertAll(s => s.ModuleDef);
+      mods.AddRange(virtual_mods);
       mods.Remove(forModule);
+
+      if (forModule is Functor) {
+        // Remove all instantiations of this functor, to avoid generating duplicates in the Boogie code
+        mods.RemoveAll(def => def.CompileName == forModule.CompileName);
+      } else {
+        // Remove all functors, since we should only be referring to their instantiations at this point
+        mods.RemoveAll(def => def is Functor);
+      }
+
+
       mods.Insert(0, forModule);
 
       foreach (ModuleDefinition m in mods) {
-        foreach (TopLevelDecl d in m.TopLevelDecls.FindAll(VisibleInScope)) {
+        var visibleDecls = m.TopLevelDecls.FindAll(VisibleInScope);
+        foreach (TopLevelDecl d in visibleDecls) {
           currentDeclaration = d;
           if (d is OpaqueTypeDecl) {
             var dd = (OpaqueTypeDecl)d;
