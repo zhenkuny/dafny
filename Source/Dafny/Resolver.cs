@@ -2515,7 +2515,7 @@ namespace Microsoft.Dafny
           ScopeCloner cloner = new ScopeCloner(literalRoot.DefaultExport.VisibilityScope);
           ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
           // Should have the same scope, not a clone, as cloning allocates new tokens
-          newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
+          //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
 
           if (qid.FunctorApp.functor.Formals.Count != qid.FunctorApp.moduleParams.Count) {
             var msg = $"Module {decl.Name} expects {qid.FunctorApp.functor.Formals.Count} parameters, got {qid.FunctorApp.moduleParams.Count}";
