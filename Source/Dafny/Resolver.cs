@@ -2447,6 +2447,24 @@ namespace Microsoft.Dafny
       }
     }
 
+    private bool EqualsOrRefines(ModuleDecl actual, ModuleDefinition formal) {
+      if (actual is LiteralModuleDecl lmd) {
+        if (lmd.ModuleDef == formal) {
+          return true;
+        }
+      } else if (actual is AliasModuleDecl amd) {
+        if (amd.Signature.ModuleDef == formal) {
+          return true;
+        }
+      } else if (actual is AbstractModuleDecl amd) {
+        if (amd.Signature.ModuleDef == formal) {
+          return true;
+        }
+      } // TODO: else if (actual is ModuleExportDecl med) { ... }
+
+
+    }
+
     // Returns the resolved Module declaration corresponding to the qualified module id
     // Requires the root to have been resolved
     // Issues an error and returns null if the path is not valid
@@ -2475,10 +2493,22 @@ namespace Microsoft.Dafny
           // Should have the same scope, not a clone, as cloning allocates new tokens
           newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
 
+          if (qid.FunctorApp.functor.Formals.Count != qid.FunctorApp.moduleParams.Count) {
+            var msg = $"Module {decl.Name} expects {qid.FunctorApp.functor.Formals.Count} parameters, got {qid.FunctorApp.moduleParams.Count}";
+            reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, msg);
+            return null;
+          }
+
           // 2)
           foreach (var pair in System.Linq.Enumerable.Zip(qid.FunctorApp.functor.Formals, qid.FunctorApp.moduleParams)) {
             ModuleFormal formal = pair.Item1;
             ModuleDecl actual = pair.Item2;
+
+            if (!equalsOrRefines(actual, formal.TypeDef)) {
+              var msg = $"Module {decl.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
+              reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, msg);
+              return null;
+            }
 
             // Find the artificial alias decl we created, and update it with the actual
             foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {

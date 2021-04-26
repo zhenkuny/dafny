@@ -2,7 +2,7 @@
 // RUN: %diff "%s.expect" "%t"
 
 module ABase {
-    type Key
+  type Key
 }
 
 //abstract module P_normal {
@@ -17,7 +17,7 @@ abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
 
-// Try simple functor application
+//// Try simple functor application
 //abstract module Apply {
 //  import Output = P(ABase)
 //
@@ -26,7 +26,7 @@ abstract module P(A: ABase) {
 //  }
 //}
 
-// Make sure functors behave applicatively
+//// Make sure functors behave applicatively
 //abstract module Apply2 {
 //  import Output0 = P(ABase)
 //  import Output1 = P(ABase)
@@ -38,31 +38,31 @@ abstract module P(A: ABase) {
 //  }
 //}
 
-// Try passing a refinement to a functor
-abstract module B refines ABase {
-  method BTest()
-}
-
-abstract module ApplyRefinement {
-  import Output = P(B)
-
-  method UseB() {
-    Output.A.BTest();
-  }
-
-  method KeyTest(b:Output.A.Key)
-  {
-    Output.Test(b);
-  }
-}
-
-// Try passing module of the wrong type to a functor
-//abstract module NoBase {
+//// Try passing a refinement to a functor
+//abstract module B refines ABase {
+//  method BTest()
 //}
 //
-//abstract module BadApplication {
-//  import ShouldFail = P(NoBase)
+//abstract module ApplyRefinement {
+//  import Output = P(B)
+//
+//  method UseB() {
+//    Output.A.BTest();
+//  }
+//
+//  method KeyTest(b:Output.A.Key)
+//  {
+//    Output.Test(b);
+//  }
 //}
+
+// Try passing module of the wrong type to a functor
+abstract module NoBase {
+}
+
+abstract module BadApplication {
+  import ShouldFail = P(NoBase)
+}
 
 
 
