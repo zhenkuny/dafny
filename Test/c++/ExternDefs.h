@@ -35,7 +35,6 @@ namespace Extern {
       ExternClass2(uint64 x) { (void)x; }
   };
 
-
   uint64 Caller(uint64 (*inc)(uint64), uint64 x) {
     return inc(x);
   }

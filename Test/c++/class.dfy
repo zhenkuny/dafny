@@ -188,7 +188,6 @@ class GenericClass<A> {
 }
 
 
-
 method Main() {
   TestMyClass();
   TestEquality();

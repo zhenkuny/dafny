@@ -21,7 +21,7 @@ template <typename A>
 A unwrap(maybe<A> m) { return m.a; }
 
 template <typename A>
-maybe<A> give(A a) { 
+maybe<A> give(A a) {
   struct maybe<A> m;
   m.a = a;
   return m;
@@ -29,22 +29,22 @@ maybe<A> give(A a) {
 
 template <typename A>
 //maybe<A> empty() { return maybe(get_default<A>::call()); }
-maybe<A> empty() { 
+maybe<A> empty() {
   struct maybe<A> m;
   return m;  // REVIEW: Safe, b/c !has ?
-}    
+}
 
 template <typename A>
-Tuple0 discard(maybe<A> m) { (void)m; Tuple0 ret; return ret; } 
+Tuple0 discard(maybe<A> m) { (void)m; Tuple0 ret; return ret; }
 
 }
 
 template<typename A>
 struct get_default<LinearMaybe::maybe<A>> {
-  static LinearMaybe::maybe<A> call() { 
+  static LinearMaybe::maybe<A> call() {
     struct LinearMaybe::maybe<A> m;
     m.a = get_default<A>::call();
-    return m; 
+    return m;
   }
 };
 
@@ -136,8 +136,8 @@ Tuple0 lseq_free_raw(lseq<A> s) {
 }
 
 template <typename A>
-Tuple2<lseq<A>, LinearMaybe::maybe<A>> lseq_swap_raw_fun(lseq<A> s1, uint64 i, LinearMaybe::maybe<A> a1) {
-  Tuple2 ret(s1, s1[i]);
+Tuple<lseq<A>, LinearMaybe::maybe<A>> lseq_swap_raw_fun(lseq<A> s1, uint64 i, LinearMaybe::maybe<A> a1) {
+  Tuple ret(s1, s1[i]);
   s1[i] = a1;
   return ret;
 }

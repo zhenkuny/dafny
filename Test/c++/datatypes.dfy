@@ -222,6 +222,24 @@ method TestMultCons(){
   n3.Free();
 }
 
+// Test generic datatype methods
+datatype Foo<A> = Foo(a: A) {
+  static method Alloc(a: A) returns (f: Foo<A>) {
+    f := Foo(a);
+  }
+}
+
+datatype Test<A> = Test(a:A) | Empty
+{
+  static method Alloc() returns (t:Test<A>) {
+    return Empty;
+  }
+
+  static method Invoke() {
+    var a := Alloc();
+  }
+}
+
 method Main() {
   TestMultCons();
   var e1 := Example1(22, false);
@@ -239,3 +257,4 @@ method Main() {
   var len := IntListLen(Cons(15, Cons(18, Cons(330, Nil))));
   print len;
 }
+
