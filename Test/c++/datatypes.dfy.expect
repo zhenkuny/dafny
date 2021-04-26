@@ -1,5 +1,7 @@
 
-Dafny program verifier finished with 16 verified, 0 errors
+Dafny program verifier finished with 20 verified, 0 errors
+node (node (leaf (0), leaf (1)), node (leaf (0), leaf (1)))
+node (node (leaf (1), leaf (0)), node (leaf (1), leaf (0)))
 Case A: 42
 Case B: 1
 This is expected
