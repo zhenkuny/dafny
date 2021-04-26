@@ -18,13 +18,26 @@ abstract module P(A: ABase) {
 }
 
 // Try simple functor application
-abstract module Apply {
-  import Output = P(ABase)
+//abstract module Apply {
+//  import Output = P(ABase)
+//
+//  method More(a:Output.A.Key) {
+//    Output.Test(a);
+//  }
+//}
 
-  method More(a:Output.A.Key) {
-    Output.Test(a);
+// Make sure functors behave applicatively
+abstract module Apply2 {
+  import Output0 = P(ABase)
+  import Output1 = P(ABase)
+
+  method More(a:Output0.A.Key, b:Output1.A.Key)
+    requires a == b
+  {
+    Output1.Test(a);
   }
 }
+
 
 //abstract module B refines P(ABase) {
 //}

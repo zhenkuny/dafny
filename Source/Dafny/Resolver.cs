@@ -22,8 +22,8 @@ namespace Microsoft.Dafny
     ErrorReporter reporter;
     ModuleSignature moduleInfo = null;
 
-    public static Dictionary<FunctorApplication, ModuleSignature> virtualModules =
-      new Dictionary<FunctorApplication, ModuleSignature>();
+    public static Dictionary<FunctorApplication, LiteralModuleDecl> virtualModules =
+      new Dictionary<FunctorApplication, LiteralModuleDecl>();
 
     private bool RevealedInScope(Declaration d) {
       Contract.Requires(d != null);
@@ -2494,7 +2494,6 @@ namespace Microsoft.Dafny
 
           // 3) Compute the new signature
           ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
-          Resolver.virtualModules[qid.FunctorApp] = sig;
           // TODO: Need this?
           // sig.Refines = refinementTransformer.RefinedSig;
           // or this?
@@ -2507,10 +2506,11 @@ namespace Microsoft.Dafny
           LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, root.EnclosingModuleDefinition);
           newDecl.Signature = sig;
           newDecl.DefaultExport = sig;
+          Resolver.virtualModules[qid.FunctorApp] = newDecl;
           decl = newDecl;
         }
-
-        p = Resolver.virtualModules[qid.FunctorApp];
+        decl = Resolver.virtualModules[qid.FunctorApp];
+        p = decl.Signature;
       }
 
 
