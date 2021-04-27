@@ -36,12 +36,12 @@ abstract module Stuff {
   import T = IntTotalOrder
   import W = SortMethodUtil(IntTotalOrder).S.T
 
-  lemma same_types(x: T.K, y: W.K)
-  requires x == y == 0
-  {
-  }
+//  lemma same_types(x: T.K, y: W.K)
+//  requires x == y == 0
+//  {
+//  }
 }
-
+/*
 abstract module ParameterizedStuff(T: TotalOrder) {
   import W = SortMethodUtil(T).S.T
 
@@ -50,4 +50,4 @@ abstract module ParameterizedStuff(T: TotalOrder) {
   {
   }
 }
-
+*/
