@@ -1727,7 +1727,11 @@ namespace Microsoft.Dafny
         // each enclosing module.
         if (!ResolveQualifiedModuleIdRootImport(dependencies, moduleDecl, alias, bindings, alias.TargetQId, out root)) {
 //        if (!bindings.TryLookupFilter(alias.TargetQId.rootToken(), out root, m => alias != m)
-          reporter.Error(MessageSource.Resolver, alias.tok, ModuleNotFoundErrorMessage(0, alias.TargetQId.Path));
+          if (alias.TargetQId.FunctorApp != null) {
+            reporter.Error(MessageSource.Resolver, alias.tok, "module " + alias.TargetQId.rootName() + " does not exist");
+          } else {
+            reporter.Error(MessageSource.Resolver, alias.tok, ModuleNotFoundErrorMessage(0, alias.TargetQId.Path));
+          }
         }  else {
           dependencies.AddEdge(moduleDecl, root);
         }
@@ -2569,6 +2573,10 @@ namespace Microsoft.Dafny
         }
         decl = Resolver.virtualModules[qid.FunctorApp];
         p = decl.Signature;
+      } else if (root is LiteralModuleDecl lmd && lmd.ModuleDef is Functor functor) {
+        var msg = $"Functor {functor.Name} expects {functor.Formals.Count} arguments";
+        reporter.Error(MessageSource.Resolver, root.tok, msg);
+        return null;
       }
 
 
