@@ -5,13 +5,13 @@ abstract module A {
   datatype T = T
 }
 
-module B refines A {
-}
+//module B refines A {
+//}
 
 abstract module C(a: A) {
 }
 
-module D(a: A) refines C(a) {
+abstract module D(a_d: A) refines C(a_d) {
 }
 
 abstract module E(c: C) {
@@ -20,16 +20,16 @@ abstract module E(c: C) {
 abstract module F(e: E) {
 }
 
-module G(a: A) refines E(C(a)) {
+abstract module G(a_g: A) refines E(C(a_g)) {
 }
 
-abstract module H(a: A) refines F(G(a)) {
-  import X = a
-  import Y = e.c.a
-  import Z = G(a).a
-  import W = G(a).c.a
+abstract module H(a_h: A) refines F(G(a_h)) {
+  import X = a_h
+  //import Y = e.c.a    // Invalid: e is an argument to F, which has already been applied
+  import Z = G(a_h).a_g
+  import W = G(a_h).a
 
-  lemma types_eq(x: X.T, y: Y.T, z: Z.T, w: W.T)
+  lemma types_eq(x: X.T, /* y: Y.T, */ z: Z.T, w: W.T)
   requires x == y == z == w
   {
   }

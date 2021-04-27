@@ -5,19 +5,19 @@ module ABase {
   type Key
 }
 
-//abstract module P_normal {
-//  import A : ABase
-//
-//  method Test(a:A.Key)
-//}
+abstract module P_normal {
+  import A : ABase
+
+  method Test(a:A.Key)
+}
 //
 // Use an element of a formal parameter
 // Morally equivalent to P_normal above
-abstract module P(A: ABase) {
-  method Test(a:A.Key)
-}
-
-
+//abstract module P(A: ABase) {
+//  method Test(a:A.Key)
+//}
+//
+/*
 // Try simple functor application
 abstract module Apply {
   import OutputBase = P(ABase)
@@ -66,9 +66,16 @@ abstract module FunctorAppRefiner refines P(ABase) {
     Test(x);
   }
 }
+*/
+//// Try refining a functor application applied to our formal argument
+//module FunctorAppParamRefiner(abase: ABase) refines P(abase) {
+//  // Refer to the formal name of our refinement functor
+//  import X = A
+//}
 
-// Try refining a functor application applied to our formal argument
-module FunctorAppParamRefiner(a: ABase) refines P(a) {
-}
 
-
+//// Dafny says this isn't okay
+//module NormalRefinement refines P_normal {
+//  import A
+//  import X = A
+//}
