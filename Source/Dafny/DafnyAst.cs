@@ -4108,8 +4108,12 @@ namespace Microsoft.Dafny {
 
     override public string ToString() {
       string s = rootName();
-      foreach (IToken tok in Path) {
-        s = s + "." + tok.val;
+      int i = 1;
+      if (FunctorApp != null) {
+        i = 0;
+      }
+      for (; i < Path.Count; ++i) {
+        s = s + "." + Path[i].val;
       }
 
       return s;
