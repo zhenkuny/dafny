@@ -17,6 +17,7 @@ abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
 
+
 // Try simple functor application
 abstract module Apply {
   import OutputBase = P(ABase)
@@ -25,6 +26,7 @@ abstract module Apply {
     OutputBase.Test(a);
   }
 }
+
 
 // Make sure functors behave applicatively
 abstract module Apply2 {
@@ -37,6 +39,7 @@ abstract module Apply2 {
     Output1.Test(a);
   }
 }
+
 
 // Try passing a refinement to a functor
 abstract module B refines ABase {
@@ -57,10 +60,10 @@ abstract module ApplyRefinement {
 }
 
 
-//// Try passing module of the wrong type to a functor
-//abstract module NoBase {
-//}
-//
+// Try passing module of the wrong type to a functor
+abstract module NoBase {
+}
+
 //abstract module BadApplication {
 //  import ShouldFail = P(NoBase)
 //}
