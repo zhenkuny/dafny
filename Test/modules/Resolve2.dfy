@@ -22,8 +22,8 @@ abstract module SortUtil(T: TotalOrder) {
   }
 }
 
-abstract module SortMethodUtil(T: TotalOrder) {
-  import S = SortUtil(T)
+abstract module SortMethodUtil(T: TotalOrder, S:SortUtil(T)) {
+  //import S = SortUtil(T)
 
   method m(x: seq<T.K>) returns (y: seq<T.K>)
     ensures S.IsStrictlySorted(y)
@@ -34,7 +34,8 @@ abstract module SortMethodUtil(T: TotalOrder) {
 
 abstract module Stuff {
   import T = IntTotalOrder
-  import W = SortMethodUtil(IntTotalOrder).S.T
+  //import W = SortMethodUtil(IntTotalOrder).S.T
+  import W = SortMethodUtil(IntTotalOrder, SortUtil(IntTotalOrder)).S.T
 
 //  lemma same_types(x: T.K, y: W.K)
 //  requires x == y == 0
