@@ -68,6 +68,10 @@ abstract module P(A: ABase) {
 //}
 
 // Try refining a functor application applied to our formal argument
-module FunctorAppParamRefiner(a: A) refines P(a) {
+module FunctorAppParamRefiner(a: ABase) refines P(a) {
 }
+
+//abstract module MissingParameter {
+//  import P    // Fails with: P expects 1 arguments
+//}
 

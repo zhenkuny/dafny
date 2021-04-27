@@ -1403,7 +1403,7 @@ namespace Microsoft.Dafny
 
     public class ModuleBindings {
       private ModuleBindings parent;
-      private Dictionary<string, ModuleDecl> modules;
+      public Dictionary<string, ModuleDecl> modules;
       private Dictionary<string, ModuleBindings> bindings;
 
       public ModuleBindings(ModuleBindings p) {
@@ -1656,20 +1656,6 @@ namespace Microsoft.Dafny
       Graph<ModuleDecl> dependencies) {
       Contract.Assert(decl is LiteralModuleDecl);
       Contract.Assert(((LiteralModuleDecl)decl).ModuleDef == m);
-      if (m.RefinementQId != null) {
-        ModuleDecl other;
-        bool res = ResolveQualifiedModuleIdRootRefines(dependencies, decl, m, bindings, m.RefinementQId, out other);
-        if (!res) {
-          reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(),
-            $"module {m.RefinementQId.ToString()} named as refinement base does not exist");
-        } else if (other is LiteralModuleDecl && ((LiteralModuleDecl)other).ModuleDef == m) {
-          reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(), "module cannot refine itself: {0}",
-            m.RefinementQId.ToString());
-        } else {
-          Contract.Assert(other != null); // follows from postcondition of TryGetValue
-          dependencies.AddEdge(decl, other);
-        }
-      }
 
       if (m is Functor f) {
         // We need to create dependencies on each formal's module type
@@ -1683,9 +1669,12 @@ namespace Microsoft.Dafny
           // update the formals with their actuals
 
           // REVIEW: What should the "exports" list (final argument) be?
-          f.TopLevelDecls.Add(new AliasModuleDecl(formal.TypeName, formal.Name, f, opened:false, new List<IToken>()));
+          AliasModuleDecl formalDecl =
+            new AliasModuleDecl(formal.TypeName, formal.Name, f, opened: false, new List<IToken>());
+          f.TopLevelDecls.Add(formalDecl);
 
-
+          // Extend the bindings to include formal parameters
+          bindings.modules.Add(formal.Name.val, formalDecl);
           /*
           // Now add the formal's type as a dependency
           ModuleDecl other = null;
@@ -1698,6 +1687,21 @@ namespace Microsoft.Dafny
             dependencies.AddEdge(decl, other);
           }
           */
+        }
+      }
+
+      if (m.RefinementQId != null) {
+        ModuleDecl other;
+        bool res = ResolveQualifiedModuleIdRootRefines(dependencies, decl, m, bindings, m.RefinementQId, out other);
+        if (!res) {
+          reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(),
+            $"module {m.RefinementQId.ToString()} named as refinement base does not exist");
+        } else if (other is LiteralModuleDecl && ((LiteralModuleDecl)other).ModuleDef == m) {
+          reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(), "module cannot refine itself: {0}",
+            m.RefinementQId.ToString());
+        } else {
+          Contract.Assert(other != null); // follows from postcondition of TryGetValue
+          dependencies.AddEdge(decl, other);
         }
       }
 
@@ -1718,7 +1722,7 @@ namespace Microsoft.Dafny
 
     private void ProcessDependencies(ModuleDecl moduleDecl, ModuleBindings bindings, Graph<ModuleDecl> dependencies) {
       dependencies.AddVertex(moduleDecl);
-      if (moduleDecl is LiteralModuleDecl) {
+      if (moduleDecl is LiteralModuleDecl lmd) {
         ProcessDependenciesDefinition(moduleDecl, ((LiteralModuleDecl)moduleDecl).ModuleDef, bindings, dependencies);
       } else if (moduleDecl is AliasModuleDecl) {
         var alias = moduleDecl as AliasModuleDecl;
@@ -2573,7 +2577,7 @@ namespace Microsoft.Dafny
         }
         decl = Resolver.virtualModules[qid.FunctorApp];
         p = decl.Signature;
-      } else if (root is LiteralModuleDecl lmd && lmd.ModuleDef is Functor functor) {
+      } else if (qid.Root is LiteralModuleDecl lmd && lmd.ModuleDef is Functor functor) {
         var msg = $"Functor {functor.Name} expects {functor.Formals.Count} arguments";
         reporter.Error(MessageSource.Resolver, root.tok, msg);
         return null;
