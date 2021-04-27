@@ -1776,7 +1776,7 @@ MethodDecl<DeclModifierData dmod, bool allowConstructor, out Method/*!*/ m>
     ]
   | ellipsis                                    (. signatureEllipsis = t; .)
   )
-  MethodSpec<dmod.Usage == Usage.Ghost || isLemma || isTwoStateLemma || isLeastLemma || isGreatestLemma,
+  MethodSpec<dmod.Usage.IsGhostKind || isLemma || isTwoStateLemma || isLeastLemma || isGreatestLemma,
              req, mod, ens, dec, ref decAttrs, ref modAttrs, caption, isConstructor>
   [ IF(isConstructor)
     (. DividedBlockStmt dividedBody; .)
