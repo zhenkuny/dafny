@@ -4033,8 +4033,8 @@ namespace Microsoft.Dafny {
 
     public override string ToString() {
       string result = tok.val;
-      if (moduleParams.Count > 0) {
-        result += "(" + Util.Comma(", ", moduleParams, exp => exp.ToString()) + ")";
+      if (moduleParamNames.Count > 0) {
+        result += "(" + Util.Comma(", ", moduleParamNames, exp => exp.ToString()) + ")";
       }
       return result;
     }
@@ -4107,9 +4107,9 @@ namespace Microsoft.Dafny {
     }
 
     override public string ToString() {
-      string s = Path[0].val;
-      for (int i = 1; i < Path.Count; ++i) {
-        s = s + "." + Path[i].val;
+      string s = rootName();
+      foreach (IToken tok in Path) {
+        s = s + "." + tok.val;
       }
 
       return s;
