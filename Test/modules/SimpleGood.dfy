@@ -18,60 +18,57 @@ abstract module P(A: ABase) {
 }
 
 
-//// Try simple functor application
-//abstract module Apply {
-//  import OutputBase = P(ABase)
-//
-//  method More(a:OutputBase.A.Key) {
-//    OutputBase.Test(a);
-//  }
-//}
-//
-//
-//// Make sure functors behave applicatively
-//abstract module Apply2 {
-//  import Output0 = P(ABase)
-//  import Output1 = P(ABase)
-//
-//  method More(a:Output0.A.Key, b:Output1.A.Key)
-//    requires a == b
-//  {
-//    Output1.Test(a);
-//  }
-//}
-//
-//
-//// Try passing a refinement to a functor
-//abstract module B refines ABase {
-//  method BTest()
-//}
-//
-//abstract module ApplyRefinement {
-//  import OutputRefined = P(B)
-//
-//  method UseB() {
-//    OutputRefined.A.BTest();
-//  }
-//
-//  method KeyTest(b:OutputRefined.A.Key)
-//  {
-//    OutputRefined.Test(b);
-//  }
-//}
-//
-//
-//// Try refining the result of a functor application
-//abstract module FunctorAppRefiner refines P(ABase) {
-//  method MoreTest(x:A.Key) {
-//    Test(x);
-//  }
-//}
+// Try simple functor application
+abstract module Apply {
+  import OutputBase = P(ABase)
+
+  method More(a:OutputBase.A.Key) {
+    OutputBase.Test(a);
+  }
+}
+
+
+// Make sure functors behave applicatively
+abstract module Apply2 {
+  import Output0 = P(ABase)
+  import Output1 = P(ABase)
+
+  method More(a:Output0.A.Key, b:Output1.A.Key)
+    requires a == b
+  {
+    Output1.Test(a);
+  }
+}
+
+
+// Try passing a refinement to a functor
+abstract module B refines ABase {
+  method BTest()
+}
+
+abstract module ApplyRefinement {
+  import OutputRefined = P(B)
+
+  method UseB() {
+    OutputRefined.A.BTest();
+  }
+
+  method KeyTest(b:OutputRefined.A.Key)
+  {
+    OutputRefined.Test(b);
+  }
+}
+
+
+// Try refining the result of a functor application
+abstract module FunctorAppRefiner refines P(ABase) {
+  method MoreTest(x:A.Key) {
+    Test(x);
+  }
+}
 
 // Try refining a functor application applied to our formal argument
 module FunctorAppParamRefiner(a: ABase) refines P(a) {
 }
 
-//abstract module MissingParameter {
-//  import P    // Fails with: P expects 1 arguments
-//}
 

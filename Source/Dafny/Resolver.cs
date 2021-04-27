@@ -1624,7 +1624,11 @@ namespace Microsoft.Dafny
       out ModuleDecl result) {
       Contract.Assert(qid != null);
       result = null;
-      Func<ModuleDecl, bool> filter = m => m.EnclosingModuleDefinition != context;
+      Func<ModuleDecl, bool> filter = m =>
+        (m.EnclosingModuleDefinition != context
+         || (m.EnclosingModuleDefinition == context
+             && m.EnclosingModuleDefinition is Functor f
+             && f.Formals.ConvertAll(f => f.Name.val).Contains(m.Name)));
       return ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, qid, out result);
     }
 
