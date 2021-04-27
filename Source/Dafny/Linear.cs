@@ -385,17 +385,17 @@ namespace Microsoft.Dafny.Linear {
           method.Outs.RemoveAt(method.Outs.Count - 1);
         }
 
-        var inoutInArgs = method.Ins.Where(x => x.Inout).Select((_, i) => i).ToList();
+        var inoutInArgs = method.Ins.Select((formal, inPos) => new { inPos, formal }).Where(x => x.formal.Inout).Select((x, outPos) => new { inPos = x.inPos, outPos }).ToList();
         var inoutArgCount = inoutInArgs.Count;
         var inoutOutArgs = method.Outs.GetRange(method.Outs.Count - inoutArgCount, inoutArgCount);
         method.Outs.RemoveRange(method.Outs.Count - inoutArgCount, inoutArgCount);
         const String oldPrefix = "old_";
-        foreach (var i in inoutInArgs) {
-          var arg = method.Ins[i];
+        foreach (var a in inoutInArgs) {
+          var arg = method.Ins[a.inPos];
           Contract.Assert(arg.Name.StartsWith(oldPrefix));
-          var inoutArg = inoutOutArgs[i];
+          var inoutArg = inoutOutArgs[a.outPos];
           inoutArg.Inout = true;
-          method.Ins[i] = inoutArg;
+          method.Ins[a.inPos] = inoutArg;
         }
         if (inoutArgCount > 0) {
           method.Req.Clear();

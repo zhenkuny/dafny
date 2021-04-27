@@ -28,6 +28,11 @@ method ErrTest() returns (e:Err<bool>)
 
 datatype Option<V> = None | Some(value:V)
 
+method GenericIO<A>(a:A) returns (a':A)
+{
+  a' := a;
+}
+
 method Main() {
   var t := new Test(true);
   var u := new UseTest();
