@@ -3,6 +3,9 @@
 
 module Atomics {
   type Atomic(==)<G>
+  {
+    function identifier() : nat
+  }
 
   method execute_atomic_add<G>(a: Atomic<G>)
   returns (
@@ -51,10 +54,10 @@ module Atomics {
     glinear var d3;
 
     ret1, b1, c1, d1 := execute_atomic_add(a1);
-    assert a1 != a2;
+    assert a1.identifier() != a2.identifier();
     ret2, b2, c2, d2 := execute_atomic_noop(a2);
-    assert a1 != a3;
-    assert a2 != a3;
+    assert a1.identifier() != a3.identifier();
+    assert a2.identifier() != a3.identifier();
     ret3, b3, c3, d3 := execute_atomic_noop(a3);
     finish_atomic(a3, c3, d3);
     finish_atomic(a2, c2, d2);
@@ -76,10 +79,10 @@ module Atomics {
     glinear var d3;
 
     ret1, b1, c1, d1 := execute_atomic_add(a1);
-    assert a1 != a2;
+    assert a1.identifier() != a2.identifier();
     ret2, b2, c2, d2 := execute_atomic_noop(a2);
-    assert a1 != a3;
-    assert a2 != a2; // ERROR
+    assert a1.identifier() != a3.identifier();
+    assert a2.identifier() != a2.identifier(); // ERROR
     ret3, b3, c3, d3 := execute_atomic_noop(a3);
     finish_atomic(a3, c3, d3);
     finish_atomic(a2, c2, d2);

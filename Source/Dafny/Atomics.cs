@@ -289,6 +289,28 @@ namespace Microsoft.Dafny.Linear
             return false;
         }
 
+        private String get_id_of_identifier_call(Expression e)
+        {
+            if (e is ApplySuffix appsuff)
+            {
+                if (appsuff.ResolvedExpression is FunctionCallExpr fce)
+                {
+                    if (fce.Name == "identifier")
+                    {
+                        if (fce.Receiver is NameSegment ns)
+                        {
+                            if (ns.Resolved is IdentifierExpr ie)
+                            {
+                                return ie.Var.CompileName;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
         private bool is_correct_not_equals_assertion(Statement stmt, String expected_id1, String expected_id2)
         {
             Expression expr;
@@ -309,22 +331,8 @@ namespace Microsoft.Dafny.Linear
             {
                 if (be.Op == BinaryExpr.Opcode.Neq)
                 {
-                    String actual_id1 = null;
-                    String actual_id2 = null;
-                    if (be.E0 is NameSegment ns)
-                    {
-                        if (ns.Resolved is IdentifierExpr ie)
-                        {
-                            actual_id1 = ie.Var.CompileName;
-                        }
-                    }
-                    if (be.E1 is NameSegment ns2)
-                    {
-                        if (ns2.Resolved is IdentifierExpr ie)
-                        {
-                            actual_id2 = ie.Var.CompileName;
-                        }
-                    }
+                    String actual_id1 = get_id_of_identifier_call(be.E0);
+                    String actual_id2 = get_id_of_identifier_call(be.E1);
                     
                     Contract.Assert(expected_id1 != null);
                     Contract.Assert(expected_id2 != null);
@@ -377,7 +385,7 @@ namespace Microsoft.Dafny.Linear
                                 preservedContents.Atomic, openBlocks[j].preservedContents.Atomic)))
                             {
                                 reporter.Error(MessageSource.Rewriter, stmt.Tok,
-                                    "Need to assert that ({0} != {1})",
+                                    "Need to assert that ({0}.identifier() != {1}.identifier())",
                                     preservedContents.Atomic, openBlocks[j].preservedContents.Atomic);
                             }
                         }
