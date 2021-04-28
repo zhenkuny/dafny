@@ -1,0 +1,3 @@
+Atomic3.dfy(34,21): Error: Need to assert that (a2 != a1)
+Atomic3.dfy(83,21): Error: Need to assert that (a3 != a2)
+2 resolution/type errors detected in Atomic3.dfy

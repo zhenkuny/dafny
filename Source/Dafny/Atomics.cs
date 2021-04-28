@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Linq;
 
@@ -15,6 +16,18 @@ namespace Microsoft.Dafny.Linear
             this.NewValue = newValue;
         }
     }
+
+    internal class BlockOpen
+    {
+        public readonly PreservedContents preservedContents;
+        public readonly CallStmt stmt;
+
+        public BlockOpen(PreservedContents preservedContents, CallStmt stmt)
+        {
+            this.preservedContents = preservedContents;
+            this.stmt = stmt;
+        }
+    }
     
     public class AtomicRewriter : IRewriter
     {
@@ -29,6 +42,7 @@ namespace Microsoft.Dafny.Linear
 
         private const String EXECUTE_PREFIX = "execute__atomic__";
         private const String FINISH_NAME = "finish__atomic";
+        private const String EXECUTE_NAME_NOOP = "execute__atomic__noop";
 
         private bool is_open_stmt(CallStmt call)
         {
@@ -42,6 +56,13 @@ namespace Microsoft.Dafny.Linear
             var name = call.Method.CompileName;
             var parts = name.Split(".");
             return parts[^1] == FINISH_NAME;
+        }
+
+        private bool is_open_call_entirely_ghost(CallStmt call)
+        {
+            var name = call.Method.CompileName;
+            var parts = name.Split(".");
+            return parts[^1] == EXECUTE_NAME_NOOP;
         }
 
         /*private void check_names_match(IToken tok, String s1, String s2)
@@ -267,6 +288,54 @@ namespace Microsoft.Dafny.Linear
 
             return false;
         }
+
+        private bool is_correct_not_equals_assertion(Statement stmt, String expected_id1, String expected_id2)
+        {
+            Expression expr;
+            if (stmt is AssertStmt assert_stmt)
+            {
+                expr = assert_stmt.Expr;
+            }
+            else if (stmt is AssumeStmt assume_stmt)
+            {
+                expr = assume_stmt.Expr;
+            }
+            else
+            {
+                return false;
+            }
+
+            if (expr is BinaryExpr be)
+            {
+                if (be.Op == BinaryExpr.Opcode.Neq)
+                {
+                    String actual_id1 = null;
+                    String actual_id2 = null;
+                    if (be.E0 is NameSegment ns)
+                    {
+                        if (ns.Resolved is IdentifierExpr ie)
+                        {
+                            actual_id1 = ie.Var.CompileName;
+                        }
+                    }
+                    if (be.E1 is NameSegment ns2)
+                    {
+                        if (ns2.Resolved is IdentifierExpr ie)
+                        {
+                            actual_id2 = ie.Var.CompileName;
+                        }
+                    }
+                    
+                    Contract.Assert(expected_id1 != null);
+                    Contract.Assert(expected_id2 != null);
+
+                    return (actual_id1 == expected_id1 && actual_id2 == expected_id2)
+                           || (actual_id1 == expected_id2 && actual_id2 == expected_id1);
+
+                }
+            }
+            return false;
+        }
         
         private void RewriteMethod(Method m) {
             var body = m.Body?.Body;
@@ -276,40 +345,62 @@ namespace Microsoft.Dafny.Linear
             }
             foreach (var stmtList in Visit.AllStatementLists(body))
             {
-                CallStmt openStmt = null;
-                PreservedContents preservedContents = null;
-                foreach (var stmt in stmtList)
+                List<BlockOpen> openBlocks = new List<BlockOpen>();
+
+                for (int stmtListIndex = 0; stmtListIndex < stmtList.Count; stmtListIndex++)
                 {
+                    var stmt = stmtList[stmtListIndex];
+
                     CallStmt call = as_call_stmt(stmt);
                     if (call != null && is_open_stmt(call))
                     {
-                        if (openStmt != null)
+                        if (openBlocks.Count > 0 && !is_open_call_entirely_ghost(call))
                         {
                             reporter.Error(MessageSource.Rewriter, stmt.Tok,
-                                "Improper atomic statement nesting: double-open");
+                                "Improper atomic statement nesting: non-ghost open within another open");
                         }
 
-                        openStmt = call;
-                        preservedContents = get_preserved_contents_open_stmt(call);
+                        var openStmt = call;
+                        var preservedContents = get_preserved_contents_open_stmt(call);
                         
+                        foreach (BlockOpen bo in openBlocks)
+                        {
+                            check_no_assign(openStmt, bo.preservedContents.Atomic);
+                            check_no_assign(openStmt, bo.preservedContents.Atomic);
+                        }
                         check_no_assign(openStmt, preservedContents.Atomic);
-                    } else if (call != null && is_close_stmt(call))
+
+                        for (int j = 0; j < openBlocks.Count; j++)
+                        {
+                            int sIndex = stmtListIndex - openBlocks.Count + j;
+                            if (!(sIndex >= 0 && is_correct_not_equals_assertion(stmtList[sIndex],
+                                preservedContents.Atomic, openBlocks[j].preservedContents.Atomic)))
+                            {
+                                reporter.Error(MessageSource.Rewriter, stmt.Tok,
+                                    "Need to assert that ({0} != {1})",
+                                    preservedContents.Atomic, openBlocks[j].preservedContents.Atomic);
+                            }
+                        }
+                        
+                        openBlocks.Add(new BlockOpen(preservedContents, openStmt));
+                    }
+                    else if (call != null && is_close_stmt(call))
                     {
-                        if (openStmt == null)
+                        if (openBlocks.Count == 0)
                         {
                             reporter.Error(MessageSource.Rewriter, stmt.Tok,
                                 "Improper atomic statement nesting: close without corresponding open");
                         }
                         else
                         {
-                            check_open_close_match(openStmt, call, preservedContents);
-                            openStmt = null;
-                            preservedContents = null;
+                            var last = openBlocks[^ 1];
+                            check_open_close_match(last.stmt, call, last.preservedContents);
+                            openBlocks.RemoveAt(openBlocks.Count - 1);
                         }
                     }
                     else
                     {
-                        if (openStmt != null)
+                        if (openBlocks.Count > 0)
                         {
                             if (!stmt.IsGhost && !IsGlinearStmt(stmt))
                             {
@@ -317,13 +408,15 @@ namespace Microsoft.Dafny.Linear
                                     "Only ghost statements can be within an atomic block");
                             }
                             
-                            check_no_assign(stmt, preservedContents.Atomic);
-                            check_no_assign(stmt, preservedContents.NewValue);
+                            foreach (BlockOpen bo in openBlocks) {
+                                check_no_assign(stmt, bo.preservedContents.Atomic);
+                                check_no_assign(stmt, bo.preservedContents.NewValue);
+                            }
                         }
                     }
                 }
 
-                if (openStmt != null)
+                if (openBlocks.Count > 0)
                 {
                     reporter.Error(MessageSource.Rewriter, m.Body.Tok,
                         "block ends with an atomic block open");

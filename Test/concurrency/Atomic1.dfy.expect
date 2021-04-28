@@ -5,4 +5,6 @@ Atomic1.dfy(54,4): Error: Assign to variable which should be preserved for atomi
 Atomic1.dfy(55,4): Error: Assign to variable which should be preserved for atomic block
 Atomic1.dfy(87,13): Error: Only ghost statements can be within an atomic block
 Atomic1.dfy(89,30): Error: Only ghost statements can be within an atomic block
-7 resolution/type errors detected in Atomic1.dfy
+Atomic1.dfy(132,21): Error: Improper atomic statement nesting: non-ghost open within another open
+Atomic1.dfy(132,21): Error: Need to assert that (a2 != a1)
+9 resolution/type errors detected in Atomic1.dfy
