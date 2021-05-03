@@ -688,12 +688,12 @@ namespace Microsoft.Dafny.Linear
 
                 List<Statement> newStmts = new List<Statement>
                 {
-                    isNoop
-                        ? ghost_var_decl(atomicStmt.Tok, atomicValueName, atomicExpr)
-                        : var_decl(atomicStmt.Tok, atomicValueName, atomicExpr),
                     IsReturnValueGhost(applySuffix.Lhs)
                         ? ghost_var_decl_empty(atomicStmt.Tok, returnValueName)
                         : var_decl_empty(atomicStmt.Tok, returnValueName),
+                    isNoop
+                        ? ghost_var_decl(atomicStmt.Tok, atomicValueName, atomicExpr)
+                        : var_decl(atomicStmt.Tok, atomicValueName, atomicExpr),
                     ghost_var_decl_empty(atomicStmt.Tok, oldValueName),
                     ghost_var_decl_empty(atomicStmt.Tok, newValueName),
                     glinear_var_decl_empty(atomicStmt.Tok, gName),
@@ -753,8 +753,18 @@ namespace Microsoft.Dafny.Linear
                             new ApplySuffixArg { Inout = false, Expr = new NameSegment(atomicStmt.Tok, gReturnName, null) }
                         }))
                     }));
-                    
-                return newStmts;
+
+                if (atomicVarStack.Count == 0)
+                {
+                    var s = newStmts[0];
+                    newStmts.RemoveAt(0);
+                    var bs = new BlockStmt(atomicStmt.Tok, atomicStmt.EndTok, newStmts);
+                    return new List<Statement>() {s, bs};
+                }
+                else
+                {
+                    return newStmts;
+                }
             }
 
             private void TranslateStatementList(List<Statement> stmts)
