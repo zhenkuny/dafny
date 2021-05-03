@@ -419,7 +419,7 @@ namespace Microsoft.Dafny
 
       rewriters = new List<IRewriter>();
       rewriters.Add(new Linear.InoutTranslateRewriter(reporter, this.FreshTempVarName));
-      rewriters.Add(new Linear.AtomicRewriter(reporter));
+      rewriters.Add(new Linear.AtomicRewriter(reporter, this.FreshTempVarName));
 
       refinementTransformer = new RefinementTransformer(prog);
       rewriters.Add(refinementTransformer);

@@ -8233,6 +8233,54 @@ namespace Microsoft.Dafny {
       base.AppendStmt(s);
     }
   }
+  
+  public class AtomicStmt : Statement
+  {
+    public readonly Expression Call;
+    public readonly BlockStmt Body;
+    public readonly IToken ReturnId;
+
+    public AtomicStmt(IToken tok, IToken endTok, IToken retId, Expression call, BlockStmt body)
+      : base(tok, endTok)
+    {
+      Contract.Requires(tok != null);
+      Contract.Requires(endTok != null);
+      Contract.Requires(retId != null);
+      Contract.Requires(call != null);
+      Contract.Requires(body != null);
+      this.ReturnId = retId;
+      this.Call = call;
+      this.Body = body;
+    }
+  }
+  
+  public class AcquireStmt : Statement
+  {
+    public readonly IToken Id;
+
+    public AcquireStmt(IToken tok, IToken endTok, IToken id)
+      : base(tok, endTok)
+    {
+      Contract.Requires(tok != null);
+      Contract.Requires(endTok != null);
+      Contract.Requires(id != null);
+      this.Id = id;
+    }
+  }
+  
+  public class ReleaseStmt : Statement
+  {
+    public readonly Expression E;
+
+    public ReleaseStmt(IToken tok, IToken endTok, Expression e)
+      : base(tok, endTok)
+    {
+      Contract.Requires(tok != null);
+      Contract.Requires(endTok != null);
+      Contract.Requires(e != null);
+      this.E = e;
+    }
+  }
 
   public class IfStmt : Statement {
     public readonly bool IsBindingGuard;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Linq;
+using Microsoft.Boogie;
 
 namespace Microsoft.Dafny.Linear
 {
@@ -31,12 +32,24 @@ namespace Microsoft.Dafny.Linear
     
     public class AtomicRewriter : IRewriter
     {
+        internal override void PreResolve(ModuleDefinition module)
+        {
+            foreach (var (_, method) in Visit.AllMethodMembers(module))
+            {
+                AtomicBlockTranslator abt = new AtomicBlockTranslator(reporter, freshTempVarName, method);
+                var body = method.Body?.Body;
+                if (body != null)
+                {
+                    abt.VisitStatementList(body);
+                }
+            }
+        }
         
         internal override void PostResolve(ModuleDefinition module)
         {
             foreach (var (_, method) in Visit.AllMethodMembers(module))
             {
-                RewriteMethod(method);
+                Validate(method);
             }
         }
 
@@ -263,7 +276,14 @@ namespace Microsoft.Dafny.Linear
 
             if (stmt is VarDeclStmt vds)
             {
-                return IsGlinearStmt(vds.Update);
+                foreach (var local in vds.Locals)
+                {
+                    if (!(local.Usage.IsLinearOrSharedErased || local.Usage.IsGhostKind))
+                    {
+                        return false;
+                    }
+                }
+                return vds.Update == null || IsGlinearStmt(vds.Update);
             } else if (stmt is UpdateStmt us)
             {
                 foreach (Statement sub in us.SubStatements)
@@ -331,21 +351,21 @@ namespace Microsoft.Dafny.Linear
             {
                 if (be.Op == BinaryExpr.Opcode.Neq)
                 {
-                    String actual_id1 = get_id_of_identifier_call(be.E0);
-                    String actual_id2 = get_id_of_identifier_call(be.E1);
+                    String actualId1 = get_id_of_identifier_call(be.E0);
+                    String actualId2 = get_id_of_identifier_call(be.E1);
                     
                     Contract.Assert(expected_id1 != null);
                     Contract.Assert(expected_id2 != null);
 
-                    return (actual_id1 == expected_id1 && actual_id2 == expected_id2)
-                           || (actual_id1 == expected_id2 && actual_id2 == expected_id1);
+                    return (actualId1 == expected_id1 && actualId2 == expected_id2)
+                           || (actualId1 == expected_id2 && actualId2 == expected_id1);
 
                 }
             }
             return false;
         }
         
-        private void RewriteMethod(Method m) {
+        private void Validate(Method m) {
             var body = m.Body?.Body;
             if (body == null)
             {
@@ -432,8 +452,380 @@ namespace Microsoft.Dafny.Linear
             }
         }
 
-        public AtomicRewriter(ErrorReporter reporter) : base(reporter)
+        private class AtomicBlockTranslator
         {
+            private Expression get_release_stmt_expression(AtomicStmt atomicStmt)
+            {
+                var body = atomicStmt.Body.Body;
+                if (body.Count > 0 && body[^1] is ReleaseStmt rs)
+                {
+                    return rs.E;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            
+            private string get_acquire_stmt_var_name(AtomicStmt atomicStmt)
+            {
+                var body = atomicStmt.Body.Body;
+                if (body.Count > 0 && body[0] is AcquireStmt acquireStmt)
+                {
+                    return acquireStmt.Id.val;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
+            private List<Statement> get_inner_stmts(AtomicStmt atomicStmt)
+            {
+                var body = atomicStmt.Body.Body;
+                List<Statement> newStmts = new List<Statement>();
+                for (int i = 0; i < body.Count; i++)
+                {
+                    if (i == 0 && body[i] is AcquireStmt) continue;
+                    if (i == body.Count - 1 && body[i] is ReleaseStmt) continue;
+                    newStmts.Add(body[i]);
+                }
+
+                return newStmts;
+            }
+
+            private Statement var_decl_empty(IToken tok, string id)
+            {
+                return new VarDeclStmt(tok, tok, new List<LocalVariable>()
+                {
+                    new LocalVariable(tok, tok, id, new InferredTypeProxy(), Usage.Ordinary)
+                }, null);
+            }
+            
+            private Statement var_decl(IToken tok, string id, Expression e)
+            {
+                return new VarDeclStmt(tok, tok, new List<LocalVariable>()
+                {
+                    new LocalVariable(tok, tok, id, new InferredTypeProxy(), Usage.Ordinary)
+                }, new UpdateStmt(tok, tok, 
+                    new List<Expression>() {new AutoGhostIdentifierExpr(tok, id)},
+                    new List<AssignmentRhs>() {new ExprRhs(e)}));
+            }
+            
+            private Statement ghost_var_decl_empty(IToken tok, string id)
+            {
+                return new VarDeclStmt(tok, tok, new List<LocalVariable>()
+                {
+                    new LocalVariable(tok, tok, id, new InferredTypeProxy(), Usage.Ghost)
+                }, null);
+            }
+            
+            private Statement ghost_var_decl(IToken tok, string id, Expression e)
+            {
+                return new VarDeclStmt(tok, tok, new List<LocalVariable>()
+                {
+                    new LocalVariable(tok, tok, id, new InferredTypeProxy(), Usage.Ghost)
+                }, new UpdateStmt(tok, tok, 
+                    new List<Expression>() {new IdentifierExpr(tok, id)},
+                    new List<AssignmentRhs>() {new ExprRhs(e)}));
+            }
+            
+            private Statement glinear_var_decl_empty(IToken tok, string id)
+            {
+                return new VarDeclStmt(tok, tok, new List<LocalVariable>()
+                {
+                    new LocalVariable(tok, tok, id, new InferredTypeProxy(), Usage.Linear(LinearRealm.Erased))
+                }, null);
+            }
+            
+            private Statement glinear_var_decl(IToken tok, string id, Expression e)
+            {
+                return new VarDeclStmt(tok, tok, new List<LocalVariable>()
+                {
+                    new LocalVariable(tok, tok, id, new InferredTypeProxy(), Usage.Linear(LinearRealm.Erased))
+                }, new UpdateStmt(tok, tok, 
+                    new List<Expression>() {new IdentifierExpr(tok, id)},
+                    new List<AssignmentRhs>() {new ExprRhs(e)}));
+            }
+
+            private Expression GetFinishAtomicExpr(Expression openExpr)
+            {
+                if (openExpr is NameSegment ns)
+                {
+                    return new NameSegment(openExpr.tok, "finish_atomic", null);
+                }
+                else
+                {
+                    Contract.Assert(false);
+                    return null;
+                }
+            }
+            
+            private bool IsAtomicNoop(Expression openExpr)
+            {
+                if (openExpr is NameSegment ns)
+                {
+                    return ns.Name == "execute_atomic_noop";
+                }
+                else
+                {
+                    Contract.Assert(false);
+                    return false;
+                }
+            }
+            
+            private bool IsReturnValueGhost(Expression openExpr)
+            {
+                if (openExpr is NameSegment ns)
+                {
+                    return ns.Name == "execute_atomic_noop"
+                           || ns.Name == "execute_atomic_store";
+                }
+                else
+                {
+                    Contract.Assert(false);
+                    return false;
+                }
+            }
+            
+            private List<Statement> GetNewStmtList(AtomicStmt atomicStmt)
+            {
+                string acquireStmtVarName = get_acquire_stmt_var_name(atomicStmt);
+                Expression releaseStmtExpr = get_release_stmt_expression(atomicStmt);
+
+                if (acquireStmtVarName == null && releaseStmtExpr != null)
+                {
+                    reporter.Error(MessageSource.Rewriter, atomicStmt.Tok,
+                        "Atomic block has 'release' statement but no 'acquire' statement");
+                    return new List<Statement>();
+                }
+                if (acquireStmtVarName != null && releaseStmtExpr == null)
+                {
+                    reporter.Error(MessageSource.Rewriter, atomicStmt.Tok,
+                        "Atomic block has 'acquire' statement but no 'release' statement");
+                    return new List<Statement>();
+                }
+
+                if (!(atomicStmt.Call is ApplySuffix))
+                {
+                    reporter.Error(MessageSource.Rewriter, atomicStmt.Call.tok,
+                        "Atomic statement expects a call expressions");
+                    return new List<Statement>();
+                }
+
+                var applySuffix = (ApplySuffix) atomicStmt.Call;
+
+                if (applySuffix.Args.Count == 0)
+                {
+                    reporter.Error(MessageSource.Rewriter, atomicStmt.Call.tok,
+                        "Atomic statement expects a call expression with at least 1 argument");
+                    return new List<Statement>();
+                }
+
+                var atomicAsa = applySuffix.Args[0];
+                var atomicExpr = atomicAsa.Expr;
+
+                if (atomicAsa.Inout)
+                {
+                    reporter.Error(MessageSource.Rewriter, atomicStmt.Call.tok,
+                        "Atomic statement argument 0: inout not expected");
+                    return new List<Statement>();
+                }
+                
+                // atomic return_value := atomic_fn(atomic, args...) {
+                //      acquire g;
+                //      ...
+                //      release g_expr;
+                // }
+                //
+                // should be turned into
+                //
+                // var atomic_value := atomic;
+                // var return_value;
+                // ghost var old_value;
+                // ghost var new_value;
+                // glinear var g;
+                // ghost var dummy_bool := true;
+                // return_value, old_value, new_value, g := atomic_fn(atomic_value, args...);
+                // if dummy_bool {
+                //     ...
+                // }
+                // glinear var g_return := g_expr;
+                // atomic_finish(atomic_value, new_value, g_return);
+
+                var atomicValueName = freshTempVarName("atomic_tmp", codeContext);
+                var returnValueName = atomicStmt.ReturnId.val;
+
+                bool isNoop = IsAtomicNoop(applySuffix.Lhs);
+
+                string oldValueName, newValueName;
+                if (isNoop)
+                {
+                    oldValueName = freshTempVarName("useless_old_value", codeContext);
+                    newValueName = freshTempVarName("useless_new_value", codeContext);
+                }
+                else
+                {
+                    oldValueName = "old_value";
+                    newValueName = "new_value";
+                }
+
+                var gName = acquireStmtVarName == null ? freshTempVarName("g", codeContext) : acquireStmtVarName;
+                //var dummyBoolName = freshTempVarName("dummy_bool", codeContext);
+                var gReturnName = freshTempVarName("g_return", codeContext);
+
+                List<Statement> newStmts = new List<Statement>
+                {
+                    isNoop
+                        ? ghost_var_decl(atomicStmt.Tok, atomicValueName, atomicExpr)
+                        : var_decl(atomicStmt.Tok, atomicValueName, atomicExpr),
+                    IsReturnValueGhost(applySuffix.Lhs)
+                        ? ghost_var_decl_empty(atomicStmt.Tok, returnValueName)
+                        : var_decl_empty(atomicStmt.Tok, returnValueName),
+                    ghost_var_decl_empty(atomicStmt.Tok, oldValueName),
+                    ghost_var_decl_empty(atomicStmt.Tok, newValueName),
+                    glinear_var_decl_empty(atomicStmt.Tok, gName),
+                    //ghost_var_decl(atomicStmt.Tok, dummyBoolName, new LiteralExpr(atomicStmt.Tok, true))
+                };
+                
+                List<Expression> lhss = new List<Expression>();
+                List<AssignmentRhs> rhss = new List<AssignmentRhs>();
+                lhss.Add(new IdentifierExpr(atomicStmt.Tok, returnValueName));
+                lhss.Add(new IdentifierExpr(atomicStmt.Tok, oldValueName));
+                lhss.Add(new IdentifierExpr(atomicStmt.Tok, newValueName));
+                lhss.Add(new IdentifierExpr(atomicStmt.Tok, gName));
+                var updatedArgList = applySuffix.Args.ToList();
+                ApplySuffixArg asa = new ApplySuffixArg {
+                    Inout = false, Expr = new NameSegment(atomicStmt.Tok, atomicValueName, null)
+                };
+                updatedArgList[0] = asa;
+                var updatedCallExpr = new ApplySuffix(applySuffix.tok, applySuffix.AtTok, applySuffix.Lhs, updatedArgList);
+                rhss.Add(new ExprRhs(updatedCallExpr));
+                newStmts.Add(new UpdateStmt(atomicStmt.Tok, atomicStmt.Call.tok, lhss, rhss));
+
+                var innerStmts = get_inner_stmts(atomicStmt);
+                /*newStmts.Add(new IfStmt(
+                    atomicStmt.Tok,
+                    atomicStmt.EndTok,
+                    false,
+                    new IdentifierExpr(atomicStmt.Tok, dummyBoolName),
+                    new BlockStmt(atomicStmt.Tok, atomicStmt.EndTok, innerStmts), null));*/
+                newStmts.AddRange(innerStmts);
+                    
+                newStmts.Add(glinear_var_decl(atomicStmt.Tok, gReturnName, releaseStmtExpr == null ?
+                    new IdentifierExpr(atomicStmt.Tok, gName) : releaseStmtExpr));
+                
+                // atomic_finish(atomic_value, new_value, g_return);
+                var finishAtomicExpr = GetFinishAtomicExpr(applySuffix.Lhs);
+                newStmts.Add(new UpdateStmt(
+                    atomicStmt.Tok,
+                    atomicStmt.EndTok,
+                    new List<Expression>(),
+                    new List<AssignmentRhs>()
+                    {
+                        new ExprRhs(new ApplySuffix(atomicStmt.Tok, null, finishAtomicExpr, new List<ApplySuffixArg>()
+                        {
+                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(atomicStmt.Tok, atomicValueName, null) },
+                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(atomicStmt.Tok, newValueName, null) },
+                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(atomicStmt.Tok, gReturnName, null) }
+                        }))
+                    }));
+                    
+                return newStmts;
+            }
+
+            private void TranslateStatementList(List<Statement> stmts)
+            {
+                for (int i = 0; i < stmts.Count; i++)
+                {
+                    if (stmts[i] is AtomicStmt atomicStmt)
+                    {
+                        List<Statement> newStmtList = GetNewStmtList(atomicStmt);
+                        stmts.RemoveAt(i);
+                        stmts.InsertRange(i, newStmtList);
+                        i = i + newStmtList.Count - 1;
+                    }
+                }
+            }
+
+            public void VisitStatementList(List<Statement> stmts, bool isAtomicBlock = false)
+            {
+                
+                for (int i = 0; i < stmts.Count; i++)
+                {
+                    if (isAtomicBlock && i == 0 && stmts[i] is AcquireStmt) continue;
+                    if (isAtomicBlock && i == stmts.Count - 1 && stmts[i] is ReleaseStmt) continue;
+                    VisitStatement(stmts[i]);
+                }
+
+                TranslateStatementList(stmts);
+            }
+
+            private void VisitStatement(Statement stmt)
+            {
+                switch (stmt)
+                {
+                    case BlockStmt bs:
+                        VisitStatementList(bs.Body);
+                        break;
+                    case IfStmt ifs:
+                        VisitStatementList(ifs.Thn.Body);
+                        if (ifs.Els != null)
+                        {
+                            VisitStatement(ifs.Els);
+                        }
+
+                        break;
+                    case NestedMatchStmt ms:
+                        foreach (var mc in ms.Cases)
+                        {
+                            VisitStatementList(mc.Body);
+                        }
+
+                        break;
+                    case WhileStmt ws:
+                        if (ws.Body != null)
+                        {
+                            VisitStatementList(ws.Body.Body);
+                        }
+
+                        break;
+                    
+                    case AtomicStmt atomicStmt:
+                        var body = atomicStmt.Body.Body;
+                        VisitStatementList(atomicStmt.Body.Body, true);
+                        
+                        break;
+                    case ReleaseStmt releaseStmt:
+                        reporter.Error(MessageSource.Rewriter, releaseStmt.Tok,
+                        "A 'release' statement must be the last statement in an 'atomic' block");
+                        break;
+                    case AcquireStmt acquireStmt:
+                        reporter.Error(MessageSource.Rewriter, acquireStmt.Tok,
+                            "An 'acquire' statement must be first statement in an 'atomic' block");
+                        break;
+                }
+            }
+
+            private readonly ErrorReporter reporter;
+
+            readonly FreshTempVarName freshTempVarName;
+            private readonly ICodeContext codeContext;
+
+            public AtomicBlockTranslator(ErrorReporter reporter, FreshTempVarName freshTempVarName, ICodeContext context)
+            {
+                this.reporter = reporter;
+                this.freshTempVarName = freshTempVarName;
+                this.codeContext = context;
+            }
+        }
+        
+        public delegate string FreshTempVarName(string prefix, ICodeContext context);
+        FreshTempVarName freshTempVarName;
+
+        public AtomicRewriter(ErrorReporter reporter, FreshTempVarName freshTempVarName) : base(reporter)
+        {
+            this.freshTempVarName = freshTempVarName;
         }
     }
 }

@@ -864,6 +864,9 @@ TOKENS
   gshared = "gshared".
   match = "match".
   inout = "inout".
+  atomic = "atomic".
+  acquire = "acquire".
+  release = "release".
   witness = "witness".
   lbracecolon = "{:".
   lbrace = '{'.
@@ -2461,6 +2464,9 @@ OneStmt<out Statement/*!*/ s>
   | RevealStmt<out s>
   | SkeletonStmt<out s>
   | YieldStmt<out s>
+  | AtomicStmt<out s>
+  | AcquireStmt<out s>
+  | ReleaseStmt<out s>
   )
   .
 
@@ -2771,6 +2777,54 @@ VarDeclStatement<.out Statement/*!*/ s.>
     ";"
     (. s = new VarDeclPattern(e.tok, e.tok, pat, e, usage, !usage.IsGhostKind); .)
   )
+  .
+
+/*------------------------------------------------------------------------*/
+
+AtomicStmt<out Statement/*!*/ atomicStmt>
+= (. Contract.Ensures(Contract.ValueAtReturn(out atomicStmt) != null);
+     IToken/*!*/ x;
+     Expression call = null;
+     BlockStmt/*!*/ body;
+     IToken ret_id;
+     IToken bodyStart, bodyEnd, endTok;
+  .)
+  "atomic"    (. x = t; .)
+  ( 
+    Ident<out ret_id>
+    ":="
+    Expression<out call, false, false>
+    BlockStmt<out body, out bodyStart, out bodyEnd> (. endTok = body.EndTok; .)
+    (.
+      atomicStmt = new AtomicStmt(x, endTok, ret_id, call, body);
+    .)
+  )
+  .
+
+AcquireStmt<out Statement/*!*/ acquireStmt>
+= (. Contract.Ensures(Contract.ValueAtReturn(out acquireStmt) != null);
+     IToken/*!*/ x;
+     IToken/*!*/ id;
+  .)
+  "acquire"   (. x = t; .)
+  Ident<out id>
+  SYNC ";"
+  (.
+    acquireStmt = new AcquireStmt(x, t, id);
+  .)
+  .
+
+ReleaseStmt<out Statement/*!*/ releaseStmt>
+= (. Contract.Ensures(Contract.ValueAtReturn(out releaseStmt) != null);
+     IToken/*!*/ x;
+     Expression ee = null;
+  .)
+  "release"   (. x = t; .)
+  Expression<out ee, true, true>
+  SYNC ";"
+  (.
+    releaseStmt = new ReleaseStmt(x, t, ee);
+  .)
   .
 
 /*------------------------------------------------------------------------*/
