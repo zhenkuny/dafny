@@ -864,9 +864,9 @@ TOKENS
   gshared = "gshared".
   match = "match".
   inout = "inout".
-  atomic = "atomic".
-  acquire = "acquire".
-  release = "release".
+  atomic = "atomic_block".
+  acquire = "ghost_acquire".
+  release = "ghost_release".
   witness = "witness".
   lbracecolon = "{:".
   lbrace = '{'.
@@ -2789,7 +2789,7 @@ AtomicStmt<out Statement/*!*/ atomicStmt>
      IToken ret_id;
      IToken bodyStart, bodyEnd, endTok;
   .)
-  "atomic"    (. x = t; .)
+  "atomic_block"    (. x = t; .)
   ( 
     Ident<out ret_id>
     ":="
@@ -2806,7 +2806,7 @@ AcquireStmt<out Statement/*!*/ acquireStmt>
      IToken/*!*/ x;
      IToken/*!*/ id;
   .)
-  "acquire"   (. x = t; .)
+  "ghost_acquire"   (. x = t; .)
   Ident<out id>
   SYNC ";"
   (.
@@ -2819,7 +2819,7 @@ ReleaseStmt<out Statement/*!*/ releaseStmt>
      IToken/*!*/ x;
      Expression ee = null;
   .)
-  "release"   (. x = t; .)
+  "ghost_release"   (. x = t; .)
   Expression<out ee, true, true>
   SYNC ";"
   (.
