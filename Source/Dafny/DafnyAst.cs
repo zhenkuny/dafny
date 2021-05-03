@@ -8239,6 +8239,7 @@ namespace Microsoft.Dafny {
     public readonly Expression Call;
     public readonly BlockStmt Body;
     public readonly IToken ReturnId;
+    public string atomicVar;
 
     public AtomicStmt(IToken tok, IToken endTok, IToken retId, Expression call, BlockStmt body)
       : base(tok, endTok)
@@ -8251,6 +8252,7 @@ namespace Microsoft.Dafny {
       this.ReturnId = retId;
       this.Call = call;
       this.Body = body;
+      this.atomicVar = null;
     }
   }
   

@@ -454,6 +454,8 @@ namespace Microsoft.Dafny.Linear
 
         private class AtomicBlockTranslator
         {
+            private List<string> atomicVarStack;
+                
             private Expression get_release_stmt_expression(AtomicStmt atomicStmt)
             {
                 var body = atomicStmt.Body.Body;
@@ -587,6 +589,16 @@ namespace Microsoft.Dafny.Linear
                     return false;
                 }
             }
+
+            private Expression identifier_call(IToken tok, string id)
+            {
+                return new ApplySuffix(tok, null, new ExprDotName(
+                    tok,
+                    new NameSegment(tok, id, null),
+                    "identifier",
+                    null
+                ), new List<ApplySuffixArg>());
+            }
             
             private List<Statement> GetNewStmtList(AtomicStmt atomicStmt)
             {
@@ -653,7 +665,7 @@ namespace Microsoft.Dafny.Linear
                 // glinear var g_return := g_expr;
                 // atomic_finish(atomic_value, new_value, g_return);
 
-                var atomicValueName = freshTempVarName("atomic_tmp", codeContext);
+                var atomicValueName = atomicStmt.atomicVar;
                 var returnValueName = atomicStmt.ReturnId.val;
 
                 bool isNoop = IsAtomicNoop(applySuffix.Lhs);
@@ -687,6 +699,17 @@ namespace Microsoft.Dafny.Linear
                     glinear_var_decl_empty(atomicStmt.Tok, gName),
                     //ghost_var_decl(atomicStmt.Tok, dummyBoolName, new LiteralExpr(atomicStmt.Tok, true))
                 };
+                
+                foreach (var previousAtomicVar in atomicVarStack)
+                {
+                    newStmts.Add(new AssertStmt(atomicStmt.Tok, atomicStmt.EndTok,
+                        new BinaryExpr(atomicStmt.Tok,
+                            BinaryExpr.Opcode.Neq,
+                            identifier_call(atomicStmt.Tok, previousAtomicVar),
+                            identifier_call(atomicStmt.Tok, atomicStmt.atomicVar)
+                            ),
+                        null, null, null));
+                }
                 
                 List<Expression> lhss = new List<Expression>();
                 List<AssignmentRhs> rhss = new List<AssignmentRhs>();
@@ -792,8 +815,19 @@ namespace Microsoft.Dafny.Linear
                         break;
                     
                     case AtomicStmt atomicStmt:
+                        if (atomicVarStack == null)
+                        {
+                            atomicVarStack = new List<string>();
+                        }
+
+                        var atomicVar = freshTempVarName("atomic_tmp", codeContext);
+                        atomicVarStack.Add(atomicVar);
+                        atomicStmt.atomicVar = atomicVar;
+                        
                         var body = atomicStmt.Body.Body;
                         VisitStatementList(atomicStmt.Body.Body, true);
+                        
+                        atomicVarStack.RemoveAt(atomicVarStack.Count - 1);
                         
                         break;
                     case ReleaseStmt releaseStmt:
