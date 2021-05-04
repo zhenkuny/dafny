@@ -41,7 +41,7 @@ module Atomics {
 
   method okay(a1: Atomic<int>, a2: Atomic<int>, a3: Atomic<int>)
   {
-    atomic_block ret := execute_atomic_add(a1) {
+    atomic_block var ret := execute_atomic_add(a1) {
       ghost_acquire g;
 
       ghost var t := old_value;
@@ -49,10 +49,10 @@ module Atomics {
       ghost var r := ret;
       glinear var g_heh := g;
 
-      atomic_block j1 := execute_atomic_noop(a2) {
+      atomic_block var j1 := execute_atomic_noop(a2) {
         ghost_acquire g1;
 
-        atomic_block j2 := execute_atomic_noop(a3) {
+        atomic_block var j2 := execute_atomic_noop(a3) {
           ghost_acquire g2;
           ghost_release g2;
         }
@@ -89,5 +89,33 @@ module Atomics {
     finish_atomic(a1, c1, d1);
   }*/
 
+
+  method okay_without_var(a1: Atomic<int>, a2: Atomic<int>, a3: Atomic<int>)
+  {
+    var ret;
+    ghost var j1, j2;
+
+    atomic_block ret := execute_atomic_add(a1) {
+      ghost_acquire g;
+
+      ghost var t := old_value;
+      ghost var s := new_value;
+      ghost var r := ret;
+      glinear var g_heh := g;
+
+      atomic_block j1 := execute_atomic_noop(a2) {
+        ghost_acquire g1;
+
+        atomic_block j2 := execute_atomic_noop(a3) {
+          ghost_acquire g2;
+          ghost_release g2;
+        }
+
+        ghost_release g1;
+      }
+
+      ghost_release g_heh;
+    }
+  }
 
 }

@@ -29,7 +29,7 @@ module Stuff {
 
   method okay(a1: Atomic<int>, a2: Atomic<int>, a3: Atomic<int>)
   {
-    atomic_block ret := execute_atomic_add(a1) {
+    atomic_block var ret := execute_atomic_add(a1) {
       ghost_acquire g;
 
       ghost var t := old_value;
@@ -37,10 +37,10 @@ module Stuff {
       ghost var r := ret;
       glinear var g_heh := g;
 
-      atomic_block j1 := execute_atomic_noop(a2) {
+      atomic_block var j1 := execute_atomic_noop(a2) {
         ghost_acquire g1;
 
-        atomic_block j2 := execute_atomic_noop(a3) {
+        atomic_block var j2 := execute_atomic_noop(a3) {
           ghost_acquire g2;
           ghost_release g2;
         }
@@ -54,7 +54,7 @@ module Stuff {
 
   method okay2(a1: Atomic<int>, a2: Atomic<int>, a3: Atomic<int>)
   {
-    atomic_block ret := execute_atomic_add(a1) {
+    atomic_block var ret := execute_atomic_add(a1) {
       ghost_acquire g;
 
       ghost var t := old_value;
@@ -62,10 +62,10 @@ module Stuff {
       ghost var r := ret;
       glinear var g_heh := g;
 
-      atomic_block j1 := execute_atomic_noop(a2) {
+      atomic_block var j1 := execute_atomic_noop(a2) {
         ghost_acquire g1;
 
-        atomic_block j2 := execute_atomic_noop(a3) {
+        atomic_block var j2 := execute_atomic_noop(a3) {
           ghost_acquire g2;
           ghost_release g2;
         }
@@ -76,7 +76,7 @@ module Stuff {
       ghost_release g_heh;
     }
 
-    atomic_block ret2 := execute_atomic_add(a1) {
+    atomic_block var ret2 := execute_atomic_add(a1) {
       ghost_acquire ga;
 
       ghost var u := old_value;
@@ -84,10 +84,10 @@ module Stuff {
       ghost var y := ret;
       glinear var z_heh := ga;
 
-      atomic_block j1 := execute_atomic_noop(a2) {
+      atomic_block var j1 := execute_atomic_noop(a2) {
         ghost_acquire g1a;
 
-        atomic_block j2 := execute_atomic_noop(a3) {
+        atomic_block var j2 := execute_atomic_noop(a3) {
           ghost_acquire g2a;
           ghost_release g2a;
         }

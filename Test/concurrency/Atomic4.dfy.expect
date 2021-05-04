@@ -7,5 +7,14 @@ Execution trace:
 Atomic4.dfy(55,8): Error: assertion violation
 Execution trace:
     (0,0): anon0
+Atomic4.dfy(106,6): Error: assertion violation
+Execution trace:
+    (0,0): anon0
+Atomic4.dfy(109,8): Error: assertion violation
+Execution trace:
+    (0,0): anon0
+Atomic4.dfy(109,8): Error: assertion violation
+Execution trace:
+    (0,0): anon0
 
-Dafny program verifier finished with 0 verified, 3 errors
+Dafny program verifier finished with 0 verified, 6 errors

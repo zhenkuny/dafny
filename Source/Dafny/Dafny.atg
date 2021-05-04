@@ -2788,15 +2788,17 @@ AtomicStmt<out Statement/*!*/ atomicStmt>
      BlockStmt/*!*/ body;
      IToken ret_id;
      IToken bodyStart, bodyEnd, endTok;
+     bool has_var = false;
   .)
   "atomic_block"    (. x = t; .)
   ( 
+    [ "var" (.has_var = true; .) ]
     Ident<out ret_id>
     ":="
     Expression<out call, false, false>
     BlockStmt<out body, out bodyStart, out bodyEnd> (. endTok = body.EndTok; .)
     (.
-      atomicStmt = new AtomicStmt(x, endTok, ret_id, call, body);
+      atomicStmt = new AtomicStmt(x, endTok, ret_id, call, body, has_var);
     .)
   )
   .

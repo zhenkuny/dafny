@@ -686,11 +686,16 @@ namespace Microsoft.Dafny.Linear
                 //var dummyBoolName = freshTempVarName("dummy_bool", codeContext);
                 var gReturnName = freshTempVarName("g_return", codeContext);
 
+                Statement returnValueDecl = null;
+                if (atomicStmt.hasVar)
+                {
+                    returnValueDecl = IsReturnValueGhost(applySuffix.Lhs)
+                        ? ghost_var_decl_empty(atomicStmt.Tok, returnValueName)
+                        : var_decl_empty(atomicStmt.Tok, returnValueName);
+                }
+
                 List<Statement> newStmts = new List<Statement>
                 {
-                    IsReturnValueGhost(applySuffix.Lhs)
-                        ? ghost_var_decl_empty(atomicStmt.Tok, returnValueName)
-                        : var_decl_empty(atomicStmt.Tok, returnValueName),
                     isNoop
                         ? ghost_var_decl(atomicStmt.Tok, atomicValueName, atomicExpr)
                         : var_decl(atomicStmt.Tok, atomicValueName, atomicExpr),
@@ -756,13 +761,16 @@ namespace Microsoft.Dafny.Linear
 
                 if (atomicVarStack.Count == 0)
                 {
-                    var s = newStmts[0];
-                    newStmts.RemoveAt(0);
                     var bs = new BlockStmt(atomicStmt.Tok, atomicStmt.EndTok, newStmts);
-                    return new List<Statement>() {s, bs};
+                    return returnValueDecl == null ? new List<Statement>() {bs}
+                        : new List<Statement>() {returnValueDecl, bs};
                 }
                 else
                 {
+                    if (returnValueDecl != null)
+                    {
+                        newStmts.Insert(0, returnValueDecl);
+                    }
                     return newStmts;
                 }
             }
