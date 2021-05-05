@@ -2511,7 +2511,7 @@ namespace Microsoft.Dafny
         // 4) Compute the signature for our newly created module
 
         // 1)
-        ScopeCloner cloner = new ScopeCloner(literalRoot.DefaultExport.VisibilityScope);
+        ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
         ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
         // Should have the same scope, not a clone, as cloning allocates new tokens
         //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
@@ -2524,9 +2524,11 @@ namespace Microsoft.Dafny
         }
 
         // 2)
+        Dictionary<string, ModuleDecl> formalActualPairs = new Dictionary<string, ModuleDecl>();
         foreach (var pair in System.Linq.Enumerable.Zip(functorApp.functor.Formals, functorApp.moduleParams)) {
           ModuleFormal formal = pair.Item1;
           ModuleDecl actual = pair.Item2;
+          formalActualPairs[formal.Name.val] = actual;
 
           if (formal.TypeDef == null) {
             formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
@@ -2555,29 +2557,37 @@ namespace Microsoft.Dafny
         foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
           if (decl is AliasModuleDecl amd) {
             if (amd.TargetQId.FunctorApp != null) {
-              // TODO: Optimize to only do all of this if needed
+              // Do we need to update this functor?
               var formalNames = functorApp.functor.Formals.ConvertAll(f => f.Name.val);
-              var newFunctorApp = amd.TargetQId.FunctorApp.Clone();
-              newFunctorApp.moduleParams = new List<ModuleDecl>();
-
-              foreach (var pair in System.Linq.Enumerable.Zip(amd.TargetQId.FunctorApp.moduleParamNames,
-                amd.TargetQId.FunctorApp.moduleParams)) {
-                string actualName = pair.Item1.ToString();
-                ModuleDecl oldActual = pair.Item2;
+              bool update = false;
+              foreach (ModuleQualifiedId actual in amd.TargetQId.FunctorApp.moduleParamNames) {
                 if (formalNames.Contains(actual.ToString())) {
-                  newFunctorApp.moduleParams.Add(newActual);
-                } else {
-                  newFunctorApp.moduleParams.Add(oldActual);
+                  // We need to reapply this functor
+                  update = true;
+                  break;
                 }
               }
 
-              // TODO: Fix this up (see above)
-              foreach (ModuleQualifiedId actual in amd.TargetQId.FunctorApp.moduleParamNames) {
-                if (formalNames.Contains(actual.ToString())) {
-                  // We need to reapply this functor too
-                  var newImportDecl = ApplyFunctor(amd.TargetQId.FunctorApp, (LiteralModuleDecl)amd.TargetQId.Root);
-                  amd.Signature = newImportDecl.Signature;
+              if (update) {
+                var newFunctorApp = amd.TargetQId.FunctorApp.ShallowClone();
+                newFunctorApp.moduleParams = new List<ModuleDecl>();
+
+                // Compute a new set of actual parameters, taking into account the outer functor's actuals
+                foreach (var pair in System.Linq.Enumerable.Zip(amd.TargetQId.FunctorApp.moduleParamNames,
+                  amd.TargetQId.FunctorApp.moduleParams)) {
+                  string actualName = pair.Item1.ToString();
+                  ModuleDecl oldActual = pair.Item2;
+
+                  if (formalActualPairs.ContainsKey(actualName)) {
+                    newFunctorApp.moduleParams.Add(formalActualPairs[actualName]);
+                  } else {
+                    newFunctorApp.moduleParams.Add(oldActual);
+                  }
                 }
+
+                // Compute the result of the new application
+                var newImportDecl = ApplyFunctor(newFunctorApp, (LiteralModuleDecl)amd.TargetQId.Root);
+                amd.Signature = newImportDecl.Signature;
               }
             }
           }

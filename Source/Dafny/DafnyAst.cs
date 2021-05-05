@@ -14,6 +14,7 @@ using System.Numerics;
 using System.Linq;
 using Microsoft.Boogie;
 using System.Diagnostics;
+using System.Reflection.Metadata.Ecma335;
 
 namespace Microsoft.Dafny {
   public class Program {
@@ -4031,9 +4032,11 @@ namespace Microsoft.Dafny {
       this.moduleParamNames = moduleParamNames;
     }
 
-    public FunctorApplication Clone() {
+    // Does not clonse the moduleParams.  Caller needs to handle that part.
+    public FunctorApplication ShallowClone() {
       FunctorApplication ret = new FunctorApplication(tok, moduleParamNames);
       ret.functor = functor;
+      return ret;
     }
 
     public override string ToString() {
