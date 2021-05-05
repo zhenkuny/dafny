@@ -8,20 +8,22 @@ abstract module A(u: U(L)) {
   import E = u.l
 }
 
-module W(x: L) refines U(x) {
+abstract module W(x: L) refines U(x) {
 }
 
-module B(r: L) {
+abstract module B(r: L) {
   import D = W(r)
 }
 
-module C refines L {
+abstract module C refines L {
   function the_int() : int { 5 }
 }
 
 abstract module Stuff {
-  // This should resolve to C
-  import X = A(B(C).D).E
+
+  // B(C).D = W(C), which refines U(C)
+  // Is U(C) <= U(L)?
+  import X = A(B(C).D).E  // This should resolve to C
 
   lemma stuff()
   ensures X.the_int() == 5
