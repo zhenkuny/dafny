@@ -2501,6 +2501,110 @@ namespace Microsoft.Dafny
       return null;
     }
 
+    private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
+      if (!Resolver.virtualModules.ContainsKey(functorApp)) {
+        // Apply the functor
+        // 1) Clone the base module definition
+        // 2) For each formal, update the AliasModuleDecl we introduced
+        //    to point at the actual module parameter
+        // 3) Update any other functor applications in this module to use the new actual as well
+        // 4) Compute the signature for our newly created module
+
+        // 1)
+        ScopeCloner cloner = new ScopeCloner(literalRoot.DefaultExport.VisibilityScope);
+        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
+        // Should have the same scope, not a clone, as cloning allocates new tokens
+        //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
+
+        if (functorApp.functor.Formals.Count != functorApp.moduleParams.Count) {
+          var msg =
+            $"Module {literalRoot.Name} expects {functorApp.functor.Formals.Count} parameters, got {functorApp.moduleParams.Count}";
+          reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
+          return null;
+        }
+
+        // 2)
+        foreach (var pair in System.Linq.Enumerable.Zip(functorApp.functor.Formals, functorApp.moduleParams)) {
+          ModuleFormal formal = pair.Item1;
+          ModuleDecl actual = pair.Item2;
+
+          if (formal.TypeDef == null) {
+            formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
+          }
+
+          if (!EqualsOrRefines(actual.Signature, formal.TypeDef)) {
+            var msg = $"Module {literalRoot.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
+            reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
+            return null;
+          }
+
+          // Find the artificial alias decl we created, and update it with the actual
+          foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
+            if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
+              amd.Signature = actual.Signature;
+              // TODO: Need this?
+              // amd.Signature.Refines = refinementTransformer.RefinedSig;
+              // or this?
+              // prog.ModuleSigs[m] = amd.Signature;
+            }
+          }
+        }
+
+        // 3)
+        // Update each module import that involves a functor (if any)
+        foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
+          if (decl is AliasModuleDecl amd) {
+            if (amd.TargetQId.FunctorApp != null) {
+              // TODO: Optimize to only do all of this if needed
+              var formalNames = functorApp.functor.Formals.ConvertAll(f => f.Name.val);
+              var newFunctorApp = amd.TargetQId.FunctorApp.Clone();
+              newFunctorApp.moduleParams = new List<ModuleDecl>();
+
+              foreach (var pair in System.Linq.Enumerable.Zip(amd.TargetQId.FunctorApp.moduleParamNames,
+                amd.TargetQId.FunctorApp.moduleParams)) {
+                string actualName = pair.Item1.ToString();
+                ModuleDecl oldActual = pair.Item2;
+                if (formalNames.Contains(actual.ToString())) {
+                  newFunctorApp.moduleParams.Add(newActual);
+                } else {
+                  newFunctorApp.moduleParams.Add(oldActual);
+                }
+              }
+
+              // TODO: Fix this up (see above)
+              foreach (ModuleQualifiedId actual in amd.TargetQId.FunctorApp.moduleParamNames) {
+                if (formalNames.Contains(actual.ToString())) {
+                  // We need to reapply this functor too
+                  var newImportDecl = ApplyFunctor(amd.TargetQId.FunctorApp, (LiteralModuleDecl)amd.TargetQId.Root);
+                  amd.Signature = newImportDecl.Signature;
+                }
+              }
+            }
+          }
+        }
+        // TODO: Update the refines for the functor too?
+
+        // 4)
+        ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
+        // TODO: Need this?
+        // sig.Refines = refinementTransformer.RefinedSig;
+        // or this?
+        // prog.ModuleSigs[m] = sig;
+        // REVIEW: Should isAnExport be true?
+        var b = ResolveModuleDefinition(newDef, sig, isAnExport: false);
+        Contract.Assert(b); // TODO: Better error handling
+
+        // 4) Combine everything into a ModuleDecl we can return
+        LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, literalRoot.EnclosingModuleDefinition);
+        newDecl.Signature = sig;
+        newDecl.DefaultExport = sig;
+        Resolver.virtualModules[functorApp] = newDecl;
+        return newDecl;
+      } else {
+        return Resolver.virtualModules[functorApp];
+      }
+    }
+
     // Returns the resolved Module declaration corresponding to the qualified module id
     // Requires the root to have been resolved
     // Issues an error and returns null if the path is not valid
@@ -2516,88 +2620,11 @@ namespace Microsoft.Dafny
 
       if (qid.FunctorApp != null) {
         k = 0;  // Starting point in the Path iteration
-        if (!Resolver.virtualModules.ContainsKey(qid.FunctorApp)) {
-          // Apply the functor
-          // 1) Clone the base module definition
-          // 2) For each formal, update the AliasModuleDecl we introduced
-          //    to point at the actual module parameter
-          // 3) Update any other functor applications in this module to use the new actual as well
-          // 4) Compute the signature for our newly created module
 
-          // 1)
-          LiteralModuleDecl literalRoot = (LiteralModuleDecl) root;
-          ScopeCloner cloner = new ScopeCloner(literalRoot.DefaultExport.VisibilityScope);
-          ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
-          // Should have the same scope, not a clone, as cloning allocates new tokens
-          //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
-
-          if (qid.FunctorApp.functor.Formals.Count != qid.FunctorApp.moduleParams.Count) {
-            var msg = $"Module {decl.Name} expects {qid.FunctorApp.functor.Formals.Count} parameters, got {qid.FunctorApp.moduleParams.Count}";
-            reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, msg);
-            return null;
-          }
-
-          // 2)
-          foreach (var pair in System.Linq.Enumerable.Zip(qid.FunctorApp.functor.Formals, qid.FunctorApp.moduleParams)) {
-            ModuleFormal formal = pair.Item1;
-            ModuleDecl actual = pair.Item2;
-
-            if (formal.TypeDef == null) {
-              formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
-            }
-
-            if (!EqualsOrRefines(actual.Signature, formal.TypeDef)) {
-              var msg = $"Module {decl.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
-              reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, msg);
-              return null;
-            }
-
-            // Find the artificial alias decl we created, and update it with the actual
-            foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
-              if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
-                amd.Signature = actual.Signature;
-                // TODO: Need this?
-                // amd.Signature.Refines = refinementTransformer.RefinedSig;
-                // or this?
-                // prog.ModuleSigs[m] = amd.Signature;
-              }
-            }
-          }
-
-          // 3)
-          // Update each module import that involves a functor (if any)
-          foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
-            if (decl is AliasModuleDecl amd) {
-              if (amd.TargetQId.FunctorApp != null) {
-                var formalNames = qid.FunctorApp.functor.Formals.ConvertAll(f => f.Name);
-                foreach (ModuleQualifiedId actual in amd.TargetQId.FunctorApp.moduleParamNames) {
-                  if (actual in formalNames) {
-                    // TODO: We need to reapply this functor too
-                  }
-                }
-              }
-            }
-          }
-          // TODO: Update the refines for the functor too?
-
-          // 4)
-          ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
-          // TODO: Need this?
-          // sig.Refines = refinementTransformer.RefinedSig;
-          // or this?
-          // prog.ModuleSigs[m] = sig;
-          // REVIEW: Should isAnExport be true?
-          var b = ResolveModuleDefinition(newDef, sig, isAnExport:false);
-          Contract.Assert(b);  // TODO: Better error handling
-
-          // 4) Combine everything into a ModuleDecl we can return
-          LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, root.EnclosingModuleDefinition);
-          newDecl.Signature = sig;
-          newDecl.DefaultExport = sig;
-          Resolver.virtualModules[qid.FunctorApp] = newDecl;
-          decl = newDecl;
+        decl = ApplyFunctor(qid.FunctorApp, (LiteralModuleDecl) decl);
+        if (decl == null) {  // Propagate any errors that arose during functor application
+          return null;
         }
-        decl = Resolver.virtualModules[qid.FunctorApp];
         p = decl.Signature;
       } else if (qid.Root is LiteralModuleDecl lmd && lmd.ModuleDef is Functor functor) {
         var msg = $"Functor {functor.Name} expects {functor.Formals.Count} arguments";

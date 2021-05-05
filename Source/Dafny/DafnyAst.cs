@@ -4031,6 +4031,11 @@ namespace Microsoft.Dafny {
       this.moduleParamNames = moduleParamNames;
     }
 
+    public FunctorApplication Clone() {
+      FunctorApplication ret = new FunctorApplication(tok, moduleParamNames);
+      ret.functor = functor;
+    }
+
     public override string ToString() {
       string result = tok.val;
       if (moduleParamNames.Count > 0) {
