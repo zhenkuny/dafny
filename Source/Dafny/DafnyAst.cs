@@ -4032,7 +4032,7 @@ namespace Microsoft.Dafny {
       this.moduleParamNames = moduleParamNames;
     }
 
-    // Does not clonse the moduleParams.  Caller needs to handle that part.
+    // Does not clone the moduleParams.  Caller needs to handle that part.
     public FunctorApplication ShallowClone() {
       FunctorApplication ret = new FunctorApplication(tok, moduleParamNames);
       ret.functor = functor;
