@@ -5,18 +5,18 @@ module ABase {
   type Key
 }
 
-abstract module P_normal {
-  import A : ABase
-
-  method Test(a:A.Key)
-}
+//abstract module P_normal {
+//  import A : ABase
 //
-// Use an element of a formal parameter
-// Morally equivalent to P_normal above
-//abstract module P(A: ABase) {
 //  method Test(a:A.Key)
 //}
 //
+// Use an element of a formal parameter
+// Morally equivalent to P_normal above
+abstract module P(A: ABase) {
+  method Test(a:A.Key)
+}
+
 /*
 // Try simple functor application
 abstract module Apply {
@@ -79,3 +79,20 @@ abstract module FunctorAppRefiner refines P(ABase) {
 //  import A
 //  import X = A
 //}
+
+// Try a functor that itself applies a functor
+abstract module AnotherFunctor(AB: ABase) {
+  import P1 = P(AB)
+}
+
+module AInt refines ABase {
+  type Key = int
+}
+
+abstract module DeepApplication {
+  import AF = AnotherFunctor(AInt)
+
+  method Test(x:int, y:AF.P1.A.Key)
+    requires x == y
+
+}
