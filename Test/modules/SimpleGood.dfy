@@ -17,7 +17,6 @@ abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
 
-/*
 // Try simple functor application
 abstract module Apply {
   import OutputBase = P(ABase)
@@ -66,14 +65,13 @@ abstract module FunctorAppRefiner refines P(ABase) {
     Test(x);
   }
 }
-*/
+
 //// Try refining a functor application applied to our formal argument
 //module FunctorAppParamRefiner(abase: ABase) refines P(abase) {
 //  // Refer to the formal name of our refinement functor
 //  import X = A
 //}
-
-
+//
 //// Dafny says this isn't okay
 //module NormalRefinement refines P_normal {
 //  import A
