@@ -2521,6 +2521,8 @@ namespace Microsoft.Dafny
           // 1) Clone the base module definition
           // 2) For each formal, update the AliasModuleDecl we introduced
           //    to point at the actual module parameter
+          // 3) Update any other functor applications in this module to use the new actual as well
+          // 4) Compute the signature for our newly created module
 
           // 1)
           LiteralModuleDecl literalRoot = (LiteralModuleDecl) root;
@@ -2562,7 +2564,23 @@ namespace Microsoft.Dafny
             }
           }
 
-          // 3) Compute the new signature
+          // 3)
+          // Update each module import that involves a functor (if any)
+          foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
+            if (decl is AliasModuleDecl amd) {
+              if (amd.TargetQId.FunctorApp != null) {
+                var formalNames = qid.FunctorApp.functor.Formals.ConvertAll(f => f.Name);
+                foreach (ModuleQualifiedId actual in amd.TargetQId.FunctorApp.moduleParamNames) {
+                  if (actual in formalNames) {
+                    // TODO: We need to reapply this functor too
+                  }
+                }
+              }
+            }
+          }
+          // TODO: Update the refines for the functor too?
+
+          // 4)
           ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
           // TODO: Need this?
           // sig.Refines = refinementTransformer.RefinedSig;
