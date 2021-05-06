@@ -1592,7 +1592,32 @@ namespace Microsoft.Dafny
         ModuleDecl moduleParamDecl;
         res = ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, id, out moduleParamDecl);
         if (res) {
-          qid.FunctorApp.moduleParams.Add(moduleParamDecl);
+          List<IToken> Path = id.Path;
+          ModuleDecl decl = moduleParamDecl;
+          /*
+          ModuleSignature p = moduleParamDecl.Signature;
+          // Duplicates logic from ResolveModuleQualifiedId for chasing down the full ModuleQualifiedId path
+          for (int k=0; k < id.Path.Count; k++) {
+            var tld = p.TopLevels.GetValueOrDefault(Path[k].val, null);
+            if (!(tld is ModuleDecl dd)) {
+              if (decl.Signature.ModuleDef == null) {
+                reporter.Error(MessageSource.Resolver, Path[k],
+                  ModuleNotFoundErrorMessage(k, Path, " because of previous error"));
+              } else {
+                reporter.Error(MessageSource.Resolver, Path[k], ModuleNotFoundErrorMessage(k, Path));
+              }
+              return false;
+            }
+
+            // Any aliases along the qualified path ought to be already resolved,
+            // else the modules are not being resolved in the right order
+            if (dd is AliasModuleDecl amd) {
+              Contract.Assert(amd.Signature != null);
+            }
+            decl = dd;
+          }
+          */
+          qid.FunctorApp.moduleParams.Add(decl);
           // We take responsibility for adding edges to arguments
           dependencies.AddEdge(source, moduleParamDecl);
         } else {
