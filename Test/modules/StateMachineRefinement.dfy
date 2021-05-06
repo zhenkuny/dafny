@@ -25,8 +25,8 @@ module MapStateMachine refines StateMachine(MapIfc)
   }
   predicate Next(s: Variables, s': Variables, l: ifc.TransitionLabel)
   {
-    && (l.Query? ==> l.k in s && l.v == s[k] && s' == s)
-    && (l.Insert? ==> s' == s[l.k := l.v])
+    && (l.Query? ==> l.k in s && l.value == s[l.k] && s' == s)
+    && (l.Insert? ==> s' == s[l.k := l.value])
   }
 }
 
@@ -51,8 +51,8 @@ module ComposeRefinements(
     P: StateMachine(ifc),
     Q: StateMachine(ifc),
     R: StateMachine(ifc),
-    Ref1: StateMachineRefinement(P, Q, ifc),
-    Ref2: StateMachineRefinement(Q, R, ifc)
+    Ref1: StateMachineRefinement(ifc, P, Q),
+    Ref2: StateMachineRefinement(ifc, Q, R)
 )
   refines StateMachineRefinement(ifc, P, R)
 {
@@ -87,8 +87,8 @@ module MapStateMachine2 refines StateMachine(MapIfc)
   }
   predicate Next(s: Variables, s': Variables, l: ifc.TransitionLabel)
   {
-    && (l.Query? ==> l.k in s.m && l.v == s.m[k] && s.m' == s.m)
-    && (l.Insert? ==> s.m' == s.m[l.k := l.v])
+    && (l.Query? ==> l.k in s.m && l.value == s.m[k] && s.m' == s.m)
+    && (l.Insert? ==> s.m' == s.m[l.k := l.value])
   }
 }
 
@@ -101,8 +101,8 @@ module MapStateMachine3 refines StateMachine(MapIfc)
   }
   predicate Next(s: Variables, s': Variables, l: ifc.TransitionLabel)
   {
-    && (l.Query? ==> l.k in s.n && l.v == s.n[k] && s.n' == s.n)
-    && (l.Insert? ==> s.n' == s.n[l.k := l.v])
+    && (l.Query? ==> l.k in s.n && l.value == s.n[k] && s.n' == s.n)
+    && (l.Insert? ==> s.n' == s.n[l.k := l.value])
   }
 }
 
@@ -160,7 +160,7 @@ module Final {
 
   lemma stuff() {
     var s : A.Variables := map[];
-    assert BigRef.I(s) == B.Variables(map[])
+    assert BigRef.I(s) == B.Variables(map[]);
     BigRef.InitRefinement(s);
 
     BigRef.NextRefinement(
