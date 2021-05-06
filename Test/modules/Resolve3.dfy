@@ -5,6 +5,8 @@ abstract module U(l: L) {
 }
 
 abstract module A(u: U(L)) {
+// Another option for declaring A:
+//abstract module A(l:L, u: U(l)) {
   import E = u.l
 }
 
