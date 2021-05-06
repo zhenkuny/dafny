@@ -2484,51 +2484,67 @@ namespace Microsoft.Dafny
       }
     }
 
+    private bool EqualsOrRefinesFunctorApps(Functor actualFunc, Functor formalFunc) {
+      // Check if the functor's are compatible and their arguments are compatible
+      if (actualFunc == formalFunc) { // We don't currently support functor refinement
+        // We don't have access to the arguments directly any more (they were held in the FunctorApplication),
+        // but we can (I think) reconstruct them from the module imports we inserted
+        List<ModuleSignature> actualArgs = new List<ModuleSignature>();
+        List<ModuleFormal> formalArgs = new List<ModuleFormal>();
+
+        // Find the artificial alias decl we created
+        foreach (ModuleFormal aFormal in actualFunc.Formals) {
+          foreach (TopLevelDecl topLevelDecl in actualFunc.TopLevelDecls) {
+            if (topLevelDecl is AliasModuleDecl amd && amd.Name == aFormal.Name.val) {
+              actualArgs.Add(amd.Signature);
+            }
+          }
+        }
+
+        // Find the artificial alias decl we created
+        foreach (ModuleFormal fFormal in formalFunc.Formals) {
+          foreach (TopLevelDecl topLevelDecl in formalFunc.TopLevelDecls) {
+            if (topLevelDecl is AliasModuleDecl amd && amd.Name == fFormal.Name.val) {
+              // Create a new "formal" for the purposes of EqualsOrRefines
+              var newFormal = new ModuleFormal(fFormal.Name, amd.TargetQId);
+              newFormal.TypeDef = amd.Signature.ModuleDef;
+              formalArgs.Add(newFormal);
+            }
+          }
+        }
+
+        // Check that the arguments pairwise refine
+        foreach (var pair in System.Linq.Enumerable.Zip(actualArgs, formalArgs)) {
+          var actualArg = pair.Item1;
+          var formalArg = pair.Item2;
+          if (!EqualsOrRefines(actualArg, formalArg)) {
+            return false;
+          }
+        }
+
+        return true;
+      } else {
+        return false;
+      }
+    }
+
     private bool EqualsOrRefines(ModuleSignature actual, ModuleFormal formal) {
       if (actual == null) {
         return false;
       } else if (actual.ModuleDef == formal.TypeDef) {
         return true;
       } else if (actual.ModuleDef is Functor actualFunc && (formal.TypeName.Root is LiteralModuleDecl lmd) && lmd.ModuleDef is Functor formalFunc) {
-        // Check if the functor's are compatible and their arguments are compatible
-        if (actualFunc == formalFunc) {  // We don't currently support functor refinement
-          // We don't have access to the arguments directly any more (they were held in the FunctorApplication),
-          // but we can (I think) reconstruct them from the module imports we inserted
-          List<ModuleSignature> actualArgs = new List<ModuleSignature>();
-          List<ModuleFormal> formalArgs = new List<ModuleFormal>();
-
-          // Find the artificial alias decl we created
-          foreach (ModuleFormal aFormal in actualFunc.Formals) {
-            foreach (TopLevelDecl topLevelDecl in actualFunc.TopLevelDecls) {
-              if (topLevelDecl is AliasModuleDecl amd && amd.Name == aFormal.Name.val) {
-                actualArgs.Add(amd.Signature);
-              }
-            }
-          }
-
-          // Find the artificial alias decl we created
-          foreach (ModuleFormal fFormal in formalFunc.Formals) {
-            foreach (TopLevelDecl topLevelDecl in formalFunc.TopLevelDecls) {
-              if (topLevelDecl is AliasModuleDecl amd && amd.Name == fFormal.Name.val) {
-                // Create a new "formal" for the purposes of EqualsOrRefines
-                var newFormal = new ModuleFormal(fFormal.Name, amd.TargetQId);
-                newFormal.TypeDef = amd.Signature.ModuleDef;
-                formalArgs.Add(newFormal);
-              }
-            }
-          }
-
-          // Check that the arguments pairwise refine
-          foreach (var pair in System.Linq.Enumerable.Zip(actualArgs, formalArgs)) {
-            var actualArg = pair.Item1;
-            var formalArg = pair.Item2;
-            if (!EqualsOrRefines(actualArg, formalArg)) {
-              return false;
-            }
-          }
+        bool directlyRefines = EqualsOrRefinesFunctorApps(actualFunc, formalFunc);
+        if (directlyRefines) {
           return true;
+        } else if (actual.ModuleDef.RefinementQId != null &&
+                   actual.ModuleDef.RefinementQId.Root is LiteralModuleDecl actualLmd &&
+                   actualLmd.ModuleDef is Functor actualFunc2) {
+          return EqualsOrRefinesFunctorApps(actualFunc2, formalFunc);
+          //} else if (actual.ModuleDef.RefinementQId != null) {
+          //    return EqualsOrRefines(actual.ModuleDef.RefinementQId.Sig, formal);
         } else {
-          return false;
+          return EqualsOrRefines(actual.Refines, formal);
         }
       } else {
         return EqualsOrRefines(actual.Refines, formal);
