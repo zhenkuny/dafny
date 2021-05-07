@@ -140,8 +140,9 @@ namespace Microsoft.Dafny.Linear {
     }
 
     internal static IEnumerable<(TopLevelDecl, Method)> AllMethodMembers(ModuleDefinition module) {
-      foreach (var decl in module.TopLevelDecls) {
-        var topLevelDecl = ((decl as ClassDecl) as TopLevelDeclWithMembers) ?? ((decl as DatatypeDecl) as TopLevelDeclWithMembers);
+      foreach (var decl in module.TopLevelDecls)
+      {
+        var topLevelDecl = (decl as TopLevelDeclWithMembers);
         if (topLevelDecl != null) {
           foreach (var m in topLevelDecl.Members.Where(memberIsMethod)) {
             var method = (Method) m;
