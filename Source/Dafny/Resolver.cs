@@ -8673,9 +8673,9 @@ namespace Microsoft.Dafny
           s.IsGhost = s.IsGhost || s.Body.All(ss => ss.IsGhost);  // mark the block statement as ghost if all its substatements are ghost
           resolver.PopUsageContext(stmt.EndTok, outer, usageContext);
 
-        } else if (stmt is IfStmt) {
+        } else if (stmt is IfStmt ifstmt) {
           var s = (IfStmt)stmt;
-          s.IsGhost = mustBeErasable || (s.Guard != null && resolver.UsesSpecFeatures(s.Guard));
+          s.IsGhost = mustBeErasable || (s.Guard != null && resolver.UsesSpecFeatures(s.Guard)) || ifstmt.forceGhost;
           if (!mustBeErasable && s.IsGhost) {
             resolver.reporter.Info(MessageSource.Resolver, s.Tok, "ghost if");
           }

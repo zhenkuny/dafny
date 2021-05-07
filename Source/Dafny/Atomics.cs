@@ -797,6 +797,15 @@ namespace Microsoft.Dafny.Linear
                     if (isAtomicBlock && i == 0 && stmts[i] is AcquireStmt) continue;
                     if (isAtomicBlock && i == stmts.Count - 1 && stmts[i] is ReleaseStmt) continue;
                     VisitStatement(stmts[i]);
+
+                    if (atomicVarStack != null && atomicVarStack.Count > 0)
+                    {
+                        Statement stmt = TryGhostifyStatement(stmts[i]);
+                        if (stmt != null)
+                        {
+                            stmts[i] = stmt;
+                        }
+                    }
                 }
 
                 TranslateStatementList(stmts);
@@ -857,6 +866,27 @@ namespace Microsoft.Dafny.Linear
                             "An 'acquire' statement must be first statement in an 'atomic' block");
                         break;
                 }
+            }
+
+            private Statement TryGhostifyStatement(Statement stmt)
+            {
+                switch (stmt)
+                {
+                    case VarDeclStmt vds:
+                        foreach (var local in vds.Locals)
+                        {
+                            if (local.Usage.IsOrdinaryKind)
+                            {
+                                local.Usage = Usage.Ghost;
+                            }
+                        }
+                        break;
+                    case IfStmt ifstmt:
+                        ifstmt.forceGhost = true;
+                        break;
+                }
+
+                return null;
             }
 
             private readonly ErrorReporter reporter;

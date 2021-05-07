@@ -8291,6 +8291,7 @@ namespace Microsoft.Dafny {
     public readonly Expression Guard;
     public readonly BlockStmt Thn;
     public readonly Statement Els;
+    public bool forceGhost;
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(!IsBindingGuard || (Guard is ExistsExpr && ((ExistsExpr)Guard).Range == null));
@@ -8308,6 +8309,7 @@ namespace Microsoft.Dafny {
       this.Guard = guard;
       this.Thn = thn;
       this.Els = els;
+      this.forceGhost = false;
     }
     public override IEnumerable<Statement> SubStatements {
       get {
