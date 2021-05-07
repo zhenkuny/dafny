@@ -109,7 +109,6 @@ abstract module InstantiateComplex {
   import CF = ComplexFormal(P(C))
 }
 
-
 abstract module ComplexFormalDependent(a:ABase, p: P(a)) {
 
 }
@@ -121,3 +120,4 @@ abstract module FunctorAppRefiner2(a:ABase) refines P(a) {
 abstract module FunctorRefinementInstantiation {
   import Test = ComplexFormalDependent(ABase, FunctorAppRefiner2(ABase))
 }
+

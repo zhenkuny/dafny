@@ -2484,91 +2484,45 @@ namespace Microsoft.Dafny
       }
     }
 
-    private bool EqualsOrRefinesFunctorApps(Functor actualFunc, Functor formalFunc) {
-      // Check if the functor's are compatible and their arguments are compatible
-      if (actualFunc == formalFunc) { // We don't currently support functor refinement
-        // We don't have access to the arguments directly any more (they were held in the FunctorApplication),
-        // but we can (I think) reconstruct them from the module imports we inserted
-        List<ModuleSignature> actualArgs = new List<ModuleSignature>();
-        List<ModuleFormal> formalArgs = new List<ModuleFormal>();
 
-        // Find the artificial alias decl we created
-        foreach (ModuleFormal aFormal in actualFunc.Formals) {
-          foreach (TopLevelDecl topLevelDecl in actualFunc.TopLevelDecls) {
-            if (topLevelDecl is AliasModuleDecl amd && amd.Name == aFormal.Name.val) {
-              actualArgs.Add(amd.Signature);
-            }
-          }
-        }
+    private bool EqualsOrRefinesFunctorApps(FunctorApplication actualFunc, FunctorApplication formalFunc) {
+      // Easy case
+      if (actualFunc == formalFunc) { return true; }
 
-        // Find the artificial alias decl we created
-        foreach (ModuleFormal fFormal in formalFunc.Formals) {
-          foreach (TopLevelDecl topLevelDecl in formalFunc.TopLevelDecls) {
-            if (topLevelDecl is AliasModuleDecl amd && amd.Name == fFormal.Name.val) {
-              // Create a new "formal" for the purposes of EqualsOrRefines
-              var newFormal = new ModuleFormal(fFormal.Name, amd.TargetQId);
-              newFormal.TypeDef = amd.Signature.ModuleDef;
-              formalArgs.Add(newFormal);
-            }
-          }
-        }
-
-        // Check that the arguments pairwise refine
-        foreach (var pair in System.Linq.Enumerable.Zip(actualArgs, formalArgs)) {
+      // Check if the functors are compatible and their arguments are compatible
+      if (actualFunc.functor == formalFunc.functor) {
+        foreach (var pair in System.Linq.Enumerable.Zip(actualFunc.moduleParams, formalFunc.moduleParams)) {
           var actualArg = pair.Item1;
           var formalArg = pair.Item2;
-          if (!EqualsOrRefines(actualArg, formalArg)) {
+
+          if (!EqualsOrRefines(actualArg.Signature, formalArg.Signature)) {
             return false;
           }
         }
 
         return true;
       } else {
+        // We don't currently support functor refinement, so if the functors don't match, we fail
         return false;
       }
     }
 
-    private bool EqualsOrRefines(ModuleSignature actual, ModuleFormal formal) {
-      if (actual == null) {
-        return false;
-      } else if (actual.ModuleDef == formal.TypeDef) {
-        return true;
-      } else if (actual.ModuleDef is Functor actualFunc && (formal.TypeName.Root is LiteralModuleDecl lmd) && lmd.ModuleDef is Functor formalFunc) {
-        bool directlyRefines = EqualsOrRefinesFunctorApps(actualFunc, formalFunc);
-        if (directlyRefines) {
-          return true;
-        } else if (actual.ModuleDef.RefinementQId != null &&
-                   actual.ModuleDef.RefinementQId.Root is LiteralModuleDecl actualLmd &&
-                   actualLmd.ModuleDef is Functor actualFunc2) {
-          return EqualsOrRefinesFunctorApps(actualFunc2, formalFunc);
-          //} else if (actual.ModuleDef.RefinementQId != null) {
-          //    return EqualsOrRefines(actual.ModuleDef.RefinementQId.Sig, formal);
-        } else {
-          return EqualsOrRefines(actual.Refines, formal);
-        }
-      } else {
-        return EqualsOrRefines(actual.Refines, formal);
+    private bool EqualsOrRefines(ModuleSignature actual, ModuleSignature formal) {
+      // Two easy cases first
+      if (actual == null) { return false; }
+      if (actual.ModuleDef == formal.ModuleDef) { return true; }
+
+      // Check for refinement-based match
+      bool eq = EqualsOrRefines(actual.Refines, formal);
+      if (eq) { return true; }
+
+      if (actual.Origin != null && formal.Origin != null) {
+        return EqualsOrRefinesFunctorApps(actual.Origin, formal.Origin);
       }
-    }
-    /*
-    private bool EqualsOrRefines(ModuleDecl actual, ModuleDefinition formal) {
-      if (actual is LiteralModuleDecl lmd) {
-        if (lmd.ModuleDef == formal) {
-          return true;
-        }
-      } else if (actual is AliasModuleDecl amd) {
-        if (amd.Signature.ModuleDef == formal) {
-          return true;
-        }
-      } else if (actual is AbstractModuleDecl amd) {
-        if (amd.Signature.ModuleDef == formal) {
-          return true;
-        }
-      } // TODO: else if (actual is ModuleExportDecl med) { ... }
+      // REVIEW: Is there any hope left if one has an origin but the other doesn't?
 
-
+      return false;
     }
-    */
 
     private ModuleDefinition GetDefFromDecl(ModuleDecl decl) {
       if (decl is LiteralModuleDecl lmd) {
@@ -2579,6 +2533,19 @@ namespace Microsoft.Dafny
         return am.Signature.ModuleDef;
       } else if (decl is ModuleExportDecl med) {
         return med.Signature.ModuleDef;
+      }
+      return null;
+    }
+
+    private ModuleSignature GetSigFromDecl(ModuleDecl decl) {
+      if (decl is LiteralModuleDecl lmd) {
+        return lmd.Signature;
+      } else if (decl is AliasModuleDecl amd) {
+        return amd.Signature;
+      } else if (decl is AbstractModuleDecl am) {
+        return am.Signature;
+      } else if (decl is ModuleExportDecl med) {
+        return med.Signature;
       }
       return null;
     }
@@ -2607,16 +2574,25 @@ namespace Microsoft.Dafny
 
         // 2)
         Dictionary<string, ModuleDecl> formalActualPairs = new Dictionary<string, ModuleDecl>();
-        foreach (var pair in System.Linq.Enumerable.Zip(functorApp.functor.Formals, functorApp.moduleParams)) {
-          ModuleFormal formal = pair.Item1;
-          ModuleDecl actual = pair.Item2;
+        for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
+          ModuleFormal formal = functorApp.functor.Formals[i];
+          ModuleDecl actual = functorApp.moduleParams[i];
+          FunctorApplication actualFunctor = functorApp.moduleParamNames[i].FunctorApp;
+
+          if (actualFunctor != null) {
+            // We want the result of the application, not the unevaluated form
+            actual = ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root);
+          }
+
           formalActualPairs[formal.Name.val] = actual;
 
           if (formal.TypeDef == null) {
             formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
           }
 
-          if (!EqualsOrRefines(actual.Signature, formal)) {
+          var formalSig = GetSigFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
+
+          if (!EqualsOrRefines(actual.Signature, formalSig)) {
             var msg = $"Module {literalRoot.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
             reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
             return null;
@@ -2678,10 +2654,16 @@ namespace Microsoft.Dafny
 
         // 4)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
+        sig.Origin = functorApp;
+
+
+        sig.Refines = literalRoot.Signature.Refines;
         // TODO: Need this?
         // sig.Refines = refinementTransformer.RefinedSig;
-        // or this?
+
+        // TODO: Need this?
         // prog.ModuleSigs[m] = sig;
+
         // REVIEW: Should isAnExport be true?
         var b = ResolveModuleDefinition(newDef, sig, isAnExport: false);
         Contract.Assert(b); // TODO: Better error handling
