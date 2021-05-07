@@ -99,9 +99,12 @@ abstract module IOSystem(IoIfc: UIfc, B: BlockType, Program : DiskProgram(IoIfc,
 
 // .s This is the climax of the system. Build system demands that it be instantiatied
 // as a non-abstract module, hence supplying a proof.
+//abstract module SystemTheorem(
+//  Ifc: UIfc, B: BlockType, P: DiskProgram(Ifc, B), CrashSafeSpec: UIStateMachine(Ifc),
+//  Proof : StateMachinesRefine(Ifc, IOSystem(Ifc, B, P), CrashSafeSpec))
 abstract module SystemTheorem(
-  Ifc: UIfc, B: BlockType, P: DiskProgram(Ifc, B), CrashSafeSpec: UIStateMachine(Ifc),
-  Proof : StateMachinesRefine(Ifc, IOSystem(Ifc, B, P), CrashSafeSpec))
+  Ifc: UIfc, B: BlockType, P: DiskProgram(Ifc, B),
+  Proof : StateMachinesRefine(Ifc, IOSystem(Ifc, B, P), UIStateMachine(Ifc)))
 {
 }
 
