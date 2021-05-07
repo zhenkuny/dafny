@@ -16,7 +16,7 @@ module ABase {
 abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
-
+/*
 // Try simple functor application
 abstract module Apply {
   import OutputBase = P(ABase)
@@ -109,15 +109,46 @@ abstract module InstantiateComplex {
   import CF = ComplexFormal(P(C))
 }
 
-abstract module ComplexFormalDependent(a:ABase, p: P(a)) {
-
-}
-
-abstract module FunctorAppRefiner2(a:ABase) refines P(a) {
-}
-
 // Try to instantiate a functor formal with an actual that refines that functor
+abstract module ComplexFormalDependent(a:ABase, p: P(a)) { }
+
+abstract module FunctorAppRefiner2(a:ABase) refines P(a) { }
+
 abstract module FunctorRefinementInstantiation {
   import Test = ComplexFormalDependent(ABase, FunctorAppRefiner2(ABase))
 }
 
+// Make sure we can call methods from our parent when refining
+abstract module Q(A: ABase) {
+  predicate Valid(a:A.Key)
+
+  method Test(a:A.Key)
+    requires Valid(a)
+}
+
+abstract module FunctorAppRefiner3(a:ABase) refines Q(a) {
+  method MyTest(a:A.Key)
+    requires Valid(a)
+  {
+    Test(a);
+  }
+}
+*/
+
+// Try refining a functor application that includes a method from the parent
+abstract module T(A: ABase) {
+  predicate Valid(a:A.Key)
+
+  method Test(a:A.Key)
+    requires Valid(a)
+
+  method DoIt(a:A.Key)
+    requires Valid(a)
+}
+
+abstract module FunctorAppRefiner3(someA:ABase) refines T(someA) {
+  method Test(a:someA.Key)
+  {
+    DoIt(a);
+  }
+}

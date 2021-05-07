@@ -47,14 +47,14 @@ abstract module StateMachineRefinement(
 }
 
 module ComposeRefinements(
-    ifc: Ifc,
-    P: StateMachine(ifc),
-    Q: StateMachine(ifc),
-    R: StateMachine(ifc),
-    Ref1: StateMachineRefinement(ifc, P, Q),
-    Ref2: StateMachineRefinement(ifc, Q, R)
+    crIfc: Ifc,
+    P: StateMachine(crIfc),
+    Q: StateMachine(crIfc),
+    R: StateMachine(crIfc),
+    Ref1: StateMachineRefinement(crIfc, P, Q),
+    Ref2: StateMachineRefinement(crIfc, Q, R)
 )
-  refines StateMachineRefinement(ifc, P, R)
+  refines StateMachineRefinement(crIfc, P, R)
 {
   function I(s: L.Variables) : H.Variables
   {
@@ -62,22 +62,18 @@ module ComposeRefinements(
   }
 
   lemma InitRefinement(s: L.Variables)
-  requires L.Init(s)
-  ensures H.Init(I(s))
   {
     Ref1.InitRefinement(s);
     Ref2.InitRefinement(Ref1.I(s));
   }
 
-  lemma NextRefinement(s: L.Variables, s': L.Variables, l: ifc.TransitionLabel)
-  requires L.Next(s, s', l)
-  ensures H.Next(I(s), I(s'), l)
+  lemma NextRefinement(s: L.Variables, s': L.Variables, l: crIfc.TransitionLabel)
   {
     Ref1.NextRefinement(s, s', l);
     Ref2.NextRefinement(Ref1.I(s), Ref1.I(s'), l);
   }
 }
-
+/*
 module MapStateMachine2 refines StateMachine(MapIfc)
 {
   datatype Variables = X(m: map<int, int>)
@@ -186,3 +182,4 @@ module Final {
   {
   }
 }
+*/
