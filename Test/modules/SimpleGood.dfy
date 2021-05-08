@@ -147,7 +147,8 @@ abstract module T(A: ABase) {
 }
 
 abstract module FunctorAppRefiner3(someA:ABase) refines T(someA) {
-  method Test(a:someA.Key)
+  //method Test(a:someA.Key) // Fails
+  method Test(a:A.Key)  // Succeeds when using parent name
   {
     DoIt(a);
   }

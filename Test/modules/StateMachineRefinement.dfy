@@ -67,7 +67,7 @@ module ComposeRefinements(
     Ref2.InitRefinement(Ref1.I(s));
   }
 
-  lemma NextRefinement(s: L.Variables, s': L.Variables, l: crIfc.TransitionLabel)
+  lemma NextRefinement(s: L.Variables, s': L.Variables, l: ifc.TransitionLabel)
   {
     Ref1.NextRefinement(s, s', l);
     Ref2.NextRefinement(Ref1.I(s), Ref1.I(s'), l);

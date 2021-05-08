@@ -2665,8 +2665,12 @@ namespace Microsoft.Dafny
         // prog.ModuleSigs[m] = sig;
 
         // REVIEW: Should isAnExport be true?
+        var errCount = reporter.Count(ErrorLevel.Error);
         var b = ResolveModuleDefinition(newDef, sig, isAnExport: false);
         Contract.Assert(b); // TODO: Better error handling
+        if (b && reporter.Count(ErrorLevel.Error) == errCount) {
+          newDef.SuccessfullyResolved = true;
+        }
 
         // 4) Combine everything into a ModuleDecl we can return
         LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, literalRoot.EnclosingModuleDefinition);
