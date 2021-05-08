@@ -46,7 +46,7 @@ abstract module StateMachineRefinement(
   ensures H.Next(I(s), I(s'), l)
 }
 
-module ComposeRefinements(
+abstract module ComposeRefinements(
     crIfc: Ifc,
     P: StateMachine(crIfc),
     Q: StateMachine(crIfc),
