@@ -73,7 +73,7 @@ abstract module ComposeRefinements(
     Ref2.NextRefinement(Ref1.I(s), Ref1.I(s'), l);
   }
 }
-/*
+
 module MapStateMachine2 refines StateMachine(MapIfc)
 {
   datatype Variables = X(m: map<int, int>)
@@ -83,8 +83,8 @@ module MapStateMachine2 refines StateMachine(MapIfc)
   }
   predicate Next(s: Variables, s': Variables, l: ifc.TransitionLabel)
   {
-    && (l.Query? ==> l.k in s.m && l.value == s.m[k] && s.m' == s.m)
-    && (l.Insert? ==> s.m' == s.m[l.k := l.value])
+    && (l.Query? ==> l.k in s.m && l.value == s.m[l.k] && s'.m == s.m)
+    && (l.Insert? ==> s'.m == s.m[l.k := l.value])
   }
 }
 
@@ -97,8 +97,8 @@ module MapStateMachine3 refines StateMachine(MapIfc)
   }
   predicate Next(s: Variables, s': Variables, l: ifc.TransitionLabel)
   {
-    && (l.Query? ==> l.k in s.n && l.value == s.n[k] && s.n' == s.n)
-    && (l.Insert? ==> s.n' == s.n[l.k := l.value])
+    && (l.Query? ==> l.k in s.n && l.value == s.n[l.k] && s'.n == s.n)
+    && (l.Insert? ==> s'.n == s.n[l.k := l.value])
   }
 }
 
@@ -110,18 +110,15 @@ module Refinement_1_2 refines StateMachineRefinement(MapIfc, MapStateMachine, Ma
   }
 
   lemma InitRefinement(s: L.Variables)
-  requires L.Init(s)
-  ensures H.Init(I(s))
   {
   }
 
   lemma NextRefinement(s: L.Variables, s': L.Variables, l: ifc.TransitionLabel)
-  requires L.Next(s, s', l)
-  ensures H.Next(I(s), I(s'), l)
   {
   }
 }
 
+/*
 module Refinement_2_3 refines StateMachineRefinement(MapIfc, MapStateMachine2, MapStateMachine3)
 {
   function I(s: L.Variables) : H.Variables
