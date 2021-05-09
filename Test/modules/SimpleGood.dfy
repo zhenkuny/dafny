@@ -135,6 +135,8 @@ abstract module FunctorAppRefiner3(a:ABase) refines Q(a) {
 }
 */
 
+/*
+
 // Try refining a functor application that includes a method from the parent
 abstract module T(A: ABase) {
   predicate Valid(a:A.Key)
@@ -151,5 +153,15 @@ abstract module FunctorAppRefiner3(someA:ABase) refines T(someA) {
   method Test(a:A.Key)  // Succeeds when using parent name
   {
     DoIt(a);
+  }
+}
+*/
+
+abstract module SameFunctorRefinmentWithArg(MyA:ABase, PA0:P(MyA), PA1:P(MyA)) refines P(MyA)
+{
+  method MyTest(a:A.Key) {
+    assert 3 > 2;
+    PA0.Test(a);
+    PA1.Test(a);
   }
 }

@@ -735,6 +735,17 @@ namespace Microsoft.Dafny {
       return new Bpl.IdentifierExpr(tok, var.AssignUniqueName(currentDeclaration.IdGenerator), TrType(var.Type));
     }
 
+    class VirtualModuleComparer : IEqualityComparer<ModuleDefinition> {
+      public bool Equals(ModuleDefinition x, ModuleDefinition y) {
+        return x == y || x.CompileName == y.CompileName;
+      }
+
+      public int GetHashCode(ModuleDefinition mod) {
+        if (Object.ReferenceEquals(mod, null)) return 0;
+        return mod.CompileName.GetHashCode();
+      }
+    }
+
     private Bpl.Program DoTranslation(Program p, ModuleDefinition forModule) {
       program = p;
       Type.EnableScopes();
@@ -811,12 +822,16 @@ namespace Microsoft.Dafny {
       //translate us first
       List<ModuleDefinition> mods = program.RawModules().ToList();
       List<ModuleDefinition> virtual_mods = Resolver.virtualModules.Values.ToList().ConvertAll(s => s.ModuleDef);
+      // De-duplicate functor instantiations
+      //virtual_mods = virtual_mods.Distinct(new VirtualModuleComparer()).ToList();
+
       mods.AddRange(virtual_mods);
       mods.Remove(forModule);
 
       if (forModule is Functor) {
         // Remove all instantiations of this functor, to avoid generating duplicates in the Boogie code
         mods.RemoveAll(def => def.CompileName == forModule.CompileName);
+        // mods.RemoveAll(def => def is Functor);  // REVIEW: Shouldn't we remove these here too?
       } else {
         // Remove all functors, since we should only be referring to their instantiations at this point
         mods.RemoveAll(def => def is Functor);
@@ -824,11 +839,13 @@ namespace Microsoft.Dafny {
 
 
       mods.Insert(0, forModule);
-
+      HashSet<string> translatedDecls = new HashSet<string>();
       foreach (ModuleDefinition m in mods) {
         var visibleDecls = m.TopLevelDecls.FindAll(VisibleInScope);
         foreach (TopLevelDecl d in visibleDecls) {
           currentDeclaration = d;
+          if(translatedDecls.Contains(d.FullCompileName)) { continue; } // Skip duplicates that may have been induced by functor instantiation
+          translatedDecls.Add(d.FullCompileName);
           if (d is OpaqueTypeDecl) {
             var dd = (OpaqueTypeDecl)d;
             AddTypeDecl(dd);
