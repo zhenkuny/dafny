@@ -16,7 +16,7 @@ module ABase {
 abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
-/*
+
 // Try simple functor application
 abstract module Apply {
   import OutputBase = P(ABase)
@@ -133,9 +133,6 @@ abstract module FunctorAppRefiner3(a:ABase) refines Q(a) {
     Test(a);
   }
 }
-*/
-
-/*
 
 // Try refining a functor application that includes a method from the parent
 abstract module T(A: ABase) {
@@ -148,14 +145,13 @@ abstract module T(A: ABase) {
     requires Valid(a)
 }
 
-abstract module FunctorAppRefiner3(someA:ABase) refines T(someA) {
+abstract module FunctorAppRefiner4(someA:ABase) refines T(someA) {
   //method Test(a:someA.Key) // Fails
   method Test(a:A.Key)  // Succeeds when using parent name
   {
     DoIt(a);
   }
 }
-*/
 
 abstract module SameFunctorRefinmentWithArg(MyA:ABase, PA0:P(MyA), PA1:P(MyA)) refines P(MyA)
 {
