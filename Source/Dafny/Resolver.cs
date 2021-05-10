@@ -2574,6 +2574,7 @@ namespace Microsoft.Dafny
 
         // 2)
         Dictionary<string, ModuleDecl> formalActualPairs = new Dictionary<string, ModuleDecl>();
+        bool allArgumentsConcrete = true;
         for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
           ModuleFormal formal = functorApp.functor.Formals[i];
           ModuleDecl actual = functorApp.moduleParams[i];
@@ -2585,6 +2586,7 @@ namespace Microsoft.Dafny
           }
 
           formalActualPairs[formal.Name.val] = actual;
+          allArgumentsConcrete &= !actual.Signature.IsAbstract;
 
           if (formal.TypeDef == null) {
             formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
@@ -2656,6 +2658,13 @@ namespace Microsoft.Dafny
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
         sig.Origin = functorApp;
 
+        // Update the abstractness of the new module
+        if (!literalRoot.Signature.IsAbstract && allArgumentsConcrete) {
+          sig.IsAbstract = false;
+        } else {
+          // The functor itself is abstract and the produced module should inherits that, or an argument is abstract
+          sig.IsAbstract = true;
+        }
 
         sig.Refines = literalRoot.Signature.Refines;
         // TODO: Need this?
