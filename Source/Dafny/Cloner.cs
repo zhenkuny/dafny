@@ -18,6 +18,10 @@ namespace Microsoft.Dafny
       ModuleDefinition nw;
       if (m is DefaultModuleDecl) {
         nw = new DefaultModuleDecl();
+      } else if (m is Functor f) {
+        nw = new Functor(Tok(m.tok), name, m.PrefixIds, m.IsAbstract, m.IsFacade,
+          m.RefinementQId, m.EnclosingModule, CloneAttributes(m.Attributes),
+          true, m.IsToBeVerified, m.IsToBeCompiled, new List<ModuleFormal>(f.Formals));
       } else {
         nw = new ModuleDefinition(Tok(m.tok), name, m.PrefixIds, m.IsAbstract, m.IsFacade,
                                   m.RefinementQId, m.EnclosingModule, CloneAttributes(m.Attributes),

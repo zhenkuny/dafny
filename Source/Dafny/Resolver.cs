@@ -21,6 +21,7 @@ namespace Microsoft.Dafny
 
     ErrorReporter reporter;
     ModuleSignature moduleInfo = null;
+    private bool resolvingFunctor = false;
 
     public static Dictionary<FunctorApplication, LiteralModuleDecl> virtualModules =
       new Dictionary<FunctorApplication, LiteralModuleDecl>();
@@ -998,6 +999,8 @@ namespace Microsoft.Dafny
 
       // resolve
       var oldModuleInfo = moduleInfo;
+      var oldResolvingFunctor = resolvingFunctor;
+      resolvingFunctor = m is Functor;
       moduleInfo = MergeSignature(sig, systemNameInfo);
       Type.PushScope(moduleInfo.VisibilityScope);
       ResolveOpenedImports(moduleInfo, m, useCompileSignatures, this); // opened imports do not persist
@@ -1016,6 +1019,7 @@ namespace Microsoft.Dafny
 
       Type.PopScope(moduleInfo.VisibilityScope);
       moduleInfo = oldModuleInfo;
+      resolvingFunctor = oldResolvingFunctor;
       return true;
     }
 
@@ -2883,7 +2887,7 @@ namespace Microsoft.Dafny
           ResolveIteratorSignature((IteratorDecl)d);
         } else if (d is ModuleDecl) {
           var decl = (ModuleDecl)d;
-          if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract) {
+          if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract && !(def is Functor)) {
             reporter.Error(MessageSource.Resolver, am.TargetQId.rootToken(), "a compiled module ({0}) is not allowed to import an abstract module ({1})", def.Name, am.TargetQId.ToString());
           }
         } else if (d is DatatypeDecl) {
@@ -16482,7 +16486,7 @@ namespace Microsoft.Dafny
 
       if (!moduleInfo.IsAbstract) {
         var md = decl as ModuleDecl;
-        if (md != null && md.Signature.IsAbstract) {
+        if (md != null && md.Signature.IsAbstract && !resolvingFunctor) {
           reporter.Error(MessageSource.Resolver, tok, "a compiled module is not allowed to use an abstract module ({0})", decl.Name);
         }
       }
