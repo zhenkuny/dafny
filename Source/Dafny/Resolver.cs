@@ -12740,7 +12740,7 @@ namespace Microsoft.Dafny
               x = id.Var;
             }
             if (x != null && update.Lhss.Count > 1) {
-              if (x.Usage != Usage.Ghost && x.Usage != Usage.Ordinary) {
+              if (!x.Usage.IsOrdinaryKind && !x.Usage.IsGhostKind) {
                 reporter.Error(MessageSource.Resolver, update, "multi-assignment not supported for linear variables");
               }
             }
