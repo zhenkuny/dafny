@@ -10329,6 +10329,10 @@ namespace Microsoft.Dafny {
       if (stmt is PredicateStmt) {
         var stmtBuilder = new BoogieStmtListBuilder(this);
         string errorMessage = CustomErrorMessage(stmt.Attributes);
+        if (errorMessage == null)
+        {
+          errorMessage = (stmt as PredicateStmt).CustomErrorMessage;
+        }
         this.fuelContext = FuelSetting.ExpandFuelContext(stmt.Attributes, stmt.Tok, this.fuelContext, this.reporter);
         var defineFuel = DefineFuelConstant(stmt.Tok, stmt.Attributes, stmtBuilder, etran);
         var b = defineFuel ? stmtBuilder : builder;

@@ -456,15 +456,17 @@ namespace Microsoft.Dafny.Linear
         {
             private List<string> atomicVarStack;
                 
-            private Expression get_release_stmt_expression(AtomicStmt atomicStmt)
+            private Expression get_release_stmt_expression(AtomicStmt atomicStmt, out ReleaseStmt releaseStmt)
             {
                 var body = atomicStmt.Body.Body;
                 if (body.Count > 0 && body[^1] is ReleaseStmt rs)
                 {
+                    releaseStmt = rs;
                     return rs.E;
                 }
                 else
                 {
+                    releaseStmt = null;
                     return null;
                 }
             }
@@ -603,7 +605,8 @@ namespace Microsoft.Dafny.Linear
             private List<Statement> GetNewStmtList(AtomicStmt atomicStmt)
             {
                 string acquireStmtVarName = get_acquire_stmt_var_name(atomicStmt);
-                Expression releaseStmtExpr = get_release_stmt_expression(atomicStmt);
+                ReleaseStmt releaseStmt;
+                Expression releaseStmtExpr = get_release_stmt_expression(atomicStmt, out releaseStmt);
 
                 if (acquireStmtVarName == null && releaseStmtExpr != null)
                 {
@@ -707,13 +710,15 @@ namespace Microsoft.Dafny.Linear
                 
                 foreach (var previousAtomicVar in atomicVarStack)
                 {
-                    newStmts.Add(new AssertStmt(atomicStmt.Tok, atomicStmt.EndTok,
+                    var asStmt = new AssertStmt(atomicStmt.Tok, atomicStmt.EndTok,
                         new BinaryExpr(atomicStmt.Tok,
                             BinaryExpr.Opcode.Neq,
                             identifier_call(atomicStmt.Tok, previousAtomicVar),
                             identifier_call(atomicStmt.Tok, atomicStmt.atomicVar)
-                            ),
-                        null, null, null));
+                        ), null, null, null);
+                    asStmt.AddCustomizedErrorMessage(
+                        "Cannot show that the atomic cell is distinct from other currently-open atomics.");
+                    newStmts.Add(asStmt);
                 }
                 
                 List<Expression> lhss = new List<Expression>();
@@ -739,23 +744,24 @@ namespace Microsoft.Dafny.Linear
                     new IdentifierExpr(atomicStmt.Tok, dummyBoolName),
                     new BlockStmt(atomicStmt.Tok, atomicStmt.EndTok, innerStmts), null));*/
                 newStmts.AddRange(innerStmts);
-                    
-                newStmts.Add(glinear_var_decl(atomicStmt.Tok, gReturnName, releaseStmtExpr == null ?
-                    new IdentifierExpr(atomicStmt.Tok, gName) : releaseStmtExpr));
+
+                var finalTok = releaseStmt == null ? atomicStmt.EndTok : releaseStmt.Tok;
+                newStmts.Add(glinear_var_decl(finalTok, gReturnName, releaseStmtExpr == null ?
+                    new IdentifierExpr(finalTok, gName) : releaseStmtExpr));
                 
                 // atomic_finish(atomic_value, new_value, g_return);
                 var finishAtomicExpr = GetFinishAtomicExpr(applySuffix.Lhs);
                 newStmts.Add(new UpdateStmt(
-                    atomicStmt.Tok,
-                    atomicStmt.EndTok,
+                    finalTok,
+                    finalTok,
                     new List<Expression>(),
                     new List<AssignmentRhs>()
                     {
-                        new ExprRhs(new ApplySuffix(atomicStmt.Tok, null, finishAtomicExpr, new List<ApplySuffixArg>()
+                        new ExprRhs(new ApplySuffix(finalTok, null, finishAtomicExpr, new List<ApplySuffixArg>()
                         {
-                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(atomicStmt.Tok, atomicValueName, null) },
-                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(atomicStmt.Tok, newValueName, null) },
-                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(atomicStmt.Tok, gReturnName, null) }
+                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(finalTok, atomicValueName, null) },
+                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(finalTok, newValueName, null) },
+                            new ApplySuffixArg { Inout = false, Expr = new NameSegment(finalTok, gReturnName, null) }
                         }))
                     }));
 

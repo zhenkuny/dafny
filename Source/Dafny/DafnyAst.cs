@@ -7272,6 +7272,8 @@ namespace Microsoft.Dafny {
   public abstract class PredicateStmt : Statement
   {
     public readonly Expression Expr;
+    public string CustomErrorMessage;
+      
     [ContractInvariantMethod]
     void ObjectInvariant() {
       Contract.Invariant(Expr != null);
@@ -7283,6 +7285,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(endTok != null);
       Contract.Requires(expr != null);
       this.Expr = expr;
+      this.CustomErrorMessage = null;
     }
 
     public PredicateStmt(IToken tok, IToken endTok, Expression expr)
@@ -7291,6 +7294,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(endTok != null);
       Contract.Requires(expr != null);
       this.Expr = expr;
+      this.CustomErrorMessage = null;
     }
     public override IEnumerable<Expression> SubExpressions {
       get {
@@ -7318,11 +7322,12 @@ namespace Microsoft.Dafny {
         }
       }
     }
-    public void AddCustomizedErrorMessage(IToken tok, string s) {
-      var args = new List<Expression>() { new StringLiteralExpr(tok, s, true) };
+    public void AddCustomizedErrorMessage(string s) {
+      /*var args = new List<Expression>() { new StringLiteralExpr(tok, s, true) };
       IToken openBrace = tok;
       IToken closeBrace = new Token(tok.line, tok.col + 7 + s.Length + 1); // where 7 = length(":error ")
-      this.Attributes = new UserSuppliedAttributes(tok, openBrace, closeBrace, args, this.Attributes);
+      this.Attributes = new UserSuppliedAttributes(tok, openBrace, closeBrace, args, this.Attributes);*/
+      this.CustomErrorMessage = s;
     }
   }
 
