@@ -12702,6 +12702,15 @@ namespace Microsoft.Dafny
         } else if (reporter.Count(ErrorLevel.Error) == errorCountBeforeCheckingLhs) {
           // add the statements here in a sequence, but don't use that sequence later for translation (instead, should translate properly as multi-assignment)
           for (int i = 0; i < update.Lhss.Count; i++) {
+            IVariable x = update.Lhss[i].Resolved as IVariable;
+            if (update.Lhss[i].Resolved is IdentifierExpr id) {
+              x = id.Var;
+            }
+            if (x != null && update.Lhss.Count > 1) {
+              if (x.Usage != Usage.Ghost && x.Usage != Usage.Ordinary) {
+                reporter.Error(MessageSource.Resolver, update, "multi-assignment not supported for linear variables");
+              }
+            }
             var a = new AssignStmt(update.Tok, update.EndTok, update.Lhss[i].Resolved, update.Rhss[i]);
             if (i == 0 && update.InoutAssignTarget.HasValue) {
               var (_, inoutAssignTargetExpr) = update.InoutAssignTarget.Value;
