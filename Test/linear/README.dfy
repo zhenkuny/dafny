@@ -277,14 +277,14 @@ method seq_free<A>(linear s:seq<A>)
 
 type maybe<A>
 predicate has<A>(m:maybe<A>)
-function read<A>(m:maybe<A>):A
-function method peek<A>(shared m:maybe<A>):(shared a:A)
+function read<A(00)>(m:maybe<A>):A
+function method peek<A(00)>(shared m:maybe<A>):(shared a:A)
     requires has(m)
     ensures a == read(m)
-function method take<A>(linear m:maybe<A>):(linear a:A)
+function method take<A(00)>(linear m:maybe<A>):(linear a:A)
     requires has(m)
     ensures a == read(m)
-function method give<A>(linear a:A):(linear m:maybe<A>)
+function method give<A(00)>(linear a:A):(linear m:maybe<A>)
     ensures has(m)
     ensures read(m) == a
     ensures forall x:maybe<A> {:trigger give(read(x))} | has(x) && a == read(x) :: m == x
@@ -321,7 +321,7 @@ function{:inline true} operator(| |)<A>(s:lseq<A>):nat
     |lseqs(s)|
 }
 
-function{:inline true} operator([])<A>(s:lseq<A>, i:nat):A
+function{:inline true} operator([])<A(00)>(s:lseq<A>, i:nat):A
     requires i < |s|
 {
     read(lseqs(s)[i])
@@ -333,7 +333,7 @@ function{:inline true} operator(in)<A>(s:lseq<A>, i:nat):bool
     has(lseqs(s)[i])
 }
 
-function method lseq_peek<A>(shared s:lseq<A>, i:nat):(shared a:A)
+function method lseq_peek<A(00)>(shared s:lseq<A>, i:nat):(shared a:A)
     requires i < |s|
     requires i in s
     ensures a == s[i]
@@ -341,7 +341,7 @@ function method lseq_peek<A>(shared s:lseq<A>, i:nat):(shared a:A)
     peek(lseq_share(s, i))
 }
 
-method lseq_take<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear a:A)
+method lseq_take<A(00)>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear a:A)
     requires i < |s1|
     requires i in s1
     ensures a == s1[i]
@@ -353,7 +353,7 @@ method lseq_take<A>(linear s1:lseq<A>, i:nat) returns(linear s2:lseq<A>, linear 
     a := take(x2);
 }
 
-method lseq_give<A>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq<A>)
+method lseq_give<A(00)>(linear s1:lseq<A>, i:nat, linear a:A) returns(linear s2:lseq<A>)
     requires i < |s1|
     requires i !in s1
     ensures lseqs(s2) == lseqs(s1)[i := give(a)]
@@ -433,7 +433,7 @@ In addition, expressions in arguments to method calls may also call Borrow as lo
 the called method has no modifies clause and no shared return values.
 These restrictions ensure that Swap cannot be called while using the shared value returned from Borrow.
 */
-class MaybeLinear<A>
+class MaybeLinear<A(00)>
 {
     var box:BoxedLinear<maybe<A>>;
     function Has():bool
@@ -486,7 +486,7 @@ class MaybeLinear<A>
     }
 }
 
-method MaybeLinearExample<A>(linear a_in:A) returns(linear a:A)
+method MaybeLinearExample<A(00)>(linear a_in:A) returns(linear a:A)
 {
     a := a_in;
     var box1 := new MaybeLinear<A>(a);
