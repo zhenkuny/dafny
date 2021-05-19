@@ -49,4 +49,40 @@ module Stuff {
 
     x := moo;
   }
+
+  glinear datatype glOption<V> = Some(glinear v: V) | None
+
+  glinear method inout_method<V>(glinear inout x: V)
+  glinear method inout_method2<V>(glinear inout x: glOption<V>)
+
+  glinear method dispose_t<V>(glinear x: V)
+
+  glinear method get_some_object()
+  returns (glinear o: glOption<int>)
+
+  method okay2(a1: Atomic<glOption<int>>)
+  {
+    glinear var x := get_some_object(); 
+    inout_method(inout x);
+    dispose_t(x);
+
+    atomic_block var ret := execute_atomic_add(a1) {
+      ghost_acquire g;
+
+      inout_method(inout g);
+
+      glinear match g {
+        case None => { }
+        case Some(t) => {
+          inout_method(inout t);
+          dispose_t(t);
+        }
+      }
+
+      g := get_some_object();
+
+      ghost_release g;
+    }
+  }
+
 }

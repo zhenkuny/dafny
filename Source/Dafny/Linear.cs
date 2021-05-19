@@ -123,6 +123,11 @@ namespace Microsoft.Dafny.Linear {
             }
           }
           break;
+        case AtomicStmt atomicBlockStmt:
+          foreach (var ls in AllStatementLists(atomicBlockStmt.Body.Body)) {
+            yield return ls;
+          }
+          break;
       }
     }
 

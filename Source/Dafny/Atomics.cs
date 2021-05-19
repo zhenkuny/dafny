@@ -229,7 +229,7 @@ namespace Microsoft.Dafny.Linear
                     check_no_assign_lhs(ns.Resolved, varName);
                     break;
                 case IdentifierExpr ie:
-                    if (ie.Var.CompileName == varName)
+                    if (ie.Var != null && ie.Var.CompileName == varName)
                     {
                         reporter.Error(MessageSource.Rewriter, lhs.tok,
                             "Assign to variable which should be preserved for atomic block");
@@ -262,6 +262,25 @@ namespace Microsoft.Dafny.Linear
                 {
                     check_no_assign_stmt(s, varName);
                 }
+            }
+        }
+
+        private static bool IsIgnoredVarDecl(Statement stmt)
+        {
+            if (stmt is VarDeclStmt vds)
+            {
+                foreach (var local in vds.Locals)
+                {
+                    if (!(local.Usage.IsLinearOrSharedErased || local.Usage.IsGhostKind) && !local.Usage.ignore)
+                    {
+                        return false;
+                    }
+                }
+                return vds.Update == null;
+            }
+            else
+            {
+                return false;
             }
         }
 
@@ -304,6 +323,10 @@ namespace Microsoft.Dafny.Linear
                 }
 
                 return false;
+            } else if (stmt is NestedMatchStmt nms)
+            {
+                var u = nms.Usage;
+                return (u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased;
             }
 
             return false;
@@ -430,7 +453,7 @@ namespace Microsoft.Dafny.Linear
                     {
                         if (openBlocks.Count > 0)
                         {
-                            if (!stmt.IsGhost && !IsGlinearStmt(stmt))
+                            if (!stmt.IsGhost && !IsGlinearStmt(stmt) && !IsIgnoredVarDecl(stmt))
                             {
                                 reporter.Error(MessageSource.Rewriter, stmt.Tok,
                                     "Only ghost statements can be within an atomic block");
