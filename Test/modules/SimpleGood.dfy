@@ -164,15 +164,21 @@ abstract module SameFunctorRefinmentWithArg(MyA:ABase, PA0:P(MyA), PA1:P(MyA)) r
 */
 
 // Test abstract vs. concrete module rules
-module AInt refines ABase {
-  type Key = int
-}
+//module AInt refines ABase {
+//  type Key = int
+//}
 
 module AConsumer(a:ABase, b:P(a)) {
-  method MyTest(a:b.A.Key) {
-    b.Test(a);
+  method MyTest(x:b.A.Key) {
+    b.Test(x);
   }
 }
+//// Simplified
+//module AConsumer(b:P(ABase)) {
+//  method MyTest(x:b.A.Key) {
+//    b.Test(x);
+//  }
+//}
 
 //module Pconcrete refines AConsumer(AInt, P(AInt)) {
 ////  method Test(a:A.Key) {
