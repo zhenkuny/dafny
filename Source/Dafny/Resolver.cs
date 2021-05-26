@@ -2554,6 +2554,18 @@ namespace Microsoft.Dafny
       return null;
     }
 
+    private void CloneCompileSignatures(ModuleDefinition src, ModuleDefinition dst) {
+      foreach (var pair in System.Linq.Enumerable.Zip(src.TopLevelDecls, dst.TopLevelDecls)) {
+        var srcDecl = pair.Item1;
+        var dstDecl = pair.Item2;
+        if (srcDecl is ModuleDecl srcMD && dstDecl is ModuleDecl dstMD) {
+          if (srcMD.Signature != null) {
+            dstMD.Signature.CompileSignature = srcMD.Signature.CompileSignature;
+          }
+        }
+      }
+    }
+
     private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
       if (!Resolver.virtualModules.ContainsKey(functorApp)) {
         // Apply the functor
@@ -2566,6 +2578,8 @@ namespace Microsoft.Dafny
         // 1)
         ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
         ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
+        // Cloner doesn't propagate the compile signature, so we do so ourselves
+        CloneCompileSignatures(literalRoot.ModuleDef, newDef);
         // Should have the same scope, not a clone, as cloning allocates new tokens
         //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
 

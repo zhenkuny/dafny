@@ -42,3 +42,10 @@ module Uint32Marshalling refines IntegerMarshalling(NativePackedUint32) {
   // ERR:
   // module-test.dfy[Uint32Marshalling](36,15): Error: type mismatch for argument (function expects seq<byte>, got seq<byte>) (covariant type parameter would require byte <: byte)
 }
+
+/*
+// Works on normal Dafny
+module Uint32Marshalling refines IntegerMarshalling {
+  import Int = NativePackedUint32
+}
+*/
