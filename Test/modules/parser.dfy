@@ -1,4 +1,5 @@
-// Int stuff
+// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint" "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
 
 // Simplifying the example to use int instead of NativeTypes.byte makes the problem disappear
 module NativeTypes {
