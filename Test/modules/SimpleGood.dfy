@@ -16,7 +16,7 @@ module ABase {
 abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
-/*
+
 // Try simple functor application
 abstract module Apply {
   import OutputBase = P(ABase)
@@ -26,7 +26,7 @@ abstract module Apply {
   }
 }
 
-
+/*
 // Make sure functors behave applicatively
 abstract module Apply2 {
   import Output0 = P(ABase)
@@ -161,7 +161,6 @@ abstract module SameFunctorRefinmentWithArg(MyA:ABase, PA0:P(MyA), PA1:P(MyA)) r
     PA1.Test(a);
   }
 }
-*/
 
 // Test abstract vs. concrete module rules
 //module AInt refines ABase {
@@ -185,3 +184,4 @@ module AConsumer(a:ABase, b:P(a)) {
 ////    var x:int := a;
 ////  }
 //}
+*/
