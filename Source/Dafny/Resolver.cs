@@ -2592,6 +2592,7 @@ namespace Microsoft.Dafny
 
         // 2)
         Dictionary<string, ModuleDecl> formalActualPairs = new Dictionary<string, ModuleDecl>();
+        Dictionary<string, ModuleQualifiedId> formalActualIdPairs = new Dictionary<string, ModuleQualifiedId>();
         bool allArgumentsConcrete = true;
         for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
           ModuleFormal formal = functorApp.functor.Formals[i];
@@ -2604,6 +2605,7 @@ namespace Microsoft.Dafny
           }
 
           formalActualPairs[formal.Name.val] = actual;
+          formalActualIdPairs[formal.Name.val] = functorApp.moduleParamNames[i];
           allArgumentsConcrete &= !actual.Signature.IsAbstract;
 
           if (formal.TypeDef == null) {
@@ -2647,21 +2649,27 @@ namespace Microsoft.Dafny
               }
 
               if (update) {
-                var newFunctorApp = amd.TargetQId.FunctorApp.ShallowClone();
-                newFunctorApp.moduleParams = new List<ModuleDecl>();
+                List<ModuleDecl> moduleParams = new List<ModuleDecl>();
+                List<ModuleQualifiedId> moduleParamNames = new List<ModuleQualifiedId>();
 
                 // Compute a new set of actual parameters, taking into account the outer functor's actuals
-                foreach (var pair in System.Linq.Enumerable.Zip(amd.TargetQId.FunctorApp.moduleParamNames,
-                  amd.TargetQId.FunctorApp.moduleParams)) {
-                  string actualName = pair.Item1.ToString();
-                  ModuleDecl oldActual = pair.Item2;
+                for (int i = 0; i < amd.TargetQId.FunctorApp.moduleParamNames.Count; i++) {
+                  string actualName = amd.TargetQId.FunctorApp.moduleParamNames[i].ToString();
+                  ModuleDecl oldActual = amd.TargetQId.FunctorApp.moduleParams[i];
+                  ModuleQualifiedId oldActualName = amd.TargetQId.FunctorApp.moduleParamNames[i];
 
                   if (formalActualPairs.ContainsKey(actualName)) {
-                    newFunctorApp.moduleParams.Add(formalActualPairs[actualName]);
+                    moduleParams.Add(formalActualPairs[actualName]);
+                    moduleParamNames.Add(formalActualIdPairs[actualName]);
                   } else {
-                    newFunctorApp.moduleParams.Add(oldActual);
+                    moduleParams.Add(oldActual);
+                    moduleParamNames.Add(oldActualName);
                   }
                 }
+
+                FunctorApplication newFunctorApp = new FunctorApplication(amd.TargetQId.FunctorApp.tok, moduleParamNames);
+                newFunctorApp.functor = amd.TargetQId.FunctorApp.functor;
+                newFunctorApp.moduleParams = moduleParams;
 
                 // Compute the result of the new application
                 var newImportDecl = ApplyFunctor(newFunctorApp, (LiteralModuleDecl)amd.TargetQId.Root);
