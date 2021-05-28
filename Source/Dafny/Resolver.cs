@@ -2577,7 +2577,7 @@ namespace Microsoft.Dafny
 
         // 1)
         ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
-        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name);
+        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name, preserveFunctors:false);
         // Cloner doesn't propagate the compile signature, so we do so ourselves
         CloneCompileSignatures(literalRoot.ModuleDef, newDef);
         // Should have the same scope, not a clone, as cloning allocates new tokens

@@ -14,11 +14,11 @@ namespace Microsoft.Dafny
   {
 
 
-    public virtual ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
+    public virtual ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name, bool preserveFunctors=true) {
       ModuleDefinition nw;
       if (m is DefaultModuleDecl) {
         nw = new DefaultModuleDecl();
-      } else if (m is Functor f) {
+      } else if (m is Functor f && preserveFunctors) {
         nw = new Functor(Tok(m.tok), name, m.PrefixIds, m.IsAbstract, m.IsFacade,
           m.RefinementQId, m.EnclosingModule, CloneAttributes(m.Attributes),
           true, m.IsToBeVerified, m.IsToBeCompiled, new List<ModuleFormal>(f.Formals));
@@ -892,8 +892,8 @@ namespace Microsoft.Dafny
       return d.IsVisibleInScope(scope);
     }
 
-    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
-      var basem = base.CloneModuleDefinition(m, name);
+    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name, bool preserveFunctors=true) {
+      var basem = base.CloneModuleDefinition(m, name, preserveFunctors);
 
 
       //Merge signatures for imports which point to the same module
@@ -1013,8 +1013,8 @@ namespace Microsoft.Dafny
       : base(scope) {
     }
 
-    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
-      var basem = base.CloneModuleDefinition(m, name);
+    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name, bool preserveFunctors=true) {
+      var basem = base.CloneModuleDefinition(m, name, preserveFunctors);
       basem.TopLevelDecls.RemoveAll(t => t is ModuleExportDecl);
       return basem;
     }
