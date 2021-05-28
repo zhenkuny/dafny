@@ -46,7 +46,8 @@ abstract module StateMachineRefinement(
   ensures H.Next(I(s), I(s'), l)
 }
 
-abstract module ComposeRefinements(
+/*
+module ComposeRefinements(
     crIfc: Ifc,
     P: StateMachine(crIfc),
     Q: StateMachine(crIfc),
@@ -72,7 +73,7 @@ abstract module ComposeRefinements(
     Ref1.NextRefinement(s, s', l);
     Ref2.NextRefinement(Ref1.I(s), Ref1.I(s'), l);
   }
-}
+}*/
 
 module MapStateMachine2 refines StateMachine(MapIfc)
 {
@@ -87,7 +88,7 @@ module MapStateMachine2 refines StateMachine(MapIfc)
     && (l.Insert? ==> s'.m == s.m[l.k := l.value])
   }
 }
-
+/*
 module MapStateMachine3 refines StateMachine(MapIfc)
 {
   datatype Variables = Y(n: map<int, int>)
@@ -101,7 +102,7 @@ module MapStateMachine3 refines StateMachine(MapIfc)
     && (l.Insert? ==> s'.n == s.n[l.k := l.value])
   }
 }
-
+*/
 module Refinement_1_2 refines StateMachineRefinement(MapIfc, MapStateMachine, MapStateMachine2)
 {
   function I(s: L.Variables) : H.Variables

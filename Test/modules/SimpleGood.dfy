@@ -13,7 +13,7 @@ module ABase {
 //
 // Use an element of a formal parameter
 // Morally equivalent to P_normal above
-module P(A: ABase) {
+abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
 /*
