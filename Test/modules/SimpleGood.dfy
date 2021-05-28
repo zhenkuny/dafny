@@ -26,7 +26,6 @@ abstract module Apply {
   }
 }
 
-/*
 // Make sure functors behave applicatively
 abstract module Apply2 {
   import Output0 = P(ABase)
@@ -184,4 +183,3 @@ module AConsumer(a:ABase, b:P(a)) {
 ////    var x:int := a;
 ////  }
 //}
-*/
