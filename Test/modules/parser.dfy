@@ -5,12 +5,9 @@
 module NativeTypes {
   newtype{:nativeType "byte"} byte = i:int | 0 <= i < 0x100
 }
-
 abstract module NativePackedInt {
   import opened NativeTypes
-
   type Integer
-
   function unpack(s: seq<byte>) : Integer
 }
 
@@ -19,34 +16,34 @@ module NativePackedUint32 refines NativePackedInt {
 }
 
 // Marshalling
-
 abstract module Marshalling {
   import opened NativeTypes
-
   type UnmarshalledType
-
   function parse(data: seq<byte>) : UnmarshalledType
 }
 
 // Integer marshalling
-
 abstract module IntegerMarshalling(Int: NativePackedInt) refines Marshalling {
   type UnmarshalledType = Int.Integer
-
   function parse(data: seq<byte>) : UnmarshalledType
   {
     Int.unpack(data)
   }
 }
 
-module Uint32Marshalling refines IntegerMarshalling(NativePackedUint32) {
-  // ERR:
-  // module-test.dfy[Uint32Marshalling](36,15): Error: type mismatch for argument (function expects seq<byte>, got seq<byte>) (covariant type parameter would require byte <: byte)
+// Sequence marshalling
+abstract module SeqMarshalling(ElementMarshalling: Marshalling) refines Marshalling {
+  type Element = ElementMarshalling.UnmarshalledType
+  type UnmarshalledType = seq<Element>
 }
 
-/*
-// Works on normal Dafny
-module Uint32Marshalling refines IntegerMarshalling {
-  import Int = NativePackedUint32
+abstract module UniformSizedElementSeqMarshallingCommon(elementMarshalling: Marshalling) refines SeqMarshalling(elementMarshalling) {
+  function parse_prefix(data: seq<byte>) : (result: UnmarshalledType)
+    ensures result == [ elementMarshalling.parse(data) ]
 }
-*/
+
+abstract module IntegerSeqMarshalling(Int: NativePackedInt) refines UniformSizedElementSeqMarshallingCommon(IntegerMarshalling(Int)) {
+  // ERR:
+  // module-example.dfy(35,49): Error: arguments must have comparable types (got ElementMarshalling.UnmarshalledType and UnmarshalledType)
+  // module-example.dfy[IntegerSeqMarshalling](35,49): Error: arguments must have comparable types (got ElementMarshalling.UnmarshalledType and UnmarshalledType)
+}
