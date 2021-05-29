@@ -118,27 +118,23 @@ module Refinement_1_2 refines StateMachineRefinement(MapIfc, MapStateMachine, Ma
   }
 }
 
-/*
 module Refinement_2_3 refines StateMachineRefinement(MapIfc, MapStateMachine2, MapStateMachine3)
 {
   function I(s: L.Variables) : H.Variables
   {
-    H.Variables[s.m]
+    H.Y(s.m)
   }
 
   lemma InitRefinement(s: L.Variables)
-  requires L.Init(s)
-  ensures H.Init(I(s))
   {
   }
 
   lemma NextRefinement(s: L.Variables, s': L.Variables, l: ifc.TransitionLabel)
-  requires L.Next(s, s', l)
-  ensures H.Next(I(s), I(s'), l)
   {
   }
 }
 
+/*
 module Final {
   import BigRef = ComposeRefinements(
       MapIfc,
