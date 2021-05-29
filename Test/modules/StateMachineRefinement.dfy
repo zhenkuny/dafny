@@ -107,7 +107,7 @@ module Refinement_1_2 refines StateMachineRefinement(MapIfc, MapStateMachine, Ma
 {
   function I(s: L.Variables) : H.Variables
   {
-    H.Variables(s)
+    H.X(s)
   }
 
   lemma InitRefinement(s: L.Variables)
@@ -124,7 +124,7 @@ module Refinement_2_3 refines StateMachineRefinement(MapIfc, MapStateMachine2, M
 {
   function I(s: L.Variables) : H.Variables
   {
-    H.Variables(s.m)
+    H.Variables[s.m]
   }
 
   lemma InitRefinement(s: L.Variables)

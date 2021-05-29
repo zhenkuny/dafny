@@ -2593,6 +2593,7 @@ namespace Microsoft.Dafny
         // 2)
         Dictionary<string, ModuleDecl> formalActualPairs = new Dictionary<string, ModuleDecl>();
         Dictionary<string, ModuleQualifiedId> formalActualIdPairs = new Dictionary<string, ModuleQualifiedId>();
+        HashSet<TopLevelDecl> fakeAliasDecls = new HashSet<TopLevelDecl>();
         bool allArgumentsConcrete = true;
         for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
           ModuleFormal formal = functorApp.functor.Formals[i];
@@ -2623,6 +2624,7 @@ namespace Microsoft.Dafny
           // Find the artificial alias decl we created, and update it with the actual
           foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
             if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
+              fakeAliasDecls.Add(topLevelDecl);
               amd.Signature = actual.Signature;
               // TODO: Need this?
               // amd.Signature.Refines = refinementTransformer.RefinedSig;
@@ -2635,6 +2637,9 @@ namespace Microsoft.Dafny
         // 3)
         // Update each module import that involves a functor (if any)
         foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
+          if (fakeAliasDecls.Contains(decl)) {
+            continue;   // Don't duplicate work
+          }
           if (decl is AliasModuleDecl amd) {
             if (amd.TargetQId.FunctorApp != null) {
               // Do we need to update this functor?
