@@ -134,7 +134,6 @@ module Refinement_2_3 refines StateMachineRefinement(MapIfc, MapStateMachine2, M
   }
 }
 
-/*
 module Final {
   import BigRef = ComposeRefinements(
       MapIfc,
@@ -149,15 +148,15 @@ module Final {
 
   lemma stuff() {
     var s : A.Variables := map[];
-    assert BigRef.I(s) == B.Variables(map[]);
-    BigRef.InitRefinement(s);
-
-    BigRef.NextRefinement(
-        map[1 := 2],
-        map[1 := 2],
-        MapIfc.Query(1, 2));
+    assert BigRef.I(s) == B.Y(map[]);
+//    BigRef.InitRefinement(s);
+//
+//    BigRef.NextRefinement(
+//        map[1 := 2],
+//        map[1 := 2],
+//        MapIfc.Query(1, 2));
   }
-
+/*
   lemma names_for_same_type(
       a: MapIfc.TransitionLabel,
       b: A.ifc.TransitionLabel,
@@ -174,5 +173,5 @@ module Final {
       == g == h == i == j == k
   {
   }
-}
 */
+}
