@@ -2573,7 +2573,8 @@ namespace Microsoft.Dafny
         // 2) For each formal, update the AliasModuleDecl we introduced
         //    to point at the actual module parameter
         // 3) Update any other functor applications in this module to use the new actual as well
-        // 4) Compute the signature for our newly created module
+        // 4) Update the functor's refinement target, if needed
+        // 5) Compute the signature for our newly created module
 
         // 1)
         ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
@@ -2683,9 +2684,44 @@ namespace Microsoft.Dafny
             }
           }
         }
-        // TODO: Update the refines for the functor too?
 
         // 4)
+        if (literalRoot.Signature.Refines != null && literalRoot.Signature.Refines.Origin != null) {
+          // We refined a functor application, so we need to check whether any of that functor's arguments need to be updated
+          FunctorApplication refFunctorApplication = literalRoot.Signature.Refines.Origin;
+
+          // Do we need to update this functor?
+          var formalNames = functorApp.functor.Formals.ConvertAll(f => f.Name.val);
+          bool update = false;
+          foreach (ModuleQualifiedId actual in refFunctorApplication.moduleParamNames) {
+            if (formalNames.Contains(actual.ToString())) {
+              // We need to reapply this functor
+              update = true;
+              break;
+            }
+          }
+
+          if (update) {
+            for (int i = 0; i < refFunctorApplication.functor.Formals.Count; i++) {
+              ModuleFormal refFormal = refFunctorApplication.functor.Formals[i];
+              var refActualName = refFunctorApplication.moduleParamNames[i];
+
+              foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
+                if (decl is AliasModuleDecl amd && amd.Name == refFormal.Name.val) {
+                  // This is a fake alias we inserted for the functor we're refining,
+                  // which was then merged into this new module's definition.  Update it.
+                  amd.Signature = formalActualPairs[refActualName.ToString()].Signature;
+                }
+              }
+            }
+          }
+
+          // TODO: But this module might itself have some refines, so we need to recurse
+          // TODO: Do we need to reapply any functors we find in the refining module too?
+        }
+
+
+        // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
         sig.Origin = functorApp;
 
