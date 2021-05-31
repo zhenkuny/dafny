@@ -148,7 +148,9 @@ module Final {
 
   lemma stuff() {
     var s : A.Variables := map[];
-    assert BigRef.I(s) == B.Y(map[]);
+    assert BigRef.I(s) // H.Variables = MapStateMachine3.Variables
+           ==
+           B.Y(map[]); // MapStateMachine3.Variables
 //    BigRef.InitRefinement(s);
 //
 //    BigRef.NextRefinement(
