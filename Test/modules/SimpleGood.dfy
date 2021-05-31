@@ -16,7 +16,7 @@ module ABase {
 abstract module P(A: ABase) {
   method Test(a:A.Key)
 }
-/*
+
 // Try simple functor application
 abstract module Apply {
   import OutputBase = P(ABase)
@@ -160,20 +160,24 @@ abstract module SameFunctorRefinmentWithArg(MyA:ABase, PA0:P(MyA), PA1:P(MyA)) r
     PA1.Test(a);
   }
 }
-*/
 
 // Test abstract vs. concrete module rules
-module AInt refines ABase {
+
+module Pconcrete(A: ABase) {
+  method Test(a:A.Key)
+}
+
+module AIntAgain refines ABase {
   type Key = int
 }
 
-module AConsumer(a:ABase, b:P(a)) {
+module AConsumer(a:ABase, b:Pconcrete(a)) {
   method MyTest(x:b.A.Key) {
     b.Test(x);
   }
 }
 
-module Pconcrete refines AConsumer(AInt, P(AInt)) {
+module PconcreteRefiner refines AConsumer(AIntAgain, Pconcrete(AIntAgain)) {
 //  method Test(a:A.Key) {
 //    var x:int := a;
 //  }

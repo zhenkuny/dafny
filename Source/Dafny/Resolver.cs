@@ -2566,6 +2566,41 @@ namespace Microsoft.Dafny
       }
     }
 
+    // refiningSig: The signature that the current module refines
+    // topLevelDecls: The decls in the functor that does the refining
+    // formalAcutalPairs: Map from formal names to the actual arguments
+    private void UpdateRefinment(ModuleSignature refiningSig, List<TopLevelDecl> topLevelDecls, Dictionary<string, ModuleDecl> formalActualPairs) {
+      if (refiningSig != null && refiningSig.Refines != null && refiningSig.Refines.Origin != null) {
+        // We refined a functor application, so we need to check whether any of that functor's arguments need to be updated
+        FunctorApplication refFunctorApplication = refiningSig.Refines.Origin;
+
+        // Construct a map from this functor's formals to actuals, in case we need to recurse
+        Dictionary<string, ModuleDecl> newMap = new Dictionary<string, ModuleDecl>();
+        for (int i = 0; i < refFunctorApplication.functor.Formals.Count; i++) {
+          ModuleFormal refFormal = refFunctorApplication.functor.Formals[i];
+          var refActualName = refFunctorApplication.moduleParamNames[i];
+
+          foreach (TopLevelDecl decl in topLevelDecls) {
+            if (decl is AliasModuleDecl amd && amd.Name == refFormal.Name.val) {
+              // This is a fake alias we inserted for the functor we're refining,
+              // which was then merged into this new module's definition.  Update it.
+              ModuleDecl actualDecl = formalActualPairs[refActualName.ToString()];
+              amd.Signature = actualDecl.Signature;
+              newMap[refFormal.Name.val] = actualDecl;
+            }
+          }
+        }
+
+        // This module might itself have some refines, so we need to recurse
+        if (refFunctorApplication.functor.RefinementQId != null) {
+          UpdateRefinment(refFunctorApplication.functor.RefinementQId.Decl.Signature, topLevelDecls, newMap);
+        }
+
+        // TODO: Do we need to reapply any functors we find in the refining module too?
+      }
+    }
+
+
     private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
       if (!Resolver.virtualModules.ContainsKey(functorApp)) {
         // Apply the functor
@@ -2686,40 +2721,7 @@ namespace Microsoft.Dafny
         }
 
         // 4)
-        if (literalRoot.Signature.Refines != null && literalRoot.Signature.Refines.Origin != null) {
-          // We refined a functor application, so we need to check whether any of that functor's arguments need to be updated
-          FunctorApplication refFunctorApplication = literalRoot.Signature.Refines.Origin;
-
-          // Do we need to update this functor?
-          var formalNames = functorApp.functor.Formals.ConvertAll(f => f.Name.val);
-          bool update = false;
-          foreach (ModuleQualifiedId actual in refFunctorApplication.moduleParamNames) {
-            if (formalNames.Contains(actual.ToString())) {
-              // We need to reapply this functor
-              update = true;
-              break;
-            }
-          }
-
-          if (update) {
-            for (int i = 0; i < refFunctorApplication.functor.Formals.Count; i++) {
-              ModuleFormal refFormal = refFunctorApplication.functor.Formals[i];
-              var refActualName = refFunctorApplication.moduleParamNames[i];
-
-              foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
-                if (decl is AliasModuleDecl amd && amd.Name == refFormal.Name.val) {
-                  // This is a fake alias we inserted for the functor we're refining,
-                  // which was then merged into this new module's definition.  Update it.
-                  amd.Signature = formalActualPairs[refActualName.ToString()].Signature;
-                }
-              }
-            }
-          }
-
-          // TODO: But this module might itself have some refines, so we need to recurse
-          // TODO: Do we need to reapply any functors we find in the refining module too?
-        }
-
+        UpdateRefinment(literalRoot.Signature, newDef.TopLevelDecls, formalActualPairs);
 
         // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
