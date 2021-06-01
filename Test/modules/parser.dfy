@@ -23,7 +23,7 @@ abstract module Marshalling {
 }
 
 // Integer marshalling
-abstract module IntegerMarshalling(Int: NativePackedInt) refines Marshalling {
+module IntegerMarshalling(Int: NativePackedInt) refines Marshalling {
   type UnmarshalledType = Int.Integer
   function parse(data: seq<byte>) : UnmarshalledType
   {
@@ -41,9 +41,15 @@ abstract module UniformSizedElementSeqMarshallingCommon(elementMarshalling: Mars
   function parse_prefix(data: seq<byte>) : (result: UnmarshalledType)
     ensures result == [ elementMarshalling.parse(data) ]
 }
-abstract module IntegerSeqMarshalling(Int: NativePackedInt) refines UniformSizedElementSeqMarshallingCommon(IntegerMarshalling(Int)) {
+module IntegerSeqMarshalling(Int: NativePackedInt) refines UniformSizedElementSeqMarshallingCommon(IntegerMarshalling(Int)) {
 }
 
-abstract module Uint32SeqMarshalling refines IntegerSeqMarshalling(NativePackedUint32) {
+// Works
+module Uint32SeqMarshalling { //refines IntegerSeqMarshalling(NativePackedUint32) {
+  import X = IntegerSeqMarshalling(NativePackedUint32)
 }
 
+// Creates a type mismatch, presumably due to _Compile issues
+//module Uint32SeqMarshalling2 refines IntegerSeqMarshalling(NativePackedUint32) {
+//
+//}

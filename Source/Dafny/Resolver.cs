@@ -2703,6 +2703,7 @@ namespace Microsoft.Dafny
             if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
               fakeAliasDecls.Add(topLevelDecl);
               amd.Signature = actual.Signature;
+              amd.Signature.IsAbstract = false;    // Functor formals are considered concrete, since they will always eventually be concretely instantiated
               // TODO: Need this?
               // amd.Signature.Refines = refinementTransformer.RefinedSig;
               // or this?
