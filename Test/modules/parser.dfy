@@ -45,6 +45,5 @@ abstract module IntegerSeqMarshalling(Int: NativePackedInt) refines UniformSized
 }
 
 abstract module Uint32SeqMarshalling refines IntegerSeqMarshalling(NativePackedUint32) {
-  // CRASH!
 }
 

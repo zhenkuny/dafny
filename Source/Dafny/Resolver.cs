@@ -2599,51 +2599,47 @@ namespace Microsoft.Dafny
     // refiningSig: The signature that the current module refines
     // topLevelDecls: The decls in the functor that does the refining
     // formalAcutalPairs: Map from formal names to the actual arguments
-    private void UpdateRefinment(ModuleSignature refiningSig, List<TopLevelDecl> topLevelDecls,
+    private void UpdateRefinment(FunctorApplication refFunctorApplication, List<TopLevelDecl> topLevelDecls,
       Dictionary<string, ModuleDecl> formalActualPairs, Dictionary<string, ModuleQualifiedId> formalActualIdPairs) {
-      if (refiningSig != null && refiningSig.Refines != null && refiningSig.Refines.Origin != null) {
-        // We refined a functor application, so we need to check whether any of that functor's arguments need to be updated
-        FunctorApplication refFunctorApplication = refiningSig.Refines.Origin;
 
-        // Construct a map from this functor's formals to actuals, in case we need to recurse
-        Dictionary<string, ModuleDecl> newMap = new Dictionary<string, ModuleDecl>();
-        Dictionary<string, ModuleQualifiedId> newIdMap = new Dictionary<string, ModuleQualifiedId>();
-        for (int i = 0; i < refFunctorApplication.functor.Formals.Count; i++) {
-          ModuleFormal refFormal = refFunctorApplication.functor.Formals[i];
-          ModuleQualifiedId refActualName = refFunctorApplication.moduleParamNames[i];
+      // Construct a map from this functor's formals to actuals, in case we need to recurse
+      Dictionary<string, ModuleDecl> newMap = new Dictionary<string, ModuleDecl>();
+      Dictionary<string, ModuleQualifiedId> newIdMap = new Dictionary<string, ModuleQualifiedId>();
+      for (int i = 0; i < refFunctorApplication.functor.Formals.Count; i++) {
+        ModuleFormal refFormal = refFunctorApplication.functor.Formals[i];
+        ModuleQualifiedId refActualName = refFunctorApplication.moduleParamNames[i];
 
-          foreach (TopLevelDecl decl in topLevelDecls) {
-            if (decl is AliasModuleDecl amd && amd.Name == refFormal.Name.val) {
-              // This is a fake alias we inserted for the functor we're refining,
-              // which was then merged into this new module's definition.  Update it.
-              ModuleDecl actualDecl;
-              ModuleQualifiedId actualId;
-              if (formalActualPairs.ContainsKey(refActualName.ToString())) {
-                actualDecl = formalActualPairs[refActualName.ToString()];
-                actualId = formalActualIdPairs[refActualName.ToString()];
-              } else {
-                Contract.Assert(refActualName.FunctorApp != null);
-                // The actual is a functor that needs to be recomputed
-                FunctorApplication newFunctorApp;
-                actualDecl = UpdateFunctorApp(refActualName.FunctorApp, (LiteralModuleDecl) refActualName.Root,
-                  formalActualPairs, formalActualIdPairs, out newFunctorApp);
-                actualId = new ModuleQualifiedId(newFunctorApp, refActualName.Path);
-              }
-
-              amd.Signature = actualDecl.Signature;
-              newMap[refFormal.Name.val] = actualDecl;
-              newIdMap[refFormal.Name.val] = actualId;
+        foreach (TopLevelDecl decl in topLevelDecls) {
+          if (decl is AliasModuleDecl amd && amd.Name == refFormal.Name.val) {
+            // This is a fake alias we inserted for the functor we're refining,
+            // which was then merged into this new module's definition.  Update it.
+            ModuleDecl actualDecl;
+            ModuleQualifiedId actualId;
+            if (formalActualPairs.ContainsKey(refActualName.ToString())) {
+              actualDecl = formalActualPairs[refActualName.ToString()];
+              actualId = formalActualIdPairs[refActualName.ToString()];
+            } else {
+              Contract.Assert(refActualName.FunctorApp != null);
+              // The actual is a functor that needs to be recomputed
+              FunctorApplication newFunctorApp;
+              actualDecl = UpdateFunctorApp(refActualName.FunctorApp, (LiteralModuleDecl) refActualName.Root,
+                formalActualPairs, formalActualIdPairs, out newFunctorApp);
+              actualId = new ModuleQualifiedId(newFunctorApp, refActualName.Path);
             }
+
+            amd.Signature = actualDecl.Signature;
+            newMap[refFormal.Name.val] = actualDecl;
+            newIdMap[refFormal.Name.val] = actualId;
           }
         }
-
-        // This module might itself have some refines, so we need to recurse
-        if (refFunctorApplication.functor.RefinementQId != null) {
-          UpdateRefinment(refFunctorApplication.functor.RefinementQId.Decl.Signature, topLevelDecls, newMap, newIdMap);
-        }
-
-        // TODO: Do we need to reapply any functors we find in the refining module too?
       }
+
+      // This module might itself have some refines, so we need to recurse
+      if (refFunctorApplication.functor.RefinementQId != null && refFunctorApplication.functor.RefinementQId.FunctorApp != null) {
+        UpdateRefinment(refFunctorApplication.functor.RefinementQId.FunctorApp, topLevelDecls, newMap, newIdMap);
+      }
+
+      // TODO: Do we need to reapply any functors we find in the refining module too?
     }
 
     private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
@@ -2744,7 +2740,10 @@ namespace Microsoft.Dafny
         }
 
         // 4)
-        UpdateRefinment(literalRoot.Signature, newDef.TopLevelDecls, formalActualPairs, formalActualIdPairs);
+        if (literalRoot.Signature.Refines != null && literalRoot.Signature.Refines.Origin != null) {
+          // We refined a functor application, so we need to check whether any of that functor's arguments need to be updated
+          UpdateRefinment(literalRoot.Signature.Refines.Origin, newDef.TopLevelDecls, formalActualPairs, formalActualIdPairs);
+        }
 
         // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
