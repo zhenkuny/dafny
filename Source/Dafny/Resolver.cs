@@ -515,10 +515,12 @@ namespace Microsoft.Dafny
           }
           Type.PopScope(tempVis);
 
-          if (reporter.Count(ErrorLevel.Error) == errorCount && !m.IsAbstract && !(m is Functor)) {  // Functors are effectively abstract?
+          if (reporter.Count(ErrorLevel.Error) == errorCount && (!m.IsAbstract || m is Functor)) {
             // compilation should only proceed if everything is good, including the signature (which preResolveErrorCount does not include);
             CompilationCloner cloner = new CompilationCloner(compilationModuleClones);
             var nw = cloner.CloneModuleDefinition(m, m.CompileName + "_Compile");
+            // Cloner doesn't propagate the compile signature, so we do so ourselves
+            CloneCompileSignatures(m, nw);
             compilationModuleClones.Add(m, nw);
             var oldErrorsOnly = reporter.ErrorsOnly;
             reporter.ErrorsOnly = true; // turn off warning reporting for the clone
@@ -2749,6 +2751,7 @@ namespace Microsoft.Dafny
         // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
         sig.Origin = functorApp;
+        sig.CompileSignature = literalRoot.Signature.CompileSignature;
 
         // Update the abstractness of the new module
         if (!literalRoot.Signature.IsAbstract && allArgumentsConcrete) {
