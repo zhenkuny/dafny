@@ -50,6 +50,6 @@ module Uint32SeqMarshalling { //refines IntegerSeqMarshalling(NativePackedUint32
 }
 
 // Creates a type mismatch, presumably due to _Compile issues
-//module Uint32SeqMarshalling2 refines IntegerSeqMarshalling(NativePackedUint32) {
-//
-//}
+module Uint32SeqMarshalling2 refines IntegerSeqMarshalling(NativePackedUint32) {
+
+}
