@@ -134,7 +134,7 @@ module Refinement_2_3 refines StateMachineRefinement(MapIfc, MapStateMachine2, M
   }
 }
 
-module Final {
+abstract module Final {
   import BigRef = ComposeRefinements(
       MapIfc,
       MapStateMachine,
@@ -148,9 +148,10 @@ module Final {
 
   lemma stuff() {
     var s : A.Variables := map[];
-    assert BigRef.I(s) // H.Variables = MapStateMachine3.Variables
-           ==
-           B.Y(map[]); // MapStateMachine3.Variables
+    var BigRefIs := BigRef.I(s);
+//    assert BigRef.I(s) // H.Variables = MapStateMachine3.Variables
+//           ==
+//           B.Y(map[]); // MapStateMachine3.Variables
 //    BigRef.InitRefinement(s);
 //
 //    BigRef.NextRefinement(
