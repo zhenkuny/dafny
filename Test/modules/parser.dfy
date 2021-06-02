@@ -8,7 +8,7 @@ module NativeTypes {
 abstract module NativePackedInt {
   import opened NativeTypes
   //type Integer
-  function unpack(s: seq<byte>) : Integer
+  function unpack(s: seq<byte>) : bool
 }
 
 //module NativePackedUint32 refines NativePackedInt {
@@ -27,8 +27,7 @@ module IntegerMarshalling(Int: NativePackedInt) refines Marshalling {
   //type UnmarshalledType = Int.Integer
   function parse(data: seq<byte>) : bool
   {
-    var x := Int.unpack(data);
-    true
+    Int.unpack(data)
   }
 }
 
