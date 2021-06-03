@@ -177,7 +177,7 @@ module AConsumer(a:ABase, b:Pconcrete(a)) {
 }
 
 module PconcreteRefiner refines AConsumer(AIntAgain, Pconcrete(AIntAgain)) {
-//  method Test(a:A.Key) {
-//    var x:int := a;
-//  }
+  method Test(y:a.Key) {
+    var x:int := y;
+  }
 }
