@@ -21,6 +21,10 @@ namespace Microsoft.Dafny
 
     ErrorReporter reporter;
     ModuleSignature moduleInfo = null;
+    private bool resolvingFunctor = false;
+
+    public static Dictionary<FunctorApplication, LiteralModuleDecl> virtualModules =
+      new Dictionary<FunctorApplication, LiteralModuleDecl>();
 
     private bool RevealedInScope(Declaration d) {
       Contract.Requires(d != null);
@@ -378,6 +382,38 @@ namespace Microsoft.Dafny
       }
     }
 
+    public void CreateCompileModule(ModuleDefinition m, ModuleSignature sig, Program prog = null, Dictionary<ModuleDefinition, ModuleDefinition> compilationModuleClones = null) {
+      CompilationCloner cloner = new CompilationCloner(compilationModuleClones);
+      var nw = cloner.CloneModuleDefinition(m, m.CompileName + "_Compile");
+      // Cloner doesn't propagate the compile signature, so we do so ourselves
+      CloneCompileSignatures(m, nw);
+      if (compilationModuleClones != null) {
+        compilationModuleClones.Add(m, nw);
+      }
+      var oldErrorsOnly = reporter.ErrorsOnly;
+      reporter.ErrorsOnly = true; // turn off warning reporting for the clone
+      // Next, compute the compile signature
+      Contract.Assert(!useCompileSignatures);
+      useCompileSignatures = true; // set Resolver-global flag to indicate that Signatures should be followed to their CompiledSignature
+      Type.DisableScopes();
+      var compileSig = RegisterTopLevelDecls(nw, true);
+      compileSig.Refines = refinementTransformer.RefinedSig;
+      sig.CompileSignature = compileSig;
+      foreach (var exportDecl in sig.ExportSets.Values) {
+        exportDecl.Signature.CompileSignature = cloner.CloneModuleSignature(exportDecl.Signature, compileSig);
+      }
+      // Now we're ready to resolve the cloned module definition, using the compile signature
+      ResolveModuleDefinition(nw, compileSig);
+
+      if (prog != null) {
+        prog.CompileModules.Add(nw);
+      }
+
+      useCompileSignatures = false; // reset the flag
+      Type.EnableScopes();
+      reporter.ErrorsOnly = oldErrorsOnly;
+    }
+
     public void ResolveProgram(Program prog) {
       Contract.Requires(prog != null);
       Type.ResetScopes();
@@ -457,7 +493,7 @@ namespace Microsoft.Dafny
 
       var compilationModuleClones = new Dictionary<ModuleDefinition, ModuleDefinition>();
       foreach (var decl in sortedDecls) {
-        if (decl is LiteralModuleDecl) {
+        if (decl is LiteralModuleDecl lmd) {
           // The declaration is a literal module, so it has members and such that we need
           // to resolve. First we do refinement transformation. Then we construct the signature
           // of the module. This is the public, externally visible signature. Then we add in
@@ -512,30 +548,9 @@ namespace Microsoft.Dafny
           }
           Type.PopScope(tempVis);
 
-          if (reporter.Count(ErrorLevel.Error) == errorCount && !m.IsAbstract) {
+          if (reporter.Count(ErrorLevel.Error) == errorCount) { // && (!m.IsAbstract || m is Functor)) {
             // compilation should only proceed if everything is good, including the signature (which preResolveErrorCount does not include);
-            CompilationCloner cloner = new CompilationCloner(compilationModuleClones);
-            var nw = cloner.CloneModuleDefinition(m, m.CompileName + "_Compile");
-            compilationModuleClones.Add(m, nw);
-            var oldErrorsOnly = reporter.ErrorsOnly;
-            reporter.ErrorsOnly = true; // turn off warning reporting for the clone
-            // Next, compute the compile signature
-            Contract.Assert(!useCompileSignatures);
-            useCompileSignatures = true; // set Resolver-global flag to indicate that Signatures should be followed to their CompiledSignature
-            Type.DisableScopes();
-            var compileSig = RegisterTopLevelDecls(nw, true);
-            compileSig.Refines = refinementTransformer.RefinedSig;
-            sig.CompileSignature = compileSig;
-            foreach (var exportDecl in sig.ExportSets.Values) {
-              exportDecl.Signature.CompileSignature = cloner.CloneModuleSignature(exportDecl.Signature, compileSig);
-            }
-            // Now we're ready to resolve the cloned module definition, using the compile signature
-
-            ResolveModuleDefinition(nw, compileSig);
-            prog.CompileModules.Add(nw);
-            useCompileSignatures = false; // reset the flag
-            Type.EnableScopes();
-            reporter.ErrorsOnly = oldErrorsOnly;
+            CreateCompileModule(m, sig, prog, compilationModuleClones);
           }
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
@@ -996,6 +1011,8 @@ namespace Microsoft.Dafny
 
       // resolve
       var oldModuleInfo = moduleInfo;
+      var oldResolvingFunctor = resolvingFunctor;
+      resolvingFunctor = m is Functor;
       moduleInfo = MergeSignature(sig, systemNameInfo);
       Type.PushScope(moduleInfo.VisibilityScope);
       ResolveOpenedImports(moduleInfo, m, useCompileSignatures, this); // opened imports do not persist
@@ -1014,6 +1031,7 @@ namespace Microsoft.Dafny
 
       Type.PopScope(moduleInfo.VisibilityScope);
       moduleInfo = oldModuleInfo;
+      resolvingFunctor = oldResolvingFunctor;
       return true;
     }
 
@@ -1401,7 +1419,7 @@ namespace Microsoft.Dafny
 
     public class ModuleBindings {
       private ModuleBindings parent;
-      private Dictionary<string, ModuleDecl> modules;
+      public Dictionary<string, ModuleDecl> modules;
       private Dictionary<string, ModuleBindings> bindings;
 
       public ModuleBindings(ModuleBindings p) {
@@ -1558,48 +1576,168 @@ namespace Microsoft.Dafny
       }
     }
 
-    private bool ResolveQualifiedModuleIdRootRefines(ModuleDefinition context, ModuleBindings bindings, ModuleQualifiedId qid,
+    private bool ResolveQualifiedModuleIdRootFunctor(Graph<ModuleDecl> dependencies, ModuleDecl source,
+      Func<ModuleDecl,bool> filter, ModuleBindings bindings, ModuleQualifiedId qid,
+      out ModuleDecl result) {
+      Contract.Assert(qid != null && qid.FunctorApp != null);
+
+      // Find the definition of this functor.  It should exist at this point,
+      // since functors are always LiteralModuleDecls; i.e., there are no virtual functors
+      ModuleDecl functorDecl = null;
+      bool res = bindings.TryLookupFilter(qid.FunctorApp.tok, out functorDecl, filter);
+      if (!res) {
+        result = null;
+        return false;
+      }
+
+      if (functorDecl is LiteralModuleDecl lmd && (lmd.ModuleDef is Functor f)) {
+        qid.FunctorApp.functor = f;
+        // Caller will take care of adding the dependency for functorDecl, since we return it via result
+        result = functorDecl;
+        qid.Root = functorDecl;
+      } else {
+        reporter.Error(MessageSource.Resolver, qid.FunctorApp.tok, "Attempted to apply non-functor: {0}",
+          qid.FunctorApp.tok.val);
+        result = null;
+        return false;
+      }
+
+      // Fill in the module params
+      qid.FunctorApp.moduleParams = new List<ModuleDecl>();
+      foreach (ModuleQualifiedId id in qid.FunctorApp.moduleParamNames) {
+        ModuleDecl moduleParamDecl;
+        res = ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, id, out moduleParamDecl);
+        if (res) {
+          List<IToken> Path = id.Path;
+          ModuleDecl decl = moduleParamDecl;
+          /*
+          ModuleSignature p = moduleParamDecl.Signature;
+          // Duplicates logic from ResolveModuleQualifiedId for chasing down the full ModuleQualifiedId path
+          for (int k=0; k < id.Path.Count; k++) {
+            var tld = p.TopLevels.GetValueOrDefault(Path[k].val, null);
+            if (!(tld is ModuleDecl dd)) {
+              if (decl.Signature.ModuleDef == null) {
+                reporter.Error(MessageSource.Resolver, Path[k],
+                  ModuleNotFoundErrorMessage(k, Path, " because of previous error"));
+              } else {
+                reporter.Error(MessageSource.Resolver, Path[k], ModuleNotFoundErrorMessage(k, Path));
+              }
+              return false;
+            }
+
+            // Any aliases along the qualified path ought to be already resolved,
+            // else the modules are not being resolved in the right order
+            if (dd is AliasModuleDecl amd) {
+              Contract.Assert(amd.Signature != null);
+            }
+            decl = dd;
+          }
+          */
+          qid.FunctorApp.moduleParams.Add(decl);
+          // We take responsibility for adding edges to arguments
+          dependencies.AddEdge(source, moduleParamDecl);
+        } else {
+          reporter.Error(MessageSource.Resolver, qid.rootToken(),
+            "Could not resolve module argument {0} to a valid module declaration", id.ToString());
+          result = null;
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    private bool ResolveQualifiedModuleIdRoot(Graph<ModuleDecl> dependencies, ModuleDecl source,
+      Func<ModuleDecl, bool> filter, ModuleBindings bindings, ModuleQualifiedId qid,
+      out ModuleDecl result) {
+      if (qid.FunctorApp != null) {
+        return ResolveQualifiedModuleIdRootFunctor(dependencies, source, filter, bindings, qid, out result);
+      } else {
+        IToken root = qid.Path[0];
+        result = null;
+        bool res = bindings.TryLookupFilter(root, out result, filter);
+        qid.Root = result;
+        return res;
+      }
+    }
+
+    private bool ResolveQualifiedModuleIdRootRefines(Graph<ModuleDecl> dependencies, ModuleDecl source, ModuleDefinition context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
       Contract.Assert(qid != null);
-      IToken root = qid.Path[0];
       result = null;
-      bool res = bindings.TryLookupFilter(root, out result, m => m.EnclosingModuleDefinition != context);
-      qid.Root = result;
-      return res;
+      Func<ModuleDecl, bool> filter = m =>
+        (m.EnclosingModuleDefinition != context
+         || (m.EnclosingModuleDefinition == context
+             && m.EnclosingModuleDefinition is Functor f
+             && f.Formals.ConvertAll(f => f.Name.val).Contains(m.Name)));
+      return ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, qid, out result);
     }
 
     // Find a matching module for the root of the QualifiedId, ignoring
     // (a) the module (context) itself and (b) any local imports
     // The latter is so that if one writes 'import A`E  import F = A`F' the second A does not
     // resolve to the alias produced by the first import
-    private bool ResolveQualifiedModuleIdRootImport(AliasModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
+    private bool ResolveQualifiedModuleIdRootImport(Graph<ModuleDecl> dependencies, ModuleDecl source, AliasModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
       Contract.Assert(qid != null);
-      IToken root = qid.Path[0];
-      result = null;
-      bool res = bindings.TryLookupFilter(root, out result,
-        m => context != m && ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition && context.Exports.Count == 0) || m is LiteralModuleDecl));
-      qid.Root = result;
-      return res;
+      Func<ModuleDecl, bool> filter = m => context != m &&
+                                           ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition &&
+                                             context.Exports.Count == 0) ||
+                                            m is LiteralModuleDecl);
+      return ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, qid, out result);
     }
 
-    private bool ResolveQualifiedModuleIdRootAbstract(AbstractModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
+    private bool ResolveQualifiedModuleIdRootAbstract(Graph<ModuleDecl> dependencies, ModuleDecl source, AbstractModuleDecl context, ModuleBindings bindings, ModuleQualifiedId qid,
       out ModuleDecl result) {
       Contract.Assert(qid != null);
-      IToken root = qid.Path[0];
-      result = null;
-      bool res = bindings.TryLookupFilter(root, out result,
-        m => context != m && ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition && context.Exports.Count == 0) || m is LiteralModuleDecl));
-      qid.Root = result;
-      return res;
+      Func<ModuleDecl, bool> filter = m =>
+        context != m &&
+        ((context.EnclosingModuleDefinition == m.EnclosingModuleDefinition && context.Exports.Count == 0) ||
+         m is LiteralModuleDecl);
+      return ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, qid, out result);
     }
 
     private void ProcessDependenciesDefinition(ModuleDecl decl, ModuleDefinition m, ModuleBindings bindings,
       Graph<ModuleDecl> dependencies) {
       Contract.Assert(decl is LiteralModuleDecl);
+      Contract.Assert(((LiteralModuleDecl)decl).ModuleDef == m);
+
+      if (m is Functor f) {
+        // We need to create dependencies on each formal's module type
+        foreach (ModuleFormal formal in f.Formals) {
+          // Might as well fill in parent information while we're here
+          formal.Parent = f;
+
+
+          // Insert each of the functor's formals as an abstract decl,
+          // so the normal resolution will take place, and we can later
+          // update the formals with their actuals
+
+          // REVIEW: What should the "exports" list (final argument) be?
+          AliasModuleDecl formalDecl =
+            new AliasModuleDecl(formal.TypeName, formal.Name, f, opened: false, new List<IToken>());
+          f.TopLevelDecls.Add(formalDecl);
+
+          // Extend the bindings to include formal parameters
+          bindings.modules.Add(formal.Name.val, formalDecl);
+          /*
+          // Now add the formal's type as a dependency
+          ModuleDecl other = null;
+          bool res = ResolveQualifiedModuleIdRootRefines(dependencies, decl, m, bindings, formal.TypeName, out other);
+          if (!res) {
+            reporter.Error(MessageSource.Resolver, formal.TypeName.rootToken(),
+              $"module {formal.TypeName.ToString()} named as formal type does not exist");
+          } else {
+            Contract.Assert(other != null); // follows from postcondition of TryGetValue
+            dependencies.AddEdge(decl, other);
+          }
+          */
+        }
+      }
+
       if (m.RefinementQId != null) {
         ModuleDecl other;
-        bool res = ResolveQualifiedModuleIdRootRefines(((LiteralModuleDecl)decl).ModuleDef, bindings, m.RefinementQId, out other);
+        bool res = ResolveQualifiedModuleIdRootRefines(dependencies, decl, m, bindings, m.RefinementQId, out other);
         if (!res) {
           reporter.Error(MessageSource.Resolver, m.RefinementQId.rootToken(),
             $"module {m.RefinementQId.ToString()} named as refinement base does not exist");
@@ -1629,23 +1767,27 @@ namespace Microsoft.Dafny
 
     private void ProcessDependencies(ModuleDecl moduleDecl, ModuleBindings bindings, Graph<ModuleDecl> dependencies) {
       dependencies.AddVertex(moduleDecl);
-      if (moduleDecl is LiteralModuleDecl) {
+      if (moduleDecl is LiteralModuleDecl lmd) {
         ProcessDependenciesDefinition(moduleDecl, ((LiteralModuleDecl)moduleDecl).ModuleDef, bindings, dependencies);
       } else if (moduleDecl is AliasModuleDecl) {
         var alias = moduleDecl as AliasModuleDecl;
         ModuleDecl root;
         // TryLookupFilter works outward, looking for a match to the filter for
         // each enclosing module.
-        if (!ResolveQualifiedModuleIdRootImport(alias, bindings, alias.TargetQId, out root)) {
+        if (!ResolveQualifiedModuleIdRootImport(dependencies, moduleDecl, alias, bindings, alias.TargetQId, out root)) {
 //        if (!bindings.TryLookupFilter(alias.TargetQId.rootToken(), out root, m => alias != m)
-          reporter.Error(MessageSource.Resolver, alias.tok, ModuleNotFoundErrorMessage(0, alias.TargetQId.Path));
+          if (alias.TargetQId.FunctorApp != null) {
+            reporter.Error(MessageSource.Resolver, alias.tok, "module " + alias.TargetQId.rootName() + " does not exist");
+          } else {
+            reporter.Error(MessageSource.Resolver, alias.tok, ModuleNotFoundErrorMessage(0, alias.TargetQId.Path));
+          }
         }  else {
           dependencies.AddEdge(moduleDecl, root);
         }
       } else if (moduleDecl is AbstractModuleDecl) {
         var abs = moduleDecl as AbstractModuleDecl;
         ModuleDecl root;
-        if (!ResolveQualifiedModuleIdRootAbstract(abs, bindings, abs.QId, out root)) {
+        if (!ResolveQualifiedModuleIdRootAbstract(dependencies, moduleDecl, abs, bindings, abs.QId, out root)) {
           //if (!bindings.TryLookupFilter(abs.QId.rootToken(), out root,
           //  m => abs != m && (((abs.EnclosingModuleDefinition == m.EnclosingModuleDefinition) && (abs.Exports.Count == 0)) || m is LiteralModuleDecl)))
           reporter.Error(MessageSource.Resolver, abs.tok, ModuleNotFoundErrorMessage(0, abs.QId.Path));
@@ -2358,28 +2500,344 @@ namespace Microsoft.Dafny
       }
     }
 
+
+    private bool EqualsOrRefinesFunctorApps(FunctorApplication actualFunc, FunctorApplication formalFunc) {
+      // Easy case
+      if (actualFunc == formalFunc) { return true; }
+
+      // Check if the functors are compatible and their arguments are compatible
+      if (actualFunc.functor == formalFunc.functor) {
+        foreach (var pair in System.Linq.Enumerable.Zip(actualFunc.moduleParams, formalFunc.moduleParams)) {
+          var actualArg = pair.Item1;
+          var formalArg = pair.Item2;
+
+          if (!EqualsOrRefines(actualArg.Signature, formalArg.Signature)) {
+            return false;
+          }
+        }
+
+        return true;
+      } else {
+        // We don't currently support functor refinement, so if the functors don't match, we fail
+        return false;
+      }
+    }
+
+    private bool EqualsOrRefines(ModuleSignature actual, ModuleSignature formal) {
+      // Two easy cases first
+      if (actual == null) { return false; }
+      if (actual.ModuleDef == formal.ModuleDef) { return true; }
+
+      // Check for refinement-based match
+      bool eq = EqualsOrRefines(actual.Refines, formal);
+      if (eq) { return true; }
+
+      if (actual.Origin != null && formal.Origin != null) {
+        return EqualsOrRefinesFunctorApps(actual.Origin, formal.Origin);
+      }
+      // REVIEW: Is there any hope left if one has an origin but the other doesn't?
+
+      return false;
+    }
+
+    private ModuleDefinition GetDefFromDecl(ModuleDecl decl) {
+      if (decl is LiteralModuleDecl lmd) {
+        return lmd.ModuleDef;
+      } else if (decl is AliasModuleDecl amd) {
+        return amd.Signature.ModuleDef;
+      } else if (decl is AbstractModuleDecl am) {
+        return am.Signature.ModuleDef;
+      } else if (decl is ModuleExportDecl med) {
+        return med.Signature.ModuleDef;
+      }
+      return null;
+    }
+
+    private ModuleSignature GetSigFromDecl(ModuleDecl decl) {
+      if (decl is LiteralModuleDecl lmd) {
+        return lmd.Signature;
+      } else if (decl is AliasModuleDecl amd) {
+        return amd.Signature;
+      } else if (decl is AbstractModuleDecl am) {
+        return am.Signature;
+      } else if (decl is ModuleExportDecl med) {
+        return med.Signature;
+      }
+      return null;
+    }
+
+    private void CloneCompileSignatures(ModuleDefinition src, ModuleDefinition dst) {
+      foreach (var pair in System.Linq.Enumerable.Zip(src.TopLevelDecls, dst.TopLevelDecls)) {
+        var srcDecl = pair.Item1;
+        var dstDecl = pair.Item2;
+        if (srcDecl is ModuleDecl srcMD && dstDecl is ModuleDecl dstMD) {
+          if (srcMD.Signature != null) {
+            dstMD.Signature.CompileSignature = srcMD.Signature.CompileSignature;
+          }
+        }
+      }
+    }
+
+    private ModuleDecl UpdateFunctorApp(FunctorApplication functorApp, LiteralModuleDecl literalRoot,
+      Dictionary<string, ModuleDecl> formalActualPairs, Dictionary<string, ModuleQualifiedId> formalActualIdPairs,
+      out FunctorApplication newFunctorApp) {
+      List<ModuleDecl> moduleParams = new List<ModuleDecl>();
+      List<ModuleQualifiedId> moduleParamNames = new List<ModuleQualifiedId>();
+
+      // Compute a new set of actual parameters, taking into account the outer functor's actuals
+      for (int i = 0; i < functorApp.moduleParamNames.Count; i++) {
+        string actualName = functorApp.moduleParamNames[i].ToString();
+        ModuleDecl oldActual = functorApp.moduleParams[i];
+        ModuleQualifiedId oldActualName = functorApp.moduleParamNames[i];
+
+        if (formalActualPairs.ContainsKey(actualName)) {
+          moduleParams.Add(formalActualPairs[actualName]);
+          moduleParamNames.Add(formalActualIdPairs[actualName]);
+        } else {
+          moduleParams.Add(oldActual);
+          moduleParamNames.Add(oldActualName);
+        }
+      }
+
+      newFunctorApp = new FunctorApplication(functorApp.tok, moduleParamNames);
+      newFunctorApp.functor = functorApp.functor;
+      newFunctorApp.moduleParams = moduleParams;
+
+      // Compute the result of the new application
+      ModuleDecl newImportDecl = ApplyFunctor(newFunctorApp, literalRoot);
+      return newImportDecl;
+    }
+
+    // refiningSig: The signature that the current module refines
+    // topLevelDecls: The decls in the functor that does the refining
+    // formalAcutalPairs: Map from formal names to the actual arguments
+    private void UpdateRefinment(FunctorApplication refFunctorApplication, List<TopLevelDecl> topLevelDecls,
+      Dictionary<string, ModuleDecl> formalActualPairs, Dictionary<string, ModuleQualifiedId> formalActualIdPairs) {
+
+      // Construct a map from this functor's formals to actuals, in case we need to recurse
+      Dictionary<string, ModuleDecl> newMap = new Dictionary<string, ModuleDecl>();
+      Dictionary<string, ModuleQualifiedId> newIdMap = new Dictionary<string, ModuleQualifiedId>();
+      for (int i = 0; i < refFunctorApplication.functor.Formals.Count; i++) {
+        ModuleFormal refFormal = refFunctorApplication.functor.Formals[i];
+        ModuleQualifiedId refActualName = refFunctorApplication.moduleParamNames[i];
+
+        foreach (TopLevelDecl decl in topLevelDecls) {
+          if (decl is AliasModuleDecl amd && amd.Name == refFormal.Name.val) {
+            // This is a fake alias we inserted for the functor we're refining,
+            // which was then merged into this new module's definition.  Update it.
+            ModuleDecl actualDecl;
+            ModuleQualifiedId actualId;
+            if (formalActualPairs.ContainsKey(refActualName.ToString())) {
+              actualDecl = formalActualPairs[refActualName.ToString()];
+              actualId = formalActualIdPairs[refActualName.ToString()];
+            } else {
+              Contract.Assert(refActualName.FunctorApp != null);
+              // The actual is a functor that needs to be recomputed
+              FunctorApplication newFunctorApp;
+              actualDecl = UpdateFunctorApp(refActualName.FunctorApp, (LiteralModuleDecl) refActualName.Root,
+                formalActualPairs, formalActualIdPairs, out newFunctorApp);
+              actualId = new ModuleQualifiedId(newFunctorApp, refActualName.Path);
+            }
+
+            amd.Signature = actualDecl.Signature;
+            newMap[refFormal.Name.val] = actualDecl;
+            newIdMap[refFormal.Name.val] = actualId;
+          }
+        }
+      }
+
+      // This module might itself have some refines, so we need to recurse
+      if (refFunctorApplication.functor.RefinementQId != null && refFunctorApplication.functor.RefinementQId.FunctorApp != null) {
+        UpdateRefinment(refFunctorApplication.functor.RefinementQId.FunctorApp, topLevelDecls, newMap, newIdMap);
+      }
+
+      // TODO: Do we need to reapply any functors we find in the refining module too?
+    }
+
+    private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
+      if (!Resolver.virtualModules.ContainsKey(functorApp)) {
+        // Apply the functor
+        // 1) Clone the base module definition
+        // 2) For each formal, update the AliasModuleDecl we introduced
+        //    to point at the actual module parameter
+        // 3) Update any other functor applications in this module to use the new actual as well
+        // 4) Update the functor's refinement target, if needed
+        // 5) Compute the signature for our newly created module
+
+        // 1)
+        ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
+        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name, preserveFunctors:false);
+        // Cloner doesn't propagate the compile signature, so we do so ourselves
+        CloneCompileSignatures(literalRoot.ModuleDef, newDef);
+        // Should have the same scope, not a clone, as cloning allocates new tokens
+        //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
+
+        if (functorApp.functor.Formals.Count != functorApp.moduleParams.Count) {
+          var msg =
+            $"Module {literalRoot.Name} expects {functorApp.functor.Formals.Count} parameters, got {functorApp.moduleParams.Count}";
+          reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
+          return null;
+        }
+
+        // 2)
+        Dictionary<string, ModuleDecl> formalActualPairs = new Dictionary<string, ModuleDecl>();
+        Dictionary<string, ModuleQualifiedId> formalActualIdPairs = new Dictionary<string, ModuleQualifiedId>();
+        HashSet<TopLevelDecl> fakeAliasDecls = new HashSet<TopLevelDecl>();
+        bool allArgumentsConcrete = true;
+        for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
+          ModuleFormal formal = functorApp.functor.Formals[i];
+          ModuleDecl actual = functorApp.moduleParams[i];
+          FunctorApplication actualFunctor = functorApp.moduleParamNames[i].FunctorApp;
+
+          if (actualFunctor != null) {
+            // We want the result of the application, not the unevaluated form
+            actual = ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root);
+          }
+
+          formalActualPairs[formal.Name.val] = actual;
+          formalActualIdPairs[formal.Name.val] = functorApp.moduleParamNames[i];
+          allArgumentsConcrete &= !actual.Signature.IsAbstract;
+
+          if (formal.TypeDef == null) {
+            formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
+          }
+
+          var formalSig = GetSigFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
+
+          if (!EqualsOrRefines(actual.Signature, formalSig)) {
+            var msg = $"Module {literalRoot.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
+            reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
+            return null;
+          }
+
+          // Find the artificial alias decl we created, and update it with the actual
+          foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
+            if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
+              fakeAliasDecls.Add(topLevelDecl);
+              amd.Signature = actual.Signature;
+              amd.Signature.IsAbstract = false;    // Functor formals are considered concrete, since they will always eventually be concretely instantiated
+              // TODO: Need this?
+              // amd.Signature.Refines = refinementTransformer.RefinedSig;
+              // or this?
+              // prog.ModuleSigs[m] = amd.Signature;
+            }
+          }
+        }
+
+        // 3)
+        // Update each module import that involves a functor (if any)
+        foreach (TopLevelDecl decl in newDef.TopLevelDecls) {
+          if (fakeAliasDecls.Contains(decl)) {
+            continue;   // Don't duplicate work
+          }
+          if (decl is AliasModuleDecl amd) {
+            if (amd.TargetQId.FunctorApp != null) {
+              // Do we need to update this functor?
+              var formalNames = functorApp.functor.Formals.ConvertAll(f => f.Name.val);
+              bool update = false;
+              foreach (ModuleQualifiedId actual in amd.TargetQId.FunctorApp.moduleParamNames) {
+                if (formalNames.Contains(actual.ToString())) {
+                  // We need to reapply this functor
+                  update = true;
+                  break;
+                }
+              }
+
+              if (update) {
+                FunctorApplication newFunctorApp; // Not currently used
+                amd.Signature = UpdateFunctorApp(amd.TargetQId.FunctorApp, (LiteralModuleDecl)amd.TargetQId.Root,
+                  formalActualPairs, formalActualIdPairs, out newFunctorApp).Signature;
+              }
+            }
+          }
+        }
+
+        // 4)
+        if (literalRoot.Signature.Refines != null && literalRoot.Signature.Refines.Origin != null) {
+          // We refined a functor application, so we need to check whether any of that functor's arguments need to be updated
+          UpdateRefinment(literalRoot.Signature.Refines.Origin, newDef.TopLevelDecls, formalActualPairs, formalActualIdPairs);
+        }
+
+        // 5)
+        ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
+        sig.Origin = functorApp;
+        CreateCompileModule(newDef, sig);
+
+        // Update the abstractness of the new module
+        if (!literalRoot.Signature.IsAbstract && allArgumentsConcrete) {
+          sig.IsAbstract = false;
+        } else {
+          // The functor itself is abstract and the produced module should inherits that, or an argument is abstract
+          sig.IsAbstract = true;
+        }
+
+        sig.Refines = literalRoot.Signature.Refines;
+        // TODO: Need this?
+        // sig.Refines = refinementTransformer.RefinedSig;
+
+        // TODO: Need this?
+        // prog.ModuleSigs[m] = sig;
+
+        // REVIEW: Should isAnExport be true?
+        var errCount = reporter.Count(ErrorLevel.Error);
+        var b = ResolveModuleDefinition(newDef, sig, isAnExport: false);
+        Contract.Assert(b); // TODO: Better error handling
+        if (b && reporter.Count(ErrorLevel.Error) == errCount) {
+          newDef.SuccessfullyResolved = true;
+        }
+
+        // 4) Combine everything into a ModuleDecl we can return
+        LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, literalRoot.EnclosingModuleDefinition);
+        newDecl.Signature = sig;
+        newDecl.DefaultExport = sig;
+        Resolver.virtualModules[functorApp] = newDecl;
+        return newDecl;
+      } else {
+        return Resolver.virtualModules[functorApp];
+      }
+    }
+
     // Returns the resolved Module declaration corresponding to the qualified module id
     // Requires the root to have been resolved
     // Issues an error and returns null if the path is not valid
     public ModuleDecl ResolveModuleQualifiedId(ModuleDecl root, ModuleQualifiedId qid, ErrorReporter reporter) {
 
       Contract.Requires(qid != null);
-      Contract.Requires(qid.Path.Count > 0);
+      Contract.Requires(qid.FunctorApp != null || qid.Path.Count > 0);
 
       List<IToken> Path = qid.Path;
       ModuleDecl decl = root;
-      ModuleSignature p;
-      for (int k = 1; k < Path.Count; k++) {
-        if (decl is LiteralModuleDecl) {
-          p = ((LiteralModuleDecl)decl).DefaultExport;
-          if (p == null) {
-            reporter.Error(MessageSource.Resolver, Path[k],
-              ModuleNotFoundErrorMessage(k, Path, $" because {decl.Name} does not have a default export"));
-            return null;
-          }
-        } else {
-          p = decl.Signature;
+      ModuleSignature p = null;
+      int k = 1;
+
+      if (qid.FunctorApp != null) {
+        k = 0;  // Starting point in the Path iteration
+
+        decl = ApplyFunctor(qid.FunctorApp, (LiteralModuleDecl) decl);
+        if (decl == null) {  // Propagate any errors that arose during functor application
+          return null;
         }
+        p = decl.Signature;
+      } else if (qid.Root is LiteralModuleDecl lmd && lmd.ModuleDef is Functor functor) {
+        var msg = $"Functor {functor.Name} expects {functor.Formals.Count} arguments";
+        reporter.Error(MessageSource.Resolver, root.tok, msg);
+        return null;
+      }
+
+
+      for (; k < Path.Count; k++) {
+        if (!(qid.FunctorApp != null && k == 0)) {
+          if (decl is LiteralModuleDecl) {
+            p = ((LiteralModuleDecl) decl).DefaultExport;
+            if (p == null) {
+              reporter.Error(MessageSource.Resolver, Path[k],
+                ModuleNotFoundErrorMessage(k, Path, $" because {decl.Name} does not have a default export"));
+              return null;
+            }
+          } else {
+            p = decl.Signature;
+          }
+        } // else we already computed the initial p when applying the Functor
 
         var tld = p.TopLevels.GetValueOrDefault(Path[k].val, null);
         if (!(tld is ModuleDecl dd)) {
@@ -2407,7 +2865,7 @@ namespace Microsoft.Dafny
     public bool ResolveExport(ModuleDecl alias, ModuleDefinition parent, ModuleQualifiedId qid,
       List<IToken> Exports, out ModuleSignature p, ErrorReporter reporter) {
       Contract.Requires(qid != null);
-      Contract.Requires(qid.Path.Count > 0);
+      Contract.Requires(qid.FunctorApp != null || qid.Path.Count > 0);
       Contract.Requires(Exports != null);
 
       ModuleDecl root = qid.Root;
@@ -2530,7 +2988,7 @@ namespace Microsoft.Dafny
           ResolveIteratorSignature((IteratorDecl)d);
         } else if (d is ModuleDecl) {
           var decl = (ModuleDecl)d;
-          if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract) {
+          if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract && !(def is Functor)) {
             reporter.Error(MessageSource.Resolver, am.TargetQId.rootToken(), "a compiled module ({0}) is not allowed to import an abstract module ({1})", def.Name, am.TargetQId.ToString());
           }
         } else if (d is DatatypeDecl) {
@@ -16225,7 +16683,7 @@ namespace Microsoft.Dafny
 
       if (!moduleInfo.IsAbstract) {
         var md = decl as ModuleDecl;
-        if (md != null && md.Signature.IsAbstract) {
+        if (md != null && md.Signature.IsAbstract && !resolvingFunctor) {
           reporter.Error(MessageSource.Resolver, tok, "a compiled module is not allowed to use an abstract module ({0})", decl.Name);
         }
       }

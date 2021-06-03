@@ -14,6 +14,7 @@ using System.Numerics;
 using System.Linq;
 using Microsoft.Boogie;
 using System.Diagnostics;
+using System.Reflection.Metadata.Ecma335;
 
 namespace Microsoft.Dafny {
   public class Program {
@@ -4004,6 +4005,7 @@ namespace Microsoft.Dafny {
 
   public class ModuleSignature {
     public  VisibilityScope VisibilityScope = null;
+    public FunctorApplication Origin;  // Non-null if this signature came from a module that is the output of a functor
     public readonly Dictionary<string, TopLevelDecl> TopLevels = new Dictionary<string, TopLevelDecl>();
     public readonly Dictionary<string, ModuleExportDecl> ExportSets = new Dictionary<string, ModuleExportDecl>();
     public readonly Dictionary<string, Tuple<DatatypeCtor, bool>> Ctors = new Dictionary<string, Tuple<DatatypeCtor, bool>>();
@@ -4029,19 +4031,74 @@ namespace Microsoft.Dafny {
     }
   }
 
+  public class FunctorApplication {
+    public readonly IToken tok;                                // Functor name
+    public readonly List<ModuleQualifiedId> moduleParamNames;  // Functor arg names (not yet resolved into actual module arguments)
+
+    public Functor functor = null;  // Actual functor being applied.  Filled in during resolution
+    public List<ModuleDecl> moduleParams;  // Actual module arguments to the functor.  Filled in during resolution
+
+    public FunctorApplication(IToken tok, List<ModuleQualifiedId> moduleParamNames) {
+      this.tok = tok;
+      this.moduleParamNames = moduleParamNames;
+    }
+
+    // Does not clone the moduleParams.  Caller needs to handle that part.
+    public FunctorApplication ShallowClone() {
+      FunctorApplication ret = new FunctorApplication(tok, moduleParamNames);
+      ret.functor = functor;
+      return ret;
+    }
+
+    public override string ToString() {
+      string result = tok.val;
+      if (moduleParamNames.Count > 0) {
+        result += "(" + Util.Comma(", ", moduleParamNames, exp => exp.ToString()) + ")";
+      }
+      return result;
+    }
+
+    public override bool Equals(object obj) {
+      if (obj is FunctorApplication fa) {
+        if (functor.Equals(fa.functor)) {
+          return moduleParams.SequenceEqual(fa.moduleParams);
+        } else {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+
+    public override int GetHashCode() {
+      var hash = new HashCode();
+      hash.Add(functor.GetHashCode());
+      foreach (var param in moduleParams) {
+        hash.Add(param.GetHashCode());
+      }
+      return hash.ToHashCode();
+    }
+  }
+
   public class ModuleQualifiedId {
-    public readonly List<IToken> Path; // Path != null && Path.Count > 0
+    public readonly FunctorApplication FunctorApp = null;
+    public readonly List<IToken> Path; // Functor = null ==> Path != null && Path.Count > 0
 
     public ModuleQualifiedId(List<IToken> path) {
       Contract.Assert(path != null && path.Count > 0);
       this.Path = path; // note that the list is aliased -- not to be modified after construction
     }
 
+    public ModuleQualifiedId(FunctorApplication functor, List<IToken> path) {
+      this.FunctorApp = functor;
+      this.Path = path;
+    }
+
     // Creates a clone, including a copy of the list;
     // if the argument is true, resolution information is included
     public ModuleQualifiedId Clone(bool includeResInfo) {
       List<IToken> newlist = new List<IToken>(Path);
-      ModuleQualifiedId cl = new ModuleQualifiedId(newlist);
+      ModuleQualifiedId cl = new ModuleQualifiedId(this.FunctorApp, newlist);
       if (includeResInfo) {
         cl.Root = this.Root;
         cl.Decl = this.Decl;
@@ -4053,16 +4110,28 @@ namespace Microsoft.Dafny {
     }
 
     public string rootName() {
-      return Path[0].val;
+      if (FunctorApp != null) {
+        return FunctorApp.ToString();
+      } else {
+        return Path[0].val;
+      }
     }
 
     public IToken rootToken() {
-      return Path[0];
+      if (FunctorApp != null) {
+        return FunctorApp.tok;
+      } else {
+        return Path[0];
+      }
     }
 
     override public string ToString() {
-      string s = Path[0].val;
-      for (int i = 1; i < Path.Count; ++i) {
+      string s = rootName();
+      int i = 1;
+      if (FunctorApp != null) {
+        i = 0;
+      }
+      for (; i < Path.Count; ++i) {
         s = s + "." + Path[i].val;
       }
 
@@ -4090,7 +4159,7 @@ namespace Microsoft.Dafny {
     // as it is needed to determine dependency relationships.
     // Then later the rest of the path is resolved, at which point all of the
     // ids in the path have been fully resolved
-    // Note also that the resolution of the root depends on the syntactice location
+    // Note also that the resolution of the root depends on the syntactic location
     // of the qualified id; the resolution of subsequent ids depends on the
     // default export set of the previous id.
     public ModuleDecl Root; // the module corresponding to Path[0].val
@@ -4134,7 +4203,7 @@ namespace Microsoft.Dafny {
 
     public List<Include> Includes;
 
-    public readonly List<TopLevelDecl> TopLevelDecls = new List<TopLevelDecl>();  // filled in by the parser; readonly after that, except for the addition of prefix-named modules, which happens in the resolver
+    public List<TopLevelDecl> TopLevelDecls = new List<TopLevelDecl>();  // filled in by the parser; readonly after that, except for the addition of prefix-named modules, which happens in the resolver
     public readonly List<Tuple<List<IToken>, LiteralModuleDecl>> PrefixNamedModules = new List<Tuple<List<IToken>, LiteralModuleDecl>>();  // filled in by the parser; emptied by the resolver
     public readonly Graph<ICallable> CallGraph = new Graph<ICallable>();  // filled in during resolution
     public int Height;  // height in the topological sorting of modules; filled in during resolution
@@ -4182,6 +4251,8 @@ namespace Microsoft.Dafny {
         }
         return visibilityScope;
       }
+
+      set { visibilityScope = value; }
     }
 
     public virtual bool IsDefaultModule {
@@ -4395,6 +4466,34 @@ namespace Microsoft.Dafny {
         return false;
       }
       return true;
+    }
+  }
+
+  public class ModuleFormal
+  {
+    public readonly IToken Name;
+    public readonly ModuleQualifiedId TypeName;  // The non-canonical (b/c it uses strings) name for this module "type"
+    public Functor Parent;            // Functor that declares this formal.  Filled in during resolution
+    public ModuleDefinition TypeDef;  // The actual module "type" of the formal.  Filled in during resolution
+    //public ModuleDefinition ModDef = null;
+
+    public ModuleFormal(IToken name, ModuleQualifiedId type) {
+      this.Name = name;
+      this.TypeName = type;
+      this.Parent = null;
+    }
+  }
+
+  public class Functor : ModuleDefinition
+  {
+    public List<ModuleFormal> Formals;
+
+    public Functor(IToken tok, string name, List<IToken> prefixIds, bool isAbstract, bool isFacade,
+      ModuleQualifiedId refinementQId, ModuleDefinition parent, Attributes attributes, bool isBuiltinName,
+      bool isToBeVerified, bool isToBeCompiled, List<ModuleFormal> formals) :
+      base(tok, name, prefixIds, isAbstract, isFacade, refinementQId, parent, attributes, isBuiltinName,
+        isToBeVerified, isToBeCompiled) {
+      this.Formals = formals;
     }
   }
 
