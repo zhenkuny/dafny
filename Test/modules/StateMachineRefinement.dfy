@@ -1,4 +1,5 @@
-// explicit params
+// RUN: %dafny /compile:0 /print:"%t.print" /dprint:"%t.dprint" "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
 
 abstract module Ifc {
   type TransitionLabel(==,!new)
@@ -149,17 +150,17 @@ abstract module Final {
   lemma stuff() {
     var s : A.Variables := map[];
     var BigRefIs := BigRef.I(s);
-//    assert BigRef.I(s) // H.Variables = MapStateMachine3.Variables
-//           ==
-//           B.Y(map[]); // MapStateMachine3.Variables
-//    BigRef.InitRefinement(s);
-//
-//    BigRef.NextRefinement(
-//        map[1 := 2],
-//        map[1 := 2],
-//        MapIfc.Query(1, 2));
+    assert BigRef.I(s) // H.Variables = MapStateMachine3.Variables
+           ==
+           B.Y(map[]); // MapStateMachine3.Variables
+    BigRef.InitRefinement(s);
+
+    BigRef.NextRefinement(
+        map[1 := 2],
+        map[1 := 2],
+        MapIfc.Query(1, 2));
   }
-/*
+
   lemma names_for_same_type(
       a: MapIfc.TransitionLabel,
       b: A.ifc.TransitionLabel,
@@ -168,13 +169,13 @@ abstract module Final {
       e: BigRef.P.ifc.TransitionLabel,
       f: BigRef.Q.ifc.TransitionLabel,
       g: BigRef.R.ifc.TransitionLabel,
-      h: BigRef.Ref1.L.TransitionLabel,
-      i: BigRef.Ref1.H.TransitionLabel,
-      j: BigRef.Ref2.L.TransitionLabel,
-      k: BigRef.Ref2.H.TransitionLabel)
+      h: BigRef.Ref1.L.ifc.TransitionLabel,
+      i: BigRef.Ref1.H.ifc.TransitionLabel,
+      j: BigRef.Ref2.L.ifc.TransitionLabel,
+      k: BigRef.Ref2.H.ifc.TransitionLabel)
   requires a == b == c == d == e == f
       == g == h == i == j == k
   {
   }
-*/
+
 }
