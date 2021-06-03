@@ -382,6 +382,38 @@ namespace Microsoft.Dafny
       }
     }
 
+    public void CreateCompileModule(ModuleDefinition m, ModuleSignature sig, Program prog = null, Dictionary<ModuleDefinition, ModuleDefinition> compilationModuleClones = null) {
+      CompilationCloner cloner = new CompilationCloner(compilationModuleClones);
+      var nw = cloner.CloneModuleDefinition(m, m.CompileName + "_Compile");
+      // Cloner doesn't propagate the compile signature, so we do so ourselves
+      CloneCompileSignatures(m, nw);
+      if (compilationModuleClones != null) {
+        compilationModuleClones.Add(m, nw);
+      }
+      var oldErrorsOnly = reporter.ErrorsOnly;
+      reporter.ErrorsOnly = true; // turn off warning reporting for the clone
+      // Next, compute the compile signature
+      Contract.Assert(!useCompileSignatures);
+      useCompileSignatures = true; // set Resolver-global flag to indicate that Signatures should be followed to their CompiledSignature
+      Type.DisableScopes();
+      var compileSig = RegisterTopLevelDecls(nw, true);
+      compileSig.Refines = refinementTransformer.RefinedSig;
+      sig.CompileSignature = compileSig;
+      foreach (var exportDecl in sig.ExportSets.Values) {
+        exportDecl.Signature.CompileSignature = cloner.CloneModuleSignature(exportDecl.Signature, compileSig);
+      }
+      // Now we're ready to resolve the cloned module definition, using the compile signature
+      ResolveModuleDefinition(nw, compileSig);
+
+      if (prog != null) {
+        prog.CompileModules.Add(nw);
+      }
+
+      useCompileSignatures = false; // reset the flag
+      Type.EnableScopes();
+      reporter.ErrorsOnly = oldErrorsOnly;
+    }
+
     public void ResolveProgram(Program prog) {
       Contract.Requires(prog != null);
       Type.ResetScopes();
@@ -517,30 +549,7 @@ namespace Microsoft.Dafny
 
           if (reporter.Count(ErrorLevel.Error) == errorCount) { // && (!m.IsAbstract || m is Functor)) {
             // compilation should only proceed if everything is good, including the signature (which preResolveErrorCount does not include);
-            CompilationCloner cloner = new CompilationCloner(compilationModuleClones);
-            var nw = cloner.CloneModuleDefinition(m, m.CompileName + "_Compile");
-            // Cloner doesn't propagate the compile signature, so we do so ourselves
-            CloneCompileSignatures(m, nw);
-            compilationModuleClones.Add(m, nw);
-            var oldErrorsOnly = reporter.ErrorsOnly;
-            reporter.ErrorsOnly = true; // turn off warning reporting for the clone
-            // Next, compute the compile signature
-            Contract.Assert(!useCompileSignatures);
-            useCompileSignatures = true; // set Resolver-global flag to indicate that Signatures should be followed to their CompiledSignature
-            Type.DisableScopes();
-            var compileSig = RegisterTopLevelDecls(nw, true);
-            compileSig.Refines = refinementTransformer.RefinedSig;
-            sig.CompileSignature = compileSig;
-            foreach (var exportDecl in sig.ExportSets.Values) {
-              exportDecl.Signature.CompileSignature = cloner.CloneModuleSignature(exportDecl.Signature, compileSig);
-            }
-            // Now we're ready to resolve the cloned module definition, using the compile signature
-
-            ResolveModuleDefinition(nw, compileSig);
-            prog.CompileModules.Add(nw);
-            useCompileSignatures = false; // reset the flag
-            Type.EnableScopes();
-            reporter.ErrorsOnly = oldErrorsOnly;
+            CreateCompileModule(m, sig, prog, compilationModuleClones);
           }
         } else if (decl is AliasModuleDecl alias) {
           // resolve the path
@@ -2751,7 +2760,7 @@ namespace Microsoft.Dafny
         // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
         sig.Origin = functorApp;
-        sig.CompileSignature = literalRoot.Signature.CompileSignature;
+        CreateCompileModule(newDef, sig);
 
         // Update the abstractness of the new module
         if (!literalRoot.Signature.IsAbstract && allArgumentsConcrete) {
