@@ -327,6 +327,19 @@ namespace Microsoft.Dafny.Linear
             {
                 var u = nms.Usage;
                 return (u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased;
+            } else if (stmt is VarDeclPattern vdp)
+            {
+                foreach (var local in vdp.LocalVars)
+                {
+                    var u = vdp.Usage;
+                    if (!u.IsGhostKind && !(
+                        (u.IsLinearKind || u.IsSharedKind) && u.realm == LinearRealm.Erased))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
             }
 
             return false;
