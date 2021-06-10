@@ -825,9 +825,9 @@ namespace Microsoft.Dafny {
       // De-duplicate functor instantiations
       //virtual_mods = virtual_mods.Distinct(new VirtualModuleComparer()).ToList();
 
-      mods.AddRange(virtual_mods);
+     //mods.AddRange(virtual_mods);
       mods.Remove(forModule);
-
+/*
       if (forModule is Functor) {
         // Remove all instantiations of this functor, to avoid generating duplicates in the Boogie code
         mods.RemoveAll(def => def.CompileName == forModule.CompileName);
@@ -836,7 +836,7 @@ namespace Microsoft.Dafny {
         // Remove all functors, since we should only be referring to their instantiations at this point
         mods.RemoveAll(def => def is Functor);
       }
-
+*/
 
       mods.Insert(0, forModule);
       HashSet<string> translatedDecls = new HashSet<string>();

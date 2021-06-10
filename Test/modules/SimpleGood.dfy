@@ -25,7 +25,7 @@ abstract module Apply {
     OutputBase.Test(a);
   }
 }
-
+/*
 // Make sure functors behave applicatively
 abstract module Apply2 {
   import Output0 = P(ABase)
@@ -181,3 +181,4 @@ module PconcreteRefiner refines AConsumer(AIntAgain, Pconcrete(AIntAgain)) {
     var x:int := y;
   }
 }
+*/
