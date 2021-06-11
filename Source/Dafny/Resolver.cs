@@ -2669,7 +2669,7 @@ namespace Microsoft.Dafny
         // Cloner doesn't propagate the compile signature, so we do so ourselves
         CloneCompileSignatures(literalRoot.ModuleDef, newDef);
         // Should have the same scope, not a clone, as cloning allocates new tokens
-        //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
+        newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
 
         if (functorApp.functor.Formals.Count != functorApp.moduleParams.Count) {
           var msg =
@@ -2954,10 +2954,10 @@ namespace Microsoft.Dafny
           sig.VisibilityScope.Augment(decl.AccessibleSignature().VisibilityScope);
         }
       }
-      /*if (sig.Refines != null) {
+      if (sig.Refines != null) {
         moduleInfo.VisibilityScope.Augment(sig.Refines.VisibilityScope);
         sig.VisibilityScope.Augment(sig.Refines.VisibilityScope);
-      }*/
+      }
 
       var typeRedirectionDependencies = new Graph<RedirectingTypeDecl>();  // this concerns the type directions, not their constraints (which are checked for cyclic dependencies later)
       foreach (TopLevelDecl d in ModuleDefinition.AllDeclarationsAndNonNullTypeDecls(declarations)) {
