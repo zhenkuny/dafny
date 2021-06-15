@@ -13,10 +13,9 @@ abstract module PCM {
 }
 module Tokens(pcm: PCM) {
   import opened GhostLoc
-  type {:extern} Token(!new) {
-    function {:extern} loc() : Loc
-    function {:extern} get() : pcm.M
-  }
+  type {:extern} Token(!new)
+  function {:extern} loc(t:Token) : Loc
+  function {:extern} get(t:Token) : pcm.M
 }
 abstract module PCMExt(Base: PCM) refines PCM {
   type B = Base.M
