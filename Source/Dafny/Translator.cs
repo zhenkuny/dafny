@@ -134,9 +134,7 @@ namespace Microsoft.Dafny {
       foreach (var decl in m.TopLevelDecls) {
         if (decl is ModuleDecl && !(decl is ModuleExportDecl)) {
           var mdecl = (ModuleDecl)decl;
-          var scope = mdecl.AccessibleSignature().VisibilityScope;
-          currentScope.Augment(scope);
-          verificationScope.Augment(scope);
+          currentScope.Augment(mdecl.AccessibleSignature().VisibilityScope);
         }
       }
 
