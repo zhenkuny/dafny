@@ -728,6 +728,14 @@ namespace Microsoft.Dafny {
       }
     }
 
+    public void Remove(VisibilityScope other) {
+      if (other != null) {
+        scopeTokens.ExceptWith(other.scopeTokens);
+        scopeIds.ExceptWith(other.scopeIds);
+        cached.Clear();
+      }
+    }
+
     public VisibilityScope(string name) {
       scopeTokens.Add(maxScopeID);
       scopeIds.Add(name);

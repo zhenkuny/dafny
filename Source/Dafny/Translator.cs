@@ -136,7 +136,11 @@ namespace Microsoft.Dafny {
           var mdecl = (ModuleDecl)decl;
           var scope = mdecl.AccessibleSignature().VisibilityScope;
           currentScope.Augment(scope);
-          verificationScope.Augment(scope);
+          // Remove system scope before augmenting verificationScope, or else we'll try to re-verify System code
+          var vScope = new VisibilityScope();
+          vScope.Augment(scope);
+          vScope.Remove(systemModule.VisibilityScope);
+          verificationScope.Augment(vScope);
         }
       }
 
