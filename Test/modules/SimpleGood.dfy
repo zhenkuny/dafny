@@ -38,6 +38,7 @@ abstract module Apply2 {
   }
 }
 
+
 // Try passing a refinement to a functor
 abstract module B refines ABase {
   method BTest()
@@ -180,3 +181,4 @@ module PconcreteRefiner refines AConsumer(AIntAgain, Pconcrete(AIntAgain)) {
     var x:int := y;
   }
 }
+

@@ -2696,13 +2696,7 @@ namespace Microsoft.Dafny
           formalActualPairs[formal.Name.val] = actual;
           formalActualIdPairs[formal.Name.val] = functorApp.moduleParamNames[i];
           allArgumentsConcrete &= !actual.Signature.IsAbstract;
-/*
-          // Augument our visibility with actual's refinement chain
-          // REVIEW: Need to recurse all the way along the chain?
-          if (actual.Signature.Refines != null) {
-            newDef.VisibilityScope.Augment(actual.Signature.Refines.VisibilityScope);
-          }
-*/
+
           if (formal.TypeDef == null) {
             formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
           }
