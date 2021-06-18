@@ -2684,6 +2684,8 @@ namespace Microsoft.Dafny
       // TODO: Do we need to reapply any functors we find in the refining module too?
     }
 
+    private uint FunctorNameCtr = 0;
+
     private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
       if (!Resolver.virtualModules.ContainsKey(functorApp)) {
         // Apply the functor
@@ -2696,7 +2698,9 @@ namespace Microsoft.Dafny
 
         // 1)
         ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
-        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name, preserveFunctors:false);
+        // literalRoot.Name + FunctorNameCtr
+        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, functorApp.ToUniqueName(FunctorNameCtr), preserveFunctors:false);
+        FunctorNameCtr += 1;
         // Cloner doesn't propagate the compile signature, so we do so ourselves
         CloneCompileSignatures(literalRoot.ModuleDef, newDef);
         CloneRecursionInfo(cloner, literalRoot.ModuleDef, newDef);

@@ -4058,6 +4058,14 @@ namespace Microsoft.Dafny {
       return result;
     }
 
+    public string ToUniqueName(uint uniqueId) {
+      string result = tok.val + "_" + uniqueId;
+      if (moduleParamNames.Count > 0) {
+        result += "#" + Util.Comma("_", moduleParamNames, exp => exp.ToString()) + "#";
+      }
+      return result;
+    }
+
     public override bool Equals(object obj) {
       if (obj is FunctorApplication fa) {
         if (functor.Equals(fa.functor)) {
