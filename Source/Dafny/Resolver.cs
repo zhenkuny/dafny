@@ -593,8 +593,10 @@ namespace Microsoft.Dafny
         return;
       }
 
+      IEnumerable<ModuleDefinition> virtualDefs = virtualModules.Values.Select((decl, index) => decl.ModuleDef);
+
       // compute IsRecursive bit for mutually recursive functions and methods
-      foreach (var module in prog.Modules()) {
+      foreach (var module in prog.Modules().Concat(virtualDefs)) {
         foreach (var clbl in ModuleDefinition.AllCallables(module.TopLevelDecls)) {
           if (clbl is Function) {
             var fn = (Function)clbl;
@@ -632,7 +634,7 @@ namespace Microsoft.Dafny
 
       // fill in default decreases clauses:  for functions and methods, and for loops
       FillInDefaultDecreasesClauses(prog);
-      foreach (var module in prog.Modules()) {
+      foreach (var module in prog.Modules().Concat(virtualDefs)) {
         foreach (var clbl in ModuleDefinition.AllItersAndCallables(module.TopLevelDecls)) {
           Statement body = null;
           if (clbl is Method) {
@@ -654,14 +656,14 @@ namespace Microsoft.Dafny
         }
       }
 
-      foreach (var module in prog.Modules()) {
+      foreach (var module in prog.Modules().Concat(virtualDefs)) {
         foreach (var r in rewriters) {
           r.PostDecreasesResolve(module);
         }
       }
 
       // fill in other additional information
-      foreach (var module in prog.Modules()) {
+      foreach (var module in prog.Modules().Concat(virtualDefs)) {
         foreach (var clbl in ModuleDefinition.AllItersAndCallables(module.TopLevelDecls)) {
           Statement body = null;
           if (clbl is ExtremeLemma) {
@@ -680,7 +682,7 @@ namespace Microsoft.Dafny
       }
 
       // Determine, for each function, whether someone tries to adjust its fuel parameter
-      foreach (var module in prog.Modules()) {
+      foreach (var module in prog.Modules().Concat(virtualDefs)) {
         CheckForFuelAdjustments(module.tok, module.Attributes, module);
         foreach (var clbl in ModuleDefinition.AllItersAndCallables(module.TopLevelDecls)) {
           Statement body = null;
@@ -2578,6 +2580,34 @@ namespace Microsoft.Dafny
       }
     }
 
+    private void CloneRecursionInfo(Cloner cloner, ModuleDefinition src, ModuleDefinition dst) {
+      foreach (var pair in System.Linq.Enumerable.Zip(src.TopLevelDecls, dst.TopLevelDecls)) {
+        var srcDecl = pair.Item1;
+        var dstDecl = pair.Item2;
+        if (srcDecl is TopLevelDeclWithMembers srcClass && dstDecl is TopLevelDeclWithMembers dstClass) {
+          foreach (var memberPair in System.Linq.Enumerable.Zip(srcClass.Members, dstClass.Members)) {
+            MemberDecl srcMember = memberPair.First;
+            MemberDecl dstMember = memberPair.Second;
+
+            if (srcMember is Function srcFunc && dstMember is Function dstFunc) {
+              dstFunc.IsRecursive = srcFunc.IsRecursive;
+              dstFunc.IsFueled = srcFunc.IsFueled;
+
+              if (srcFunc is ExtremePredicate srcPred && dstFunc is ExtremePredicate dstPred && srcPred.PrefixPredicate != null) {
+                dstPred.PrefixPredicate = (PrefixPredicate) cloner.CloneFunction(srcPred.PrefixPredicate);
+                dstPred.PrefixPredicate.IsRecursive = srcPred.PrefixPredicate.IsRecursive;
+                dstPred.PrefixPredicate.IsFueled = srcPred.PrefixPredicate.IsFueled;
+                dstPred.Uses.AddRange(srcPred.Uses);
+              }
+            } else if (srcMember is Method srcMethod && dstMember is Method dstMethod) {
+              dstMethod.IsRecursive = srcMethod.IsRecursive;
+              dstMethod.IsTailRecursive = srcMethod.IsTailRecursive;
+            }
+          }
+        }
+      }
+    }
+
     private ModuleDecl UpdateFunctorApp(FunctorApplication functorApp, LiteralModuleDecl literalRoot,
       Dictionary<string, ModuleDecl> formalActualPairs, Dictionary<string, ModuleQualifiedId> formalActualIdPairs,
       out FunctorApplication newFunctorApp) {
@@ -2669,6 +2699,7 @@ namespace Microsoft.Dafny
         ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, literalRoot.Name, preserveFunctors:false);
         // Cloner doesn't propagate the compile signature, so we do so ourselves
         CloneCompileSignatures(literalRoot.ModuleDef, newDef);
+        CloneRecursionInfo(cloner, literalRoot.ModuleDef, newDef);
         // Should have the same scope, not a clone, as cloning allocates new tokens
         //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
 
@@ -2775,8 +2806,10 @@ namespace Microsoft.Dafny
         // TODO: Need this?
         // sig.Refines = refinementTransformer.RefinedSig;
 
-        // TODO: Need this?
-        // prog.ModuleSigs[m] = sig;
+        // TODO: Need this?  Tried it an it creates a:
+        //   System.ArgumentException: An item with the same key has already been added. Key: PCMExt
+        // in Dafny.DafnyDriver.ProcessFiles
+        //this.Prog.ModuleSigs[newDef] = sig;
 
         // REVIEW: Should isAnExport be true?
         var errCount = reporter.Count(ErrorLevel.Error);
