@@ -12,10 +12,7 @@ abstract module PCM {
 }
 module Tokens(pcm: PCM) {
   import opened GhostLoc
-  type {:extern} Token(!new) {
-    function {:extern} loc() : Loc
-    function {:extern} get() : pcm.M
-  }
+  datatype Token = Token(loc: Loc, val: pcm.M)
 }
 abstract module PCMExt(Base: PCM) refines PCM {
   type B = Base.M
@@ -30,6 +27,6 @@ module PCMExtMethods(Base: PCM, Ext: PCMExt(Base)) {
       linear b: BaseTokens.Token,
       ghost f': F)
    : (linear f_out: ExtTokens.Token)
-  ensures f_out.loc().ExtLoc? && f_out.loc().base_loc == b.loc()
-  ensures f_out.get() == f'
+  ensures f_out.loc.ExtLoc? && f_out.loc.base_loc == b.loc
+  ensures f_out.val == f'
 }

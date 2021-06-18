@@ -38,7 +38,6 @@ abstract module Apply2 {
   }
 }
 
-
 // Try passing a refinement to a functor
 abstract module B refines ABase {
   method BTest()
