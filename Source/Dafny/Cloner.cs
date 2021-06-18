@@ -784,7 +784,10 @@ namespace Microsoft.Dafny
       } else if (f is TwoStateFunction) {
         return new TwoStateFunction(Tok(f.tok), newName, f.HasStaticKeyword, tps, formals, f.Result == null ? null : CloneFormal(f.Result), CloneType(f.ResultType),
           req, reads, ens, decreases, body, CloneAttributes(f.Attributes), null);
-      } else {
+      } else if (f is PrefixPredicate p) {
+        return new PrefixPredicate(Tok(f.tok), newName, f.HasStaticKeyword, tps, CloneFormal(p.K), formals, req, reads, ens, decreases,
+          body, CloneAttributes(f.Attributes), p.ExtremePred);
+      }else {
         return new Function(Tok(f.tok), newName, f.HasStaticKeyword, f.Usage, tps, formals, f.Result == null ? null : CloneFormal(f.Result), CloneType(f.ResultType),
           req, reads, ens, decreases, body, CloneAttributes(f.Attributes), null);
       }
