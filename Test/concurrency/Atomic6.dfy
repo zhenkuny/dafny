@@ -4,7 +4,7 @@
 module Atomics {
   type Atomic(==)<G>
   {
-    function identifier() : nat
+    function namespace() : nat
   }
 
   method execute_atomic_add<G>(a: Atomic<G>)
@@ -80,6 +80,21 @@ module Stuff {
       }
 
       g := get_some_object();
+
+      ghost_release g;
+    }
+  }
+
+  glinear datatype Foo = Foo(glinear x: int, ghost z: int)
+
+  method okay3(a1: Atomic<glOption<int>>, glinear foo: Foo)
+  returns (glinear x: int)
+  {
+    atomic_block var ret := execute_atomic_add(a1) {
+      ghost_acquire g;
+
+      glinear var Foo(x', z') := foo;
+      x := x';
 
       ghost_release g;
     }

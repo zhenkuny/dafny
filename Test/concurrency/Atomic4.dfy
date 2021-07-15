@@ -4,7 +4,7 @@
 module Atomics {
   type Atomic(==)<G>
   {
-    function identifier() : nat
+    function namespace() : nat
   }
 
   method execute_atomic_add<G>(a: Atomic<G>)
@@ -79,10 +79,10 @@ module Atomics {
     glinear var d3;
 
     ret1, b1, c1, d1 := execute_atomic_add(a1);
-    assert a1.identifier() != a2.identifier();
+    assert a1.namespace() != a2.namespace();
     ret2, b2, c2, d2 := execute_atomic_noop(a2);
-    assert a1.identifier() != a3.identifier();
-    assert a2.identifier() != a2.identifier(); // ERROR
+    assert a1.namespace() != a3.namespace();
+    assert a2.namespace() != a2.namespace(); // ERROR
     ret3, b3, c3, d3 := execute_atomic_noop(a3);
     finish_atomic(a3, c3, d3);
     finish_atomic(a2, c2, d2);

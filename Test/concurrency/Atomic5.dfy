@@ -4,7 +4,7 @@
 module Atomics {
   type Atomic(==)<G>
   {
-    function identifier() : nat
+    function namespace() : nat
   }
 
   method execute_atomic_add<G>(a: Atomic<G>)
