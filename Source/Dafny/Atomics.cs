@@ -345,13 +345,13 @@ namespace Microsoft.Dafny.Linear
             return false;
         }
 
-        private String get_id_of_identifier_call(Expression e)
+        private String get_id_of_namespace_call(Expression e)
         {
             if (e is ApplySuffix appsuff)
             {
                 if (appsuff.ResolvedExpression is FunctionCallExpr fce)
                 {
-                    if (fce.Name == "identifier")
+                    if (fce.Name == "namespace")
                     {
                         if (fce.Receiver is NameSegment ns)
                         {
@@ -387,8 +387,8 @@ namespace Microsoft.Dafny.Linear
             {
                 if (be.Op == BinaryExpr.Opcode.Neq)
                 {
-                    String actualId1 = get_id_of_identifier_call(be.E0);
-                    String actualId2 = get_id_of_identifier_call(be.E1);
+                    String actualId1 = get_id_of_namespace_call(be.E0);
+                    String actualId2 = get_id_of_namespace_call(be.E1);
                     
                     Contract.Assert(expected_id1 != null);
                     Contract.Assert(expected_id2 != null);
@@ -441,7 +441,7 @@ namespace Microsoft.Dafny.Linear
                                 preservedContents.Atomic, openBlocks[j].preservedContents.Atomic)))
                             {
                                 reporter.Error(MessageSource.Rewriter, stmt.Tok,
-                                    "Need to assert that ({0}.identifier() != {1}.identifier())",
+                                    "Need to assert that ({0}.namespace() != {1}.namespace())",
                                     preservedContents.Atomic, openBlocks[j].preservedContents.Atomic);
                             }
                         }
@@ -628,12 +628,12 @@ namespace Microsoft.Dafny.Linear
                 }
             }
 
-            private Expression identifier_call(IToken tok, string id)
+            private Expression namespace_call(IToken tok, string id)
             {
                 return new ApplySuffix(tok, null, new ExprDotName(
                     tok,
                     new NameSegment(tok, id, null),
-                    "identifier",
+                    "namespace",
                     null
                 ), new List<ApplySuffixArg>());
             }
@@ -749,8 +749,8 @@ namespace Microsoft.Dafny.Linear
                     var asStmt = new AssertStmt(atomicStmt.Tok, atomicStmt.EndTok,
                         new BinaryExpr(atomicStmt.Tok,
                             BinaryExpr.Opcode.Neq,
-                            identifier_call(atomicStmt.Tok, previousAtomicVar),
-                            identifier_call(atomicStmt.Tok, atomicStmt.atomicVar)
+                            namespace_call(atomicStmt.Tok, previousAtomicVar),
+                            namespace_call(atomicStmt.Tok, atomicStmt.atomicVar)
                         ), null, null, null);
                     asStmt.AddCustomizedErrorMessage(
                         "Cannot show that the atomic cell is distinct from other currently-open atomics.");
