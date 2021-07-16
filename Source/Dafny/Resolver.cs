@@ -23,8 +23,7 @@ namespace Microsoft.Dafny
     ModuleSignature moduleInfo = null;
     private bool resolvingFunctor = false;
 
-    public static Dictionary<FunctorApplication, LiteralModuleDecl> virtualModules =
-      new Dictionary<FunctorApplication, LiteralModuleDecl>();
+    public static Dictionary<FunctorApplication, LiteralModuleDecl> virtualModules = null;
 
     private bool RevealedInScope(Declaration d) {
       Contract.Requires(d != null);
@@ -244,6 +243,8 @@ namespace Microsoft.Dafny
 
     public Resolver(Program prog) {
       Contract.Requires(prog != null);
+
+      Resolver.virtualModules = new Dictionary<FunctorApplication, LiteralModuleDecl>(new FunctorAppComparer(this));
 
       builtIns = prog.BuiltIns;
       reporter = prog.reporter;
@@ -2681,6 +2682,72 @@ namespace Microsoft.Dafny
       }
 
       // TODO: Do we need to reapply any functors we find in the refining module too?
+    }
+
+    private class FunctorAppComparer : EqualityComparer<FunctorApplication>
+    {
+      private Resolver resolver;
+
+      public FunctorAppComparer(Resolver resolver) {
+        this.resolver = resolver;
+      }
+
+      private List<ModuleDecl> normalizeModuleParams(FunctorApplication functorApp) {
+        List<ModuleDecl> ret = new List<ModuleDecl>();
+
+        for (int i = 0; i < functorApp.moduleParams.Count; i++) {
+          ModuleDecl param = functorApp.moduleParams[i];
+          FunctorApplication actualFunctor = functorApp.moduleParamNames[i].FunctorApp;
+
+          if (actualFunctor != null) {
+            // We want the result of the application, not the unevaluated form
+            param = resolver.ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root);
+          }
+
+          if (param is LiteralModuleDecl) {
+            ret.Add(param);
+          } else if (param is AliasModuleDecl amd) {
+            var target = param;
+            while (target is AliasModuleDecl target_amd) {
+              // We want to hash what the alias it points to, not the alias itself
+              target = resolver.ResolveModuleQualifiedId(target_amd.TargetQId.Root, target_amd.TargetQId, resolver.reporter);
+              /*
+              if (target_amd.TargetQId.Decl != null) {
+                target = target_amd.TargetQId.Decl;
+              } else if (target_amd.TargetQId.FunctorApp != null) {
+                target = resolver.ApplyFunctor(target_amd.TargetQId.FunctorApp, (LiteralModuleDecl) target_amd.TargetQId.Root);
+              } else {
+                throw new Exception("Module param " + target_amd + " is an alias but TargetQId doesn't contain anything useful, see: " + target_amd.TargetQId);
+              }
+              */
+            }
+            ret.Add(target);
+          } else {
+            throw new Exception("Wasn't expecting other types of ModuleDecls here in normalizeModuleParams.  Got " + param);
+          }
+        }
+        return ret;
+      }
+
+      public override int GetHashCode(FunctorApplication functorApp) {
+        var hash = new HashCode();
+        hash.Add(functorApp.functor.GetHashCode());
+        var normalizedParams = normalizeModuleParams(functorApp);
+        foreach (var param in normalizedParams) {
+          hash.Add(param.GetHashCode());
+        }
+        return hash.ToHashCode();
+      }
+
+      public override bool Equals(FunctorApplication f1, FunctorApplication f2) {
+        if (f1.functor.Equals(f2.functor)) {
+          var normalizedParams1 = normalizeModuleParams(f1);
+          var normalizedParams2 = normalizeModuleParams(f2);
+          return normalizedParams1.SequenceEqual(normalizedParams2);
+        } else {
+          return false;
+        }
+      }
     }
 
     private uint FunctorNameCtr = 0;

@@ -4055,27 +4055,6 @@ namespace Microsoft.Dafny {
       }
       return result;
     }
-
-    public override bool Equals(object obj) {
-      if (obj is FunctorApplication fa) {
-        if (functor.Equals(fa.functor)) {
-          return moduleParams.SequenceEqual(fa.moduleParams);
-        } else {
-          return false;
-        }
-      } else {
-        return false;
-      }
-    }
-
-    public override int GetHashCode() {
-      var hash = new HashCode();
-      hash.Add(functor.GetHashCode());
-      foreach (var param in moduleParams) {
-        hash.Add(param.GetHashCode());
-      }
-      return hash.ToHashCode();
-    }
   }
 
   public class ModuleQualifiedId {
