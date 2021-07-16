@@ -5,16 +5,15 @@ abstract module BasicPCM refines PCM {
 }
 
 module Tokens(pcm: PCM) {
-  datatype Token = Token(loc: nat, val: nat)
+  datatype Token = Token()
 
-  function method get_unit(loc: nat) : Token
+  function method get_unit() : Token
 }
 
 abstract module PCMExt(base: PCM) refines PCM {
 }
 
 abstract module PCMWrap refines PCM {
-  function singleton_loc(): nat
 }
 
 module PCMWrapTokens(pcm: PCMWrap) {
@@ -44,10 +43,8 @@ module RWTokens(rw: RW) {
   import T = Tokens(RW_PCMExt(rw))
   import ET = ExtTokens(Wrap, RW_PCMExt(rw))
 
-  method init()
-  returns (t: T.Token)
-  {
-    ghost var base_loc := Wrap.singleton_loc();
-    t := ET.ext_init(MyBaseTokens.get_unit(base_loc));
+  method init() returns (t: T.Token) {
+    ghost var r := ET.ext_init(MyBaseTokens.get_unit());
+    //t := r;
   }
 }
