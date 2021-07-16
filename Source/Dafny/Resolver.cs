@@ -2896,7 +2896,9 @@ namespace Microsoft.Dafny
         Resolver.virtualModules[functorApp] = newDecl;
         return newDecl;
       } else {
-        return Resolver.virtualModules[functorApp];
+        var mod = Resolver.virtualModules[functorApp];
+        mod.Signature.Origin = functorApp;  // equal FunctorApplications may use different names for the same argument
+        return mod;
       }
     }
 
