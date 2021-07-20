@@ -3833,6 +3833,7 @@ namespace Microsoft.Dafny {
   {
     public readonly ModuleDefinition ModuleDef;
     public ModuleSignature DefaultExport;  // the default export set of the module. fill in by the resolver.
+    public FunctorApplication Origin;      // Non-null if this decl came from the output of a functor
 
     private ModuleSignature emptySignature;
     public override ModuleSignature AccessibleSignature(bool ignoreExports) {
@@ -3995,7 +3996,6 @@ namespace Microsoft.Dafny {
 
   public class ModuleSignature {
     public  VisibilityScope VisibilityScope = null;
-    public FunctorApplication Origin;  // Non-null if this signature came from a module that is the output of a functor
     public readonly Dictionary<string, TopLevelDecl> TopLevels = new Dictionary<string, TopLevelDecl>();
     public readonly Dictionary<string, ModuleExportDecl> ExportSets = new Dictionary<string, ModuleExportDecl>();
     public readonly Dictionary<string, Tuple<DatatypeCtor, bool>> Ctors = new Dictionary<string, Tuple<DatatypeCtor, bool>>();

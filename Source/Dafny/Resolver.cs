@@ -2510,10 +2510,10 @@ namespace Microsoft.Dafny
       // Check if the functors are compatible and their arguments are compatible
       if (actualFunc.functor == formalFunc.functor) {
         foreach (var pair in System.Linq.Enumerable.Zip(actualFunc.moduleParams, formalFunc.moduleParams)) {
-          var actualArg = pair.Item1;
-          var formalArg = pair.Item2;
+          LiteralModuleDecl actualArg = normalizeDecl(pair.Item1);
+          LiteralModuleDecl formalArg = normalizeDecl(pair.Item2);
 
-          if (!EqualsOrRefines(actualArg.Signature, formalArg.Signature)) {
+          if (!EqualsOrRefines(actualArg, formalArg)) {
             return false;
           }
         }
@@ -2525,13 +2525,14 @@ namespace Microsoft.Dafny
       }
     }
 
-    private bool EqualsOrRefines(ModuleSignature actual, ModuleSignature formal) {
+    private bool EqualsOrRefines(LiteralModuleDecl actual, LiteralModuleDecl formal) {
       // Two easy cases first
       if (actual == null) { return false; }
-      if (actual.ModuleDef == formal.ModuleDef) { return true; }
+      if (actual == formal) { return true; }
 
       // Check for refinement-based match
-      bool eq = EqualsOrRefines(actual.Refines, formal);
+      var actual_parent = actual.ModuleDef.RefinementQId?.Decl;
+      bool eq = EqualsOrRefines((LiteralModuleDecl)actual_parent, formal);
       if (eq) { return true; }
 
       if (actual.Origin != null && formal.Origin != null) {
@@ -2554,7 +2555,7 @@ namespace Microsoft.Dafny
       }
       return null;
     }
-
+/*
     private ModuleSignature GetSigFromDecl(ModuleDecl decl) {
       if (decl is LiteralModuleDecl lmd) {
         return lmd.Signature;
@@ -2567,7 +2568,7 @@ namespace Microsoft.Dafny
       }
       return null;
     }
-
+*/
     private void CloneCompileSignatures(ModuleDefinition src, ModuleDefinition dst) {
       foreach (var pair in System.Linq.Enumerable.Zip(src.TopLevelDecls, dst.TopLevelDecls)) {
         var srcDecl = pair.Item1;
@@ -2684,6 +2685,21 @@ namespace Microsoft.Dafny
       // TODO: Do we need to reapply any functors we find in the refining module too?
     }
 
+    private LiteralModuleDecl normalizeDecl(ModuleDecl decl) {
+      if (decl is LiteralModuleDecl lmd) {
+        return lmd;
+      } else if (decl is AliasModuleDecl amd) {
+        var target = decl;
+        while (target is AliasModuleDecl target_amd) {
+          // We want what the alias it points to, not the alias itself
+          target = ResolveModuleQualifiedId(target_amd.TargetQId.Root, target_amd.TargetQId, this.reporter);
+        }
+        return (LiteralModuleDecl) target;
+      } else {
+        throw new Exception("Wasn't expecting other types of ModuleDecls here in normalizeDecl.  Got " + decl);
+      }
+    }
+
     private class FunctorAppComparer : EqualityComparer<FunctorApplication>
     {
       private Resolver resolver;
@@ -2704,27 +2720,7 @@ namespace Microsoft.Dafny
             param = resolver.ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root);
           }
 
-          if (param is LiteralModuleDecl) {
-            ret.Add(param);
-          } else if (param is AliasModuleDecl amd) {
-            var target = param;
-            while (target is AliasModuleDecl target_amd) {
-              // We want to hash what the alias it points to, not the alias itself
-              target = resolver.ResolveModuleQualifiedId(target_amd.TargetQId.Root, target_amd.TargetQId, resolver.reporter);
-              /*
-              if (target_amd.TargetQId.Decl != null) {
-                target = target_amd.TargetQId.Decl;
-              } else if (target_amd.TargetQId.FunctorApp != null) {
-                target = resolver.ApplyFunctor(target_amd.TargetQId.FunctorApp, (LiteralModuleDecl) target_amd.TargetQId.Root);
-              } else {
-                throw new Exception("Module param " + target_amd + " is an alias but TargetQId doesn't contain anything useful, see: " + target_amd.TargetQId);
-              }
-              */
-            }
-            ret.Add(target);
-          } else {
-            throw new Exception("Wasn't expecting other types of ModuleDecls here in normalizeModuleParams.  Got " + param);
-          }
+          ret.Add(resolver.normalizeDecl(param));
         }
         return ret;
       }
@@ -2803,9 +2799,10 @@ namespace Microsoft.Dafny
             formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
           }
 
-          var formalSig = GetSigFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
+          var formalDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
+          var actualLiteral = normalizeDecl(actual);  // Move through any intervening aliases
 
-          if (!EqualsOrRefines(actual.Signature, formalSig)) {
+          if (!EqualsOrRefines(actualLiteral, (LiteralModuleDecl) formalDecl)) {
             var msg = $"Module {literalRoot.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
             reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
             return null;
@@ -2854,14 +2851,13 @@ namespace Microsoft.Dafny
         }
 
         // 4)
-        if (literalRoot.Signature.Refines != null && literalRoot.Signature.Refines.Origin != null) {
+        if (literalRoot.ModuleDef.RefinementQId != null && literalRoot.ModuleDef.RefinementQId.FunctorApp != null) {
           // We refined a functor application, so we need to check whether any of that functor's arguments need to be updated
-          UpdateRefinment(literalRoot.Signature.Refines.Origin, newDef.TopLevelDecls, formalActualPairs, formalActualIdPairs);
+          UpdateRefinment(literalRoot.ModuleDef.RefinementQId.FunctorApp, newDef.TopLevelDecls, formalActualPairs, formalActualIdPairs);
         }
 
         // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
-        sig.Origin = functorApp;
         CreateCompileModule(newDef, sig);
 
         // Update the abstractness of the new module
@@ -2889,15 +2885,15 @@ namespace Microsoft.Dafny
           newDef.SuccessfullyResolved = true;
         }
 
-        // 4) Combine everything into a ModuleDecl we can return
+        // Combine everything into a ModuleDecl we can return
         LiteralModuleDecl newDecl = new LiteralModuleDecl(newDef, literalRoot.EnclosingModuleDefinition);
+        newDecl.Origin = functorApp;
         newDecl.Signature = sig;
         newDecl.DefaultExport = sig;
         Resolver.virtualModules[functorApp] = newDecl;
         return newDecl;
       } else {
         var mod = Resolver.virtualModules[functorApp];
-        mod.Signature.Origin = functorApp;  // equal FunctorApplications may use different names for the same argument
         return mod;
       }
     }
