@@ -2802,6 +2802,12 @@ namespace Microsoft.Dafny
           var formalDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
           var actualLiteral = normalizeDecl(actual);  // Move through any intervening aliases
 
+          if (actualLiteral.ModuleDef is Functor af && actualFunctor == null) {
+            var msg = $"Module {actualLiteral.Name} expects {af.Formals.Count} arguments but didn't receive any!";
+            reporter.Error(MessageSource.Resolver, functorApp.moduleParamNames[i].rootToken(), msg);
+            return null;
+          }
+
           if (!EqualsOrRefines(actualLiteral, (LiteralModuleDecl) formalDecl)) {
             var msg = $"Module {literalRoot.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
             reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
