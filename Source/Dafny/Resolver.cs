@@ -2626,6 +2626,14 @@ namespace Microsoft.Dafny
           moduleParams.Add(formalActualPairs[actualName]);
           moduleParamNames.Add(formalActualIdPairs[actualName]);
         } else {
+          if (oldActualName.FunctorApp != null) {
+            // The actual is itself a FunctorApp, so we may need to update it as well
+            FunctorApplication newActualApp;
+            oldActual = UpdateFunctorApp(oldActualName.FunctorApp, (LiteralModuleDecl)oldActualName.Root, formalActualPairs, formalActualIdPairs,
+              out newActualApp);
+            oldActualName = new ModuleQualifiedId(newActualApp, oldActualName.Path);
+          }
+
           moduleParams.Add(oldActual);
           moduleParamNames.Add(oldActualName);
         }
@@ -2803,6 +2811,12 @@ namespace Microsoft.Dafny
           var formalDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
           var actualLiteral = normalizeDecl(actual);  // Move through any intervening aliases
 
+          if (actualLiteral.ModuleDef is Functor af && actualFunctor == null) {
+            var msg = $"Module {actualLiteral.Name} expects {af.Formals.Count} arguments but didn't receive any!";
+            reporter.Error(MessageSource.Resolver, functorApp.moduleParamNames[i].rootToken(), msg);
+            return null;
+          }
+
           if (!EqualsOrRefines(actualLiteral, (LiteralModuleDecl) formalDecl)) {
             var msg = $"Module {literalRoot.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
             reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
@@ -2831,6 +2845,7 @@ namespace Microsoft.Dafny
           }
           if (decl is AliasModuleDecl amd) {
             if (amd.TargetQId.FunctorApp != null) {
+              /*
               // Do we need to update this functor?
               var formalNames = functorApp.functor.Formals.ConvertAll(f => f.Name.val);
               bool update = false;
@@ -2843,10 +2858,11 @@ namespace Microsoft.Dafny
               }
 
               if (update) {
+              */
                 FunctorApplication newFunctorApp; // Not currently used
                 amd.Signature = UpdateFunctorApp(amd.TargetQId.FunctorApp, (LiteralModuleDecl)amd.TargetQId.Root,
                   formalActualPairs, formalActualIdPairs, out newFunctorApp).Signature;
-              }
+              //}
             }
           }
         }

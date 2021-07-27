@@ -4136,7 +4136,11 @@ namespace Microsoft.Dafny {
         this.Sig = null;
       } else {
         this.Decl = m;
-        this.Def = ((LiteralModuleDecl)m).ModuleDef;
+        if (m is LiteralModuleDecl lmd) {
+          this.Def = lmd.ModuleDef;
+        } else {
+          this.Def = ((LiteralModuleDecl) (((AliasModuleDecl) m).TargetQId.Root)).ModuleDef;
+        }
         this.Sig = m.Signature;
       }
     }
