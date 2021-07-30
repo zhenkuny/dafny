@@ -3105,7 +3105,7 @@ namespace Microsoft.Dafny
           ResolveIteratorSignature((IteratorDecl)d);
         } else if (d is ModuleDecl) {
           var decl = (ModuleDecl)d;
-          if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract && !(def is Functor)) {
+          if (!def.IsAbstract && decl is AliasModuleDecl am && decl.Signature.IsAbstract && !(def is Functor) && am.TargetQId.FunctorApp == null) {
             reporter.Error(MessageSource.Resolver, am.TargetQId.rootToken(), "a compiled module ({0}) is not allowed to import an abstract module ({1})", def.Name, am.TargetQId.ToString());
           }
         } else if (d is DatatypeDecl) {
