@@ -1,3 +1,5 @@
+// RUN: %dafny /compile:4 /compileTarget:cpp /spillTargetCode:3 "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
 
 abstract module TotalOrder {
   type V

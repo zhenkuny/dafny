@@ -4051,7 +4051,7 @@ namespace Microsoft.Dafny {
     public string ToUniqueName(uint uniqueId) {
       string result = tok.val + "_" + uniqueId;
       if (moduleParamNames.Count > 0) {
-        result += "#" + Util.Comma("_", moduleParamNames, exp => exp.ToString()) + "#";
+        result += "_ON_" + Util.Comma("_", moduleParamNames, exp => exp.ToString()) + "_";
       }
       return result;
     }

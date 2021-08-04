@@ -20,6 +20,7 @@ namespace Microsoft.Dafny
     readonly BuiltIns builtIns;
 
     ErrorReporter reporter;
+    Program prog = null;
     ModuleSignature moduleInfo = null;
     private bool resolvingFunctor = false;
 
@@ -417,6 +418,7 @@ namespace Microsoft.Dafny
 
     public void ResolveProgram(Program prog) {
       Contract.Requires(prog != null);
+      this.prog = prog;
       Type.ResetScopes();
 
       Type.EnableScopes();
@@ -2767,7 +2769,7 @@ namespace Microsoft.Dafny
         // 5) Compute the signature for our newly created module
 
         // 1)
-        ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
+        Cloner cloner = new DeepModuleSignatureCloner();
         // literalRoot.Name + FunctorNameCtr
         ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, functorApp.ToUniqueName(FunctorNameCtr), preserveFunctors:false);
         FunctorNameCtr += 1;
@@ -2874,7 +2876,7 @@ namespace Microsoft.Dafny
 
         // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
-        CreateCompileModule(newDef, sig);
+        CreateCompileModule(newDef, sig, this.prog);
 
         // Update the abstractness of the new module
         if (!literalRoot.Signature.IsAbstract && allArgumentsConcrete) {
