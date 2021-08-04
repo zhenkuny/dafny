@@ -2803,7 +2803,6 @@ namespace Microsoft.Dafny
 
           formalActualPairs[formal.Name.val] = actual;
           formalActualIdPairs[formal.Name.val] = functorApp.moduleParamNames[i];
-          allArgumentsConcrete &= !actual.Signature.IsAbstract;
 
           if (formal.TypeDef == null) {
             formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
@@ -2811,6 +2810,20 @@ namespace Microsoft.Dafny
 
           var formalDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
           var actualLiteral = normalizeDecl(actual);  // Move through any intervening aliases
+
+          // Check if the actual corresponds to a functor argument.  If so, we treat it as concrete, since it will
+          // have to eventually be concretized
+          bool isFunctorArg = false;
+          if (actual.EnclosingModuleDefinition is Functor enclosingFunctor) {
+            foreach (var arg in enclosingFunctor.Formals) {
+              if (arg.TypeName.Root == actualLiteral) {
+                // Found a match
+                isFunctorArg = true;
+                break;
+              }
+            }
+          }
+          allArgumentsConcrete &= (!actual.Signature.IsAbstract || isFunctorArg);
 
           if (actualLiteral.ModuleDef is Functor af && actualFunctor == null) {
             var msg = $"Module {actualLiteral.Name} expects {af.Formals.Count} arguments but didn't receive any!";
