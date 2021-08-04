@@ -1,3 +1,4 @@
+
 abstract module TotalOrder {
   type V
   predicate le(a: V, b: V)
@@ -12,7 +13,8 @@ abstract module TotalOrderImpl(to: TotalOrder) {
   ensures b == to.le(x, y)
 }
 module IntTotalOrder refines TotalOrder {
-  type V = int
+  newtype uint32 = i:int | 0 <= i < 0x100000000
+  type V = uint32
   predicate le(a: V, b: V) { a <= b }
   lemma le_self(a: V) { }
   lemma le_transitive(a: V, b: V, c: V) { }
