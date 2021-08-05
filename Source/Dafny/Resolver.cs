@@ -20,6 +20,7 @@ namespace Microsoft.Dafny
     readonly BuiltIns builtIns;
 
     ErrorReporter reporter;
+    Program prog = null;
     ModuleSignature moduleInfo = null;
     private bool resolvingFunctor = false;
 
@@ -417,6 +418,7 @@ namespace Microsoft.Dafny
 
     public void ResolveProgram(Program prog) {
       Contract.Requires(prog != null);
+      this.prog = prog;
       Type.ResetScopes();
 
       Type.EnableScopes();
@@ -2768,7 +2770,7 @@ namespace Microsoft.Dafny
         // 5) Compute the signature for our newly created module
 
         // 1)
-        ScopeCloner cloner = new ScopeCloner(literalRoot.Signature.VisibilityScope);
+        Cloner cloner = new DeepModuleSignatureCloner();
         // literalRoot.Name + FunctorNameCtr
         ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, functorApp.ToUniqueName(FunctorNameCtr), preserveFunctors:false);
         FunctorNameCtr += 1;
@@ -2802,7 +2804,6 @@ namespace Microsoft.Dafny
 
           formalActualPairs[formal.Name.val] = actual;
           formalActualIdPairs[formal.Name.val] = functorApp.moduleParamNames[i];
-          allArgumentsConcrete &= !actual.Signature.IsAbstract;
 
           if (formal.TypeDef == null) {
             formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
@@ -2810,6 +2811,20 @@ namespace Microsoft.Dafny
 
           var formalDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
           var actualLiteral = normalizeDecl(actual);  // Move through any intervening aliases
+
+          // Check if the actual corresponds to a functor argument.  If so, we treat it as concrete, since it will
+          // have to eventually be concretized
+          bool isFunctorArg = false;
+          if (actual.EnclosingModuleDefinition is Functor enclosingFunctor) {
+            foreach (var arg in enclosingFunctor.Formals) {
+              if (arg.TypeName.Root == actualLiteral) {
+                // Found a match
+                isFunctorArg = true;
+                break;
+              }
+            }
+          }
+          allArgumentsConcrete &= (!actual.Signature.IsAbstract || isFunctorArg);
 
           if (actualLiteral.ModuleDef is Functor af && actualFunctor == null) {
             var msg = $"Module {actualLiteral.Name} expects {af.Formals.Count} arguments but didn't receive any!";
@@ -2875,7 +2890,7 @@ namespace Microsoft.Dafny
 
         // 5)
         ModuleSignature sig = RegisterTopLevelDecls(newDef, useImports: true);
-        CreateCompileModule(newDef, sig);
+        CreateCompileModule(newDef, sig, this.prog);
 
         // Update the abstractness of the new module
         if (!literalRoot.Signature.IsAbstract && allArgumentsConcrete) {
