@@ -1608,7 +1608,7 @@ namespace Microsoft.Dafny
       }
 
       // Fill in the module params
-      qid.FunctorApp.moduleParams = new List<ModuleDecl>();
+      qid.FunctorApp.moduleParams = new List<ModuleActual>();
       foreach (ModuleQualifiedId id in qid.FunctorApp.moduleParamNames) {
         ModuleDecl moduleParamDecl;
         res = ResolveQualifiedModuleIdRoot(dependencies, source, filter, bindings, id, out moduleParamDecl);
@@ -1638,7 +1638,12 @@ namespace Microsoft.Dafny
             decl = dd;
           }
           */
-          qid.FunctorApp.moduleParams.Add(decl);
+          if (decl is AliasModuleDecl amd && amd.Formal != null) {
+            qid.FunctorApp.moduleParams.Add(new ModuleActualFormal(amd.Formal));
+          } else {
+            qid.FunctorApp.moduleParams.Add(new ModuleActualDecl(decl));
+          }
+
           // We take responsibility for adding edges to arguments
           dependencies.AddEdge(source, moduleParamDecl);
         } else {
@@ -1721,6 +1726,7 @@ namespace Microsoft.Dafny
           // REVIEW: What should the "exports" list (final argument) be?
           AliasModuleDecl formalDecl =
             new AliasModuleDecl(formal.TypeName, formal.Name, f, opened: false, new List<IToken>());
+          formalDecl.Formal = formal;
           f.TopLevelDecls.Add(formalDecl);
 
           // Extend the bindings to include formal parameters
@@ -2513,8 +2519,8 @@ namespace Microsoft.Dafny
       // Check if the functors are compatible and their arguments are compatible
       if (actualFunc.functor == formalFunc.functor) {
         foreach (var pair in System.Linq.Enumerable.Zip(actualFunc.moduleParams, formalFunc.moduleParams)) {
-          LiteralModuleDecl actualArg = normalizeDecl(pair.Item1);
-          LiteralModuleDecl formalArg = normalizeDecl(pair.Item2);
+          LiteralModuleDecl actualArg = normalizeDecl(GetDeclFromModuleActual(pair.Item1));
+          LiteralModuleDecl formalArg = normalizeDecl(GetDeclFromModuleActual(pair.Item2));
 
           if (!EqualsOrRefines(actualArg, formalArg)) {
             return false;
@@ -2613,26 +2619,27 @@ namespace Microsoft.Dafny
     }
 
     private ModuleDecl UpdateFunctorApp(FunctorApplication functorApp, LiteralModuleDecl literalRoot,
-      Dictionary<string, ModuleDecl> formalActualPairs, Dictionary<string, ModuleQualifiedId> formalActualIdPairs,
+      Dictionary<ModuleFormal, ModuleActual> formalActualPairs, Dictionary<ModuleFormal, ModuleQualifiedId> formalActualIdPairs,
       out FunctorApplication newFunctorApp) {
-      List<ModuleDecl> moduleParams = new List<ModuleDecl>();
+      List<ModuleActual> moduleParams = new List<ModuleActual>();
       List<ModuleQualifiedId> moduleParamNames = new List<ModuleQualifiedId>();
 
       // Compute a new set of actual parameters, taking into account the outer functor's actuals
       for (int i = 0; i < functorApp.moduleParamNames.Count; i++) {
-        string actualName = functorApp.moduleParamNames[i].ToString();
-        ModuleDecl oldActual = functorApp.moduleParams[i];
+        ModuleActual oldActual = functorApp.moduleParams[i];
         ModuleQualifiedId oldActualName = functorApp.moduleParamNames[i];
 
-        if (formalActualPairs.ContainsKey(actualName)) {
-          moduleParams.Add(formalActualPairs[actualName]);
-          moduleParamNames.Add(formalActualIdPairs[actualName]);
+        if (oldActual is ModuleActualFormal maf && formalActualPairs.ContainsKey(maf.formal)) {
+          // This actual is really a formal from the surrounding functor,
+          // so we need to use the updated value supplied by our caller
+          moduleParams.Add(formalActualPairs[maf.formal]);
+          moduleParamNames.Add(formalActualIdPairs[maf.formal]);
         } else {
           if (oldActualName.FunctorApp != null) {
             // The actual is itself a FunctorApp, so we may need to update it as well
             FunctorApplication newActualApp;
-            oldActual = UpdateFunctorApp(oldActualName.FunctorApp, (LiteralModuleDecl)oldActualName.Root, formalActualPairs, formalActualIdPairs,
-              out newActualApp);
+            oldActual = new ModuleActualDecl(UpdateFunctorApp(oldActualName.FunctorApp, (LiteralModuleDecl)oldActualName.Root, formalActualPairs, formalActualIdPairs,
+              out newActualApp));
             oldActualName = new ModuleQualifiedId(newActualApp, oldActualName.Path);
           }
 
@@ -2650,40 +2657,42 @@ namespace Microsoft.Dafny
       return newImportDecl;
     }
 
-    // refiningSig: The signature that the current module refines
+    // refFunctorApplication: The FunctorApp that the current module refines
     // topLevelDecls: The decls in the functor that does the refining
-    // formalAcutalPairs: Map from formal names to the actual arguments
+    // formalAcutalPairs: Map from formal functor arguments to the actual arguments of the refining functor
     private void UpdateRefinment(FunctorApplication refFunctorApplication, List<TopLevelDecl> topLevelDecls,
-      Dictionary<string, ModuleDecl> formalActualPairs, Dictionary<string, ModuleQualifiedId> formalActualIdPairs) {
+      Dictionary<ModuleFormal, ModuleActual> formalActualPairs, Dictionary<ModuleFormal, ModuleQualifiedId> formalActualIdPairs) {
 
       // Construct a map from this functor's formals to actuals, in case we need to recurse
-      Dictionary<string, ModuleDecl> newMap = new Dictionary<string, ModuleDecl>();
-      Dictionary<string, ModuleQualifiedId> newIdMap = new Dictionary<string, ModuleQualifiedId>();
+      Dictionary<ModuleFormal, ModuleActual> newMap = new Dictionary<ModuleFormal, ModuleActual>();
+      Dictionary<ModuleFormal, ModuleQualifiedId> newIdMap = new Dictionary<ModuleFormal, ModuleQualifiedId>();
       for (int i = 0; i < refFunctorApplication.functor.Formals.Count; i++) {
         ModuleFormal refFormal = refFunctorApplication.functor.Formals[i];
+        ModuleActual refActual = refFunctorApplication.moduleParams[i];
         ModuleQualifiedId refActualName = refFunctorApplication.moduleParamNames[i];
 
         foreach (TopLevelDecl decl in topLevelDecls) {
-          if (decl is AliasModuleDecl amd && amd.Name == refFormal.Name.val) {
+          if (decl is AliasModuleDecl amd && amd.Formal == refFormal) {
             // This is a fake alias we inserted for the functor we're refining,
             // which was then merged into this new module's definition.  Update it.
-            ModuleDecl actualDecl;
+            ModuleActual actual;
             ModuleQualifiedId actualId;
-            if (formalActualPairs.ContainsKey(refActualName.ToString())) {
-              actualDecl = formalActualPairs[refActualName.ToString()];
-              actualId = formalActualIdPairs[refActualName.ToString()];
+            if (refActual is ModuleActualFormal maf && formalActualPairs.ContainsKey(maf.formal)) {
+              // This actual is really a formal from the surrounding functor
+              actual = formalActualPairs[maf.formal];
+              actualId = formalActualIdPairs[maf.formal];
             } else {
               Contract.Assert(refActualName.FunctorApp != null);
               // The actual is a functor that needs to be recomputed
               FunctorApplication newFunctorApp;
-              actualDecl = UpdateFunctorApp(refActualName.FunctorApp, (LiteralModuleDecl) refActualName.Root,
-                formalActualPairs, formalActualIdPairs, out newFunctorApp);
+              actual = new ModuleActualDecl(UpdateFunctorApp(refActualName.FunctorApp, (LiteralModuleDecl) refActualName.Root,
+                formalActualPairs, formalActualIdPairs, out newFunctorApp));
               actualId = new ModuleQualifiedId(newFunctorApp, refActualName.Path);
             }
 
-            amd.Signature = actualDecl.Signature;
-            newMap[refFormal.Name.val] = actualDecl;
-            newIdMap[refFormal.Name.val] = actualId;
+            amd.Signature = GetDeclFromModuleActual(actual).Signature;
+            newMap[refFormal] = actual;
+            newIdMap[refFormal] = actualId;
           }
         }
       }
@@ -2719,19 +2728,19 @@ namespace Microsoft.Dafny
         this.resolver = resolver;
       }
 
-      private List<ModuleDecl> normalizeModuleParams(FunctorApplication functorApp) {
-        List<ModuleDecl> ret = new List<ModuleDecl>();
+      private List<ModuleActual> normalizeModuleParams(FunctorApplication functorApp) {
+        List<ModuleActual> ret = new List<ModuleActual>();
 
         for (int i = 0; i < functorApp.moduleParams.Count; i++) {
-          ModuleDecl param = functorApp.moduleParams[i];
+          ModuleActual param = functorApp.moduleParams[i];
           FunctorApplication actualFunctor = functorApp.moduleParamNames[i].FunctorApp;
 
           if (actualFunctor != null) {
             // We want the result of the application, not the unevaluated form
-            param = resolver.ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root);
+            param = new ModuleActualDecl(resolver.ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root));
           }
 
-          ret.Add(resolver.normalizeDecl(param));
+          ret.Add(new ModuleActualDecl(resolver.normalizeDecl(resolver.GetDeclFromModuleActual(param))));
         }
         return ret;
       }
@@ -2758,6 +2767,21 @@ namespace Microsoft.Dafny
     }
 
     private uint FunctorNameCtr = 0;
+
+    public ModuleDecl GetDeclFromModuleFormal(ModuleFormal formal) {
+      if (formal.TypeDecl == null) {
+        formal.TypeDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
+      }
+      return formal.TypeDecl;
+    }
+
+    public ModuleDecl GetDeclFromModuleActual(ModuleActual actual) {
+      if (actual is ModuleActualDecl mad) {
+        return mad.decl;
+      } else {
+        return GetDeclFromModuleFormal(((ModuleActualFormal) actual).formal);
+      }
+    }
 
     private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
       if (!Resolver.virtualModules.ContainsKey(functorApp)) {
@@ -2788,43 +2812,35 @@ namespace Microsoft.Dafny
         }
 
         // 2)
-        Dictionary<string, ModuleDecl> formalActualPairs = new Dictionary<string, ModuleDecl>();
-        Dictionary<string, ModuleQualifiedId> formalActualIdPairs = new Dictionary<string, ModuleQualifiedId>();
+        Dictionary<ModuleFormal, ModuleActual> formalActualPairs = new Dictionary<ModuleFormal, ModuleActual>();
+        Dictionary<ModuleFormal, ModuleQualifiedId> formalActualIdPairs = new Dictionary<ModuleFormal, ModuleQualifiedId>();
         HashSet<TopLevelDecl> fakeAliasDecls = new HashSet<TopLevelDecl>();
         bool allArgumentsConcrete = true;
         for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
           ModuleFormal formal = functorApp.functor.Formals[i];
-          ModuleDecl actual = functorApp.moduleParams[i];
+          ModuleActual actual = functorApp.moduleParams[i];
           FunctorApplication actualFunctor = functorApp.moduleParamNames[i].FunctorApp;
 
           if (actualFunctor != null) {
             // We want the result of the application, not the unevaluated form
-            actual = ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root);
+            actual = new ModuleActualDecl(ApplyFunctor(actualFunctor, (LiteralModuleDecl) functorApp.moduleParamNames[i].Root));
           }
 
-          formalActualPairs[formal.Name.val] = actual;
-          formalActualIdPairs[formal.Name.val] = functorApp.moduleParamNames[i];
+          // Initialize the formal's TypeDecl
+          GetDeclFromModuleFormal(formal);
 
-          if (formal.TypeDef == null) {
-            formal.TypeDef = GetDefFromDecl(ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter));
-          }
+          formalActualPairs[formal] = actual;
+          formalActualIdPairs[formal] = functorApp.moduleParamNames[i];
 
-          var formalDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
-          var actualLiteral = normalizeDecl(actual);  // Move through any intervening aliases
+          LiteralModuleDecl formalDecl = (LiteralModuleDecl) ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
 
-          // Check if the actual corresponds to a functor argument.  If so, we treat it as concrete, since it will
+          // If actual is a decl, we decide concreteness based on its signature
+          // If it's a functor argument, we always treat it as concrete, since it will
           // have to eventually be concretized
-          bool isFunctorArg = false;
-          if (actual.EnclosingModuleDefinition is Functor enclosingFunctor) {
-            foreach (var arg in enclosingFunctor.Formals) {
-              if (arg.TypeName.Root == actualLiteral) {
-                // Found a match
-                isFunctorArg = true;
-                break;
-              }
-            }
-          }
-          allArgumentsConcrete &= (!actual.Signature.IsAbstract || isFunctorArg);
+          bool isConcrete = (actual is ModuleActualDecl mad && !mad.decl.Signature.IsAbstract) || actual is ModuleActualFormal;
+          allArgumentsConcrete &= isConcrete;
+
+          LiteralModuleDecl actualLiteral = normalizeDecl(GetDeclFromModuleActual(actual));
 
           if (actualLiteral.ModuleDef is Functor af && actualFunctor == null) {
             var msg = $"Module {actualLiteral.Name} expects {af.Formals.Count} arguments but didn't receive any!";
@@ -2832,17 +2848,17 @@ namespace Microsoft.Dafny
             return null;
           }
 
-          if (!EqualsOrRefines(actualLiteral, (LiteralModuleDecl) formalDecl)) {
-            var msg = $"Module {literalRoot.Name} expects {formal.TypeDef.Name}, got {actual.Name}";
+          if (!EqualsOrRefines(actualLiteral, formalDecl)) {
+            var msg = $"Module {literalRoot.Name} expects {formal.TypeDecl.Name}, got {GetDeclFromModuleActual(actual).Name}";
             reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
             return null;
           }
 
           // Find the artificial alias decl we created, and update it with the actual
           foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
-            if (topLevelDecl is AliasModuleDecl amd && amd.Name == formal.Name.val) {
+            if (topLevelDecl is AliasModuleDecl amd && amd.Formal == formal) {
               fakeAliasDecls.Add(topLevelDecl);
-              amd.Signature = actual.Signature;
+              amd.Signature = GetDeclFromModuleActual(actual).Signature;
               amd.Signature.IsAbstract = false;    // Functor formals are considered concrete, since they will always eventually be concretely instantiated
               // TODO: Need this?
               // amd.Signature.Refines = refinementTransformer.RefinedSig;
@@ -2860,24 +2876,9 @@ namespace Microsoft.Dafny
           }
           if (decl is AliasModuleDecl amd) {
             if (amd.TargetQId.FunctorApp != null) {
-              /*
-              // Do we need to update this functor?
-              var formalNames = functorApp.functor.Formals.ConvertAll(f => f.Name.val);
-              bool update = false;
-              foreach (ModuleQualifiedId actual in amd.TargetQId.FunctorApp.moduleParamNames) {
-                if (formalNames.Contains(actual.ToString())) {
-                  // We need to reapply this functor
-                  update = true;
-                  break;
-                }
-              }
-
-              if (update) {
-              */
-                FunctorApplication newFunctorApp; // Not currently used
-                amd.Signature = UpdateFunctorApp(amd.TargetQId.FunctorApp, (LiteralModuleDecl)amd.TargetQId.Root,
-                  formalActualPairs, formalActualIdPairs, out newFunctorApp).Signature;
-              //}
+              FunctorApplication newFunctorApp; // Not currently used
+              amd.Signature = UpdateFunctorApp(amd.TargetQId.FunctorApp, (LiteralModuleDecl)amd.TargetQId.Root,
+                formalActualPairs, formalActualIdPairs, out newFunctorApp).Signature;
             }
           }
         }
