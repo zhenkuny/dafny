@@ -1,3 +1,6 @@
+// RUN: %dafny /compile:0 /titrace "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
 abstract module TotalOrder {
   type V
 
