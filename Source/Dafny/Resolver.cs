@@ -15990,14 +15990,24 @@ namespace Microsoft.Dafny
       var types = new Type[] { type };
       AllXConstraints.Add(new XConstraint(tok, constraintName, types, errMsg));
     }
+
+    private string TypeDetails(UserDefinedType udt) {
+      return string.Format("{0} ({1})", udt.Name, udt.FullName);
+    }
     private void AddXConstraint(IToken tok, string constraintName, Type type0, Type type1, string errMsgFormat) {
       Contract.Requires(tok != null);
       Contract.Requires(constraintName != null);
       Contract.Requires(type0 != null);
       Contract.Requires(type1 != null);
       Contract.Requires(errMsgFormat != null);
-      var types = new Type[] { type0, type1 };
-      AllXConstraints.Add(new XConstraint(tok, constraintName, types, new TypeConstraint.ErrorMsgWithToken(tok, errMsgFormat, types)));
+      var types = new Type[] {type0, type1};
+      object[] args;
+      if (DafnyOptions.O.TypeInferenceDebug && type0 is UserDefinedType udt0 && type1 is UserDefinedType udt1) {
+        args = new string[] { TypeDetails(udt0), TypeDetails(udt1) };
+      } else {
+        args = types;
+      }
+      AllXConstraints.Add(new XConstraint(tok, constraintName, types, new TypeConstraint.ErrorMsgWithToken(tok, errMsgFormat, args)));
     }
     private void AddXConstraint(IToken tok, string constraintName, Type type0, Type type1, TypeConstraint.ErrorMsg errMsg) {
       Contract.Requires(tok != null);
@@ -16016,8 +16026,14 @@ namespace Microsoft.Dafny
       Contract.Requires(expr1 != null);
       Contract.Requires(errMsgFormat != null);
       var types = new Type[] { type };
+      object[] args;
+      if (DafnyOptions.O.TypeInferenceDebug && type is UserDefinedType udt) {
+        args = new string[] { TypeDetails(udt) };
+      } else {
+        args = types;
+      }
       var exprs = new Expression[] { expr0, expr1 };
-      AllXConstraints.Add(new XConstraintWithExprs(tok, constraintName, types, exprs, new TypeConstraint.ErrorMsgWithToken(tok, errMsgFormat, types)));
+      AllXConstraints.Add(new XConstraintWithExprs(tok, constraintName, types, exprs, new TypeConstraint.ErrorMsgWithToken(tok, errMsgFormat, args)));
     }
 
     /// <summary>
