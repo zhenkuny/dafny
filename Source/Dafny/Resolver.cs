@@ -2640,6 +2640,19 @@ namespace Microsoft.Dafny
             oldActual = new ModuleActualDecl(UpdateFunctorApp(oldActualName.FunctorApp, (LiteralModuleDecl)oldActualName.Root, formalActualPairs, formalActualIdPairs,
               out newActualApp));
             oldActualName = new ModuleQualifiedId(newActualApp, oldActualName.Path);
+          } else {
+            var target = ((ModuleActualDecl) oldActual).decl;
+            while (target is AliasModuleDecl target_amd) {
+              if (target_amd.TargetQId.FunctorApp != null) {
+                FunctorApplication newActualApp;
+                oldActual = new ModuleActualDecl(UpdateFunctorApp(target_amd.TargetQId.FunctorApp, (LiteralModuleDecl)target_amd.TargetQId.Root, formalActualPairs, formalActualIdPairs,
+                  out newActualApp));
+                oldActualName = new ModuleQualifiedId(newActualApp, target_amd.TargetQId.Path);
+                break;
+              } else {
+                target = ResolveModuleQualifiedId(target_amd.TargetQId.Root, target_amd.TargetQId, this.reporter);
+              }
+            }
           }
 
           moduleParams.Add(oldActual);
