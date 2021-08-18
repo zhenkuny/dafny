@@ -13,6 +13,7 @@ using System.Numerics;
 using System.Diagnostics.Contracts;
 using Microsoft.Boogie;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace Microsoft.Dafny
 {
@@ -2640,8 +2641,8 @@ namespace Microsoft.Dafny
             oldActual = new ModuleActualDecl(UpdateFunctorApp(oldActualName.FunctorApp, (LiteralModuleDecl)oldActualName.Root, formalActualPairs, formalActualIdPairs,
               out newActualApp));
             oldActualName = new ModuleQualifiedId(newActualApp, oldActualName.Path);
-          } else {
-            var target = ((ModuleActualDecl) oldActual).decl;
+          } else if (oldActual is ModuleActualDecl mad) {
+            var target = mad.decl;
             while (target is AliasModuleDecl target_amd) {
               if (target_amd.TargetQId.FunctorApp != null) {
                 FunctorApplication newActualApp;
