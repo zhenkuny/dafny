@@ -7,7 +7,7 @@ module Atomics {
     function namespace() : nat
   }
 
-  method execute_atomic_add<G>(a: Atomic<G>)
+  method execute_atomic_add<G>(shared a: Atomic<G>)
   returns (
       ret_value: int,
       ghost orig_value: int,
@@ -27,7 +27,7 @@ module Atomics {
 module Stuff {
   import opened Atomics
 
-  method okay(a1: Atomic<int>, a2: Atomic<int>, a3: Atomic<int>)
+  method okay(shared a1: Atomic<int>, shared a2: Atomic<int>, shared a3: Atomic<int>)
   returns (x: int)
   {
     var moo := 5;
@@ -60,7 +60,7 @@ module Stuff {
   glinear method get_some_object()
   returns (glinear o: glOption<int>)
 
-  method okay2(a1: Atomic<glOption<int>>)
+  method okay2(shared a1: Atomic<glOption<int>>)
   {
     glinear var x := get_some_object(); 
     inout_method(inout x);
@@ -87,7 +87,7 @@ module Stuff {
 
   glinear datatype Foo = Foo(glinear x: int, ghost z: int)
 
-  method okay3(a1: Atomic<glOption<int>>, glinear foo: Foo)
+  method okay3(shared a1: Atomic<glOption<int>>, glinear foo: Foo)
   returns (glinear x: int)
   {
     atomic_block var ret := execute_atomic_add(a1) {

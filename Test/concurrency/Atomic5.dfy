@@ -7,7 +7,7 @@ module Atomics {
     function namespace() : nat
   }
 
-  method execute_atomic_add<G>(a: Atomic<G>)
+  method execute_atomic_add<G>(shared a: Atomic<G>)
   returns (
       ret_value: int,
       ghost orig_value: int,
@@ -27,7 +27,7 @@ module Atomics {
 module Stuff {
   import opened Atomics
 
-  method okay(a1: Atomic<int>, a2: Atomic<int>, a3: Atomic<int>)
+  method okay(shared a1: Atomic<int>, shared a2: Atomic<int>, shared a3: Atomic<int>)
   {
     atomic_block var ret := execute_atomic_add(a1) {
       ghost_acquire g;
@@ -52,7 +52,7 @@ module Stuff {
     }
   }
 
-  method okay2(a1: Atomic<int>, a2: Atomic<int>, a3: Atomic<int>)
+  method okay2(shared a1: Atomic<int>, shared a2: Atomic<int>, shared a3: Atomic<int>)
   {
     atomic_block var ret := execute_atomic_add(a1) {
       ghost_acquire g;

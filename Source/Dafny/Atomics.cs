@@ -551,7 +551,17 @@ namespace Microsoft.Dafny.Linear
                     new List<Expression>() {new AutoGhostIdentifierExpr(tok, id)},
                     new List<AssignmentRhs>() {new ExprRhs(e)}));
             }
-            
+
+            private Statement shared_var_decl(IToken tok, string id, Expression e)
+            {
+                return new VarDeclStmt(tok, tok, new List<LocalVariable>()
+                {
+                    new LocalVariable(tok, tok, id, new InferredTypeProxy(), Usage.Shared(LinearRealm.Physical))
+                }, new UpdateStmt(tok, tok, 
+                    new List<Expression>() {new AutoGhostIdentifierExpr(tok, id)},
+                    new List<AssignmentRhs>() {new ExprRhs(e)}));
+            }
+
             private Statement ghost_var_decl_empty(IToken tok, string id)
             {
                 return new VarDeclStmt(tok, tok, new List<LocalVariable>()
@@ -691,7 +701,7 @@ namespace Microsoft.Dafny.Linear
                 //
                 // should be turned into
                 //
-                // var atomic_value := atomic;
+                // shared var atomic_value := atomic;
                 // var return_value;
                 // ghost var old_value;
                 // ghost var new_value;
@@ -737,7 +747,7 @@ namespace Microsoft.Dafny.Linear
                 {
                     isNoop
                         ? ghost_var_decl(atomicStmt.Tok, atomicValueName, atomicExpr)
-                        : var_decl(atomicStmt.Tok, atomicValueName, atomicExpr),
+                        : shared_var_decl(atomicStmt.Tok, atomicValueName, atomicExpr),
                     ghost_var_decl_empty(atomicStmt.Tok, oldValueName),
                     ghost_var_decl_empty(atomicStmt.Tok, newValueName),
                     glinear_var_decl_empty(atomicStmt.Tok, gName),
