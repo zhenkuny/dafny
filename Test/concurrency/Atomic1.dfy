@@ -133,4 +133,21 @@ module Atomics {
     finish_atomic(a2, c2, d2);
     finish_atomic(a1, c1, d1);
   }
+
+  method normal_method()
+  returns (glinear foo: Foo)
+
+  method call_normal_method_returning_glinear(a1: Atomic<int>)
+  returns (glinear foo: Foo)
+  {
+    var ret1;
+    ghost var b1, c1;
+    glinear var d1;
+
+    ret1, b1, c1, d1 := execute_atomic_add(a1);
+    glinear var x := normal_method(); // ERROR
+    finish_atomic(a1, c1, d1);
+
+    foo := x;
+  }
 }
