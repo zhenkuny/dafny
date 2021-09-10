@@ -299,7 +299,7 @@ wmethodDecl = ws;
         var i = 0;
         var argNames = new List<string>();
         foreach (Formal arg in ctor.Formals) {
-          if (!arg.IsGhost) {
+          if (!arg.IsReallyGhost) {
             ws.WriteLine("{0} {1};", TypeName(arg.Type, wdecl, arg.tok, usage:arg.Usage), FormalName(arg, i));
             argNames.Add(FormalName(arg, i));
             i++;
@@ -324,7 +324,7 @@ wmethodDecl = ws;
         ws.WriteLine("{0}();", DtT_protected);
         var wc = wdef.NewNamedBlock("{1}\n{0}{2}::{0}()", DtT_protected, DeclareTemplate(dt.TypeArgs), InstantiateTemplate(dt.TypeArgs));
         foreach (var arg in ctor.Formals) {
-          if (!arg.IsGhost) {
+          if (!arg.IsReallyGhost) {
             wc.WriteLine("{0} = {1};", arg.CompileName, DefaultValue(arg.Type, wc, arg.tok, arg.Usage));
           }
         }
@@ -353,7 +353,7 @@ wmethodDecl = ws;
         var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
         owr.WriteLine("size_t seed = 0;");
         foreach (var arg in ctor.Formals) {
-          if (!arg.IsGhost) {
+          if (!arg.IsReallyGhost) {
             owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
           }
         }
@@ -371,7 +371,7 @@ wmethodDecl = ws;
           // Declare the struct members
           var i = 0;
           foreach (Formal arg in ctor.Formals) {
-            if (!arg.IsGhost) {
+            if (!arg.IsReallyGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive declaration needs to use a pointer
                 wstruct.WriteLine("std::shared_ptr<{0}> {1};", TypeName(arg.Type, wdecl, arg.tok, usage:arg.Usage), FormalName(arg, i));
               } else {
@@ -388,7 +388,7 @@ wmethodDecl = ws;
           weq.Write("\treturn true ");
           i = 0;
           foreach (Formal arg in ctor.Formals) {
-            if (!arg.IsGhost) {
+            if (!arg.IsReallyGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive destructor needs to use a pointer
                 weq.WriteLine("\t\t&& *(left.{0}) == *(right.{0})", FormalName(arg, i));
               } else {
@@ -413,7 +413,7 @@ wmethodDecl = ws;
           owr.WriteLine("size_t seed = 0;");
           int argCount = 0;
           foreach (var arg in ctor.Formals) {
-            if (!arg.IsGhost) {
+            if (!arg.IsReallyGhost) {
               if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                 // Recursive destructor needs to use a pointer
                 owr.WriteLine("hash_combine<std::shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
@@ -445,7 +445,7 @@ wmethodDecl = ws;
 
             foreach (Formal arg in ctor.Formals)
             {
-              if (!arg.IsGhost) {
+              if (!arg.IsReallyGhost) {
                 if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                   // This is a recursive destuctor, so we need to allocate space and copy the input in
                   wc.WriteLine("COMPILER_result_subStruct.{0} = std::make_shared<{1}>({0});", arg.CompileName, DtT_protected);
@@ -466,7 +466,7 @@ wmethodDecl = ws;
           wd.WriteLine("{0} COMPILER_result_subStruct;", DatatypeSubStructName(default_ctor, true));
           foreach (Formal arg in default_ctor.Formals)
           {
-            if (!arg.IsGhost) {
+            if (!arg.IsReallyGhost) {
               wd.WriteLine("COMPILER_result_subStruct.{0} = {1};", arg.CompileName,
                 DefaultValue(arg.Type, wd, arg.tok, arg.Usage));
             }
@@ -510,7 +510,7 @@ wmethodDecl = ws;
           foreach (var dtor in ctor.Destructors) {
             if (dtor.EnclosingCtors[0] == ctor) {
               var arg = dtor.CorrespondingFormals[0];
-              if (!arg.IsGhost && arg.HasName) {
+              if (!arg.IsReallyGhost && arg.HasName) {
                 var returnType = TypeName(arg.Type, ws, arg.tok, usage:arg.Usage);
                 if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
                   // This is a recursive destuctor, so return a pointer
@@ -723,7 +723,7 @@ wmethodDecl = ws;
     }
 
     protected BlockTargetWriter/*?*/ CreateMethod(Method m, List<TypeArgumentInstantiation> typeArgs, bool createBody, BlockTargetWriter wdr, TargetWriter wr, bool lookasideBody) {
-      List<Formal> nonGhostOuts = m.Outs.Where(o => !o.IsGhost).ToList();
+      List<Formal> nonGhostOuts = m.Outs.Where(o => !o.IsReallyGhost).ToList();
       string targetReturnTypeReplacement = null;
       if (nonGhostOuts.Count == 1) {
         targetReturnTypeReplacement = TypeName(nonGhostOuts[0].Type, wr, nonGhostOuts[0].tok, usage:nonGhostOuts[0].Usage);
@@ -1168,7 +1168,7 @@ wmethodDecl = ws;
       var ret = "";
       var sep = "";
       foreach (Formal arg in formals) {
-        if (!arg.IsGhost) {
+        if (!arg.IsReallyGhost) {
           string name = FormalName(arg, i);
           string decl = DeclareFormalString(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam, arg.Inout);
           if (decl != null) {
@@ -1266,7 +1266,7 @@ wmethodDecl = ws;
     }
 
     protected override void EmitReturn(List<Formal> outParams, TargetWriter wr) {
-      outParams = outParams.Where(f => !f.IsGhost).ToList();
+      outParams = outParams.Where(f => !f.IsReallyGhost).ToList();
       if (!outParams.Any()) {
         wr.WriteLine("return;");
       } else if (outParams.Count == 1) {
@@ -1381,7 +1381,7 @@ wmethodDecl = ws;
           // the arguments of any external constructor are placed here
           for (int i = 0; i < ctor.Ins.Count; i++) {
             Formal p = ctor.Ins[i];
-            if (!p.IsGhost) {
+            if (!p.IsReallyGhost && p.Usage.realm != LinearRealm.Erased) {
               wr.Write(sep);
               TrExpr(initCall.Args[i].Expr, wr, false);
               sep = ", ";

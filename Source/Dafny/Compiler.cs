@@ -1167,22 +1167,42 @@ namespace Microsoft.Dafny {
               DeclareSubsetType(sst, wr);
               v.Visit(sst);
             }
-          } else if (d is NewtypeDecl) {
+          } else if (d is NewtypeDecl)
+          {
             var nt = (NewtypeDecl)d;
             var w = DeclareNewtype(nt, wr);
             v.Visit(nt);
-            CompileClassMembers(program, nt, w);
-          } else if (d is DatatypeDecl) {
+            CompileClassMembers(program, nt, w); 
+          }
+          else if (d is DatatypeDecl)
+          {
             var dt = (DatatypeDecl)d;
-            CheckForCapitalizationConflicts(dt.Ctors);
-            foreach (var ctor in dt.Ctors) {
-              CheckForCapitalizationConflicts(ctor.Destructors);
+            var isGlinear = false;
+            if (dt is IndDatatypeDecl)
+            {
+              var idd = dt as IndDatatypeDecl;
+              if (idd.Usage.realm == LinearRealm.Erased)
+              {
+                isGlinear = true;
+              }
             }
-            var w = DeclareDatatype(dt, wr);
-            if (w != null) {
-              CompileClassMembers(program, dt, w);
+
+            if (!isGlinear)
+            {
+              
+              CheckForCapitalizationConflicts(dt.Ctors);
+              foreach (var ctor in dt.Ctors)
+              {
+                CheckForCapitalizationConflicts(ctor.Destructors);
+              }
+
+              var w = DeclareDatatype(dt, wr);
+              if (w != null)
+              {
+                CompileClassMembers(program, dt, w);
+              }
             }
-          } else if (d is IteratorDecl) {
+        } else if (d is IteratorDecl) {
             var iter = (IteratorDecl)d;
             if (DafnyOptions.O.ForbidNondeterminism && iter.Outs.Count > 0) {
               Error(iter.tok, "since yield parameters are initialized arbitrarily, iterators are forbidden by /definiteAssignment:3 option", wr);
@@ -1199,7 +1219,8 @@ namespace Microsoft.Dafny {
             // writing the trait
             var w = CreateTrait(trait.CompileName, trait.IsExtern(out _, out _), trait.TypeArgs, trait.ParentTypeInformation.UniqueParentTraits(), trait.tok, wr);
             CompileClassMembers(program, trait, w);
-          } else if (d is ClassDecl cl) {
+          } else if (d is ClassDecl cl)
+          {
             var include = true;
             if (cl.IsDefaultClass) {
               Predicate<MemberDecl> compilationMaterial = x =>
@@ -1328,7 +1349,7 @@ namespace Microsoft.Dafny {
       int n = 0;
       for (var i = 0; i < formals.Count; i++) {
         var arg = formals[i];
-        if (!arg.IsGhost) {
+        if (!arg.IsReallyGhost) {
           string name = FormalName(useTheseNamesForFormals == null ? arg : useTheseNamesForFormals[i], n);
           if (DeclareFormal(sep, name, arg.Type, arg.tok, arg.Usage, arg.InParam | arg.Inout, arg.Inout, wr)) {
             sep = ", ";
@@ -1475,6 +1496,10 @@ namespace Microsoft.Dafny {
       var cl = (TopLevelDeclWithMembers)m.EnclosingClass;
       if (m.IsGhost) {
         reason = "the method is ghost";
+        return false;
+      }
+      if (m.Usage.realm == LinearRealm.Erased) {
+        reason = "the method is glinear";
         return false;
       }
       if (m.TypeArgs.Count != 0) {
@@ -1737,6 +1762,8 @@ namespace Microsoft.Dafny {
             if (Attributes.Contains(f.Attributes, "test")) {
               Error(f.tok, "Function {0} must be compiled to use the {{:test}} attribute", errorWr, f.FullName);
             }
+          } else if (f.ResultUsage.realm == LinearRealm.Erased) {
+            // do nothing
           } else if (c is TraitDecl && !f.IsStatic) {
             if (f.OverriddenMember == null) {
               var w = classWriter.CreateFunction(IdName(f), CombineAllTypeArguments(f), f.Formals, f.ResultType, f.ResultUsage, f.tok, false, false, f, false, false);
@@ -1760,10 +1787,14 @@ namespace Microsoft.Dafny {
             } else {
               Error(m.tok, "Method {0} has no body", errorWr, m.FullName);
             }
-          } else if (m.IsGhost) {
-            if (m.Body == null) {
+          } else if (m.IsGhost)
+          {
+            if (m.Body == null)
+            {
               Contract.Assert(c is TraitDecl && !m.IsStatic);
             }
+          } else if (m.Usage.realm == LinearRealm.Erased) {
+            // do nothing
           } else if (c is TraitDecl && !m.IsStatic) {
             if (m.OverriddenMember == null) {
               var w = classWriter.CreateMethod(m, CombineAllTypeArguments(m), false, false, false);
@@ -1887,7 +1918,7 @@ namespace Microsoft.Dafny {
 
       for (int j = 0, l = 0; j < f.Formals.Count; j++) {
         var p = f.Formals[j];
-        if (!p.IsGhost) {
+        if (!p.IsReallyGhost) {
           wr.Write(sep);
           w = EmitCoercionIfNecessary(f.Original.Formals[j].Type, f.Formals[j].Type, f.tok, wr);
           w.Write(IdName(p));
@@ -1908,7 +1939,7 @@ namespace Microsoft.Dafny {
 
       // There are three types involved. See comment in EmitCallToInheritedFunction.
 
-      var nonGhostOutParameterCount = method.Outs.Count(p => !p.IsGhost);
+      var nonGhostOutParameterCount = method.Outs.Count(p => !p.IsReallyGhost);
       var returnStyleOuts = UseReturnStyleOuts(method, nonGhostOutParameterCount);
       var returnStyleOutCollector = nonGhostOutParameterCount > 1 && returnStyleOuts && !SupportsMultipleReturns ? idGenerator.FreshId("_outcollector") : null;
 
@@ -1916,7 +1947,7 @@ namespace Microsoft.Dafny {
       var outTypes = new List<Type>();  // contains a type for each non-ghost formal out-parameter
       for (int i = 0; i < method.Outs.Count; i++) {
         Formal p = method.Outs[i];
-        if (!p.IsGhost) {
+        if (!p.IsReallyGhost) {
           var target = returnStyleOutCollector != null ? IdName(p) : idGenerator.FreshId("_out");
           outTmps.Add(target);
           outTypes.Add(p.Type);
@@ -1949,7 +1980,7 @@ namespace Microsoft.Dafny {
 
       for (int j = 0, l = 0; j < method.Ins.Count; j++) {
         var p = method.Ins[j];
-        if (!p.IsGhost) {
+        if (!p.IsReallyGhost) {
           wr.Write(sep);
           w = EmitCoercionIfNecessary(method.Original.Ins[j].Type, method.Ins[j].Type, method.tok, wr);
           w.Write(IdName(p));
@@ -1974,7 +2005,7 @@ namespace Microsoft.Dafny {
       } else if (!returnStyleOuts) {
         for (int j = 0, l = 0; j < method.Outs.Count; j++) {
           var p = method.Outs[j];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             EmitAssignment(IdName(p), method.Outs[j].Type, outTmps[l], outTypes[l], wr);
             l++;
           }
@@ -1984,7 +2015,7 @@ namespace Microsoft.Dafny {
         sep = "";
         for (int j = 0, l = 0; j < method.Outs.Count; j++) {
           var p = method.Outs[j];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             wrReturn.Write(sep);
             w = EmitCoercionIfNecessary(method.Outs[j].Type, outTypes[l], method.tok, wrReturn);
             w.Write(outTmps[l]);
@@ -2195,11 +2226,11 @@ namespace Microsoft.Dafny {
         }
         Coverage.Instrument(m.Body.Tok, $"entry to method {m.FullName}", w);
 
-        var nonGhostOutsCount = m.Outs.Count(p => !p.IsGhost);
+        var nonGhostOutsCount = m.Outs.Count(p => !p.IsReallyGhost);
 
         var useReturnStyleOuts = UseReturnStyleOuts(m, nonGhostOutsCount);
         foreach (var p in m.Outs) {
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             DeclareLocalOutVar(IdName(p), p.Type, p.tok, p.Usage, PlaceboValue(p.Type, w, p.tok, p.Usage, true), useReturnStyleOuts, w);
           }
         }
@@ -2275,7 +2306,7 @@ namespace Microsoft.Dafny {
         // is translated into C# as:
         // var x := G;
         var bv = pat.Var;
-        if (!bv.IsGhost) {
+        if (!bv.IsReallyGhost) {
           var w = DeclareLocalVar(IdProtect(bv.CompileName), bv.Type, rhsTok, bv.Usage, wr);
           if (rhs != null) {
             w = EmitCoercionIfNecessary(from: rhs.Type, to: bv.Type, tok:rhsTok, wr:w);
@@ -2313,9 +2344,9 @@ namespace Microsoft.Dafny {
         for (int i = 0; i < pat.Arguments.Count; i++) {
           var arg = pat.Arguments[i];
           var formal = ctor.Formals[i];
-          if (formal.IsGhost) {
+          if (formal.IsReallyGhost) {
             // nothing to compile, but do a sanity check
-            Contract.Assert(Contract.ForAll(arg.Vars, bv => bv.IsGhost));
+            Contract.Assert(Contract.ForAll(arg.Vars, bv => bv.IsReallyGhost));
           } else {
             var sw = new TargetWriter(wr.IndentLevel, true);
             EmitDestructor(tmp_name, formal, k, ctor, dtv.InferredTypeArgs, arg.Expr.Type, sw);
@@ -2339,7 +2370,7 @@ namespace Microsoft.Dafny {
         if (e.Exact) {
           for (int i = 0; i < e.LHSs.Count; i++) {
             var lhs = e.LHSs[i];
-            if (Contract.Exists(lhs.Vars, bv => !bv.IsGhost)) {
+            if (Contract.Exists(lhs.Vars, bv => !bv.IsReallyGhost)) {
               TrCasePatternOpt(lhs, e.RHSs[i], wr, false);
             }
           }
@@ -2410,7 +2441,7 @@ namespace Microsoft.Dafny {
         }
         for (int i = 0; i < e.Function.Formals.Count; i++) {
           Formal p = e.Function.Formals[i];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             string inTmp = idGenerator.FreshId("_in");
             inTmps.Add(inTmp);
             inTypes.Add(e.Args[i].Type);
@@ -2433,7 +2464,7 @@ namespace Microsoft.Dafny {
           n++;
         }
         foreach (var p in e.Function.Formals) {
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             EmitAssignment(IdName(p), p.Type, inTmps[n], inTypes[n], wr);
             n++;
           }
@@ -2650,7 +2681,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(stmt != null);
       Contract.Requires(wr != null);
 
-      if (stmt.IsGhost) {
+      if (stmt.IsGhost || Linear.AtomicRewriter.IsGlinearStmt(stmt)) {
         return;
       }
       if (stmt is PrintStmt) {
@@ -2685,7 +2716,7 @@ namespace Microsoft.Dafny {
           var lhss = new List<Expression>();
           var rhss = new List<AssignmentRhs>();
           for (int i = 0; i < resolved.Count; i++) {
-            if (!resolved[i].IsGhost) {
+            if (!resolved[i].IsGhost && !Linear.AtomicRewriter.IsGlinearStmt(resolved[i])) {
               var lhs = s.Lhss[i];
               var rhs = s.Rhss[i];
               if (rhs is HavocRhs) {
@@ -3052,7 +3083,7 @@ namespace Microsoft.Dafny {
 
       } else if (stmt is VarDeclPattern) {
         var s = (VarDeclPattern)stmt;
-        if (Contract.Exists(s.LHS.Vars, bv => !bv.IsGhost)) {
+        if (Contract.Exists(s.LHS.Vars, bv => !bv.IsReallyGhost)) {
           TrCasePatternOpt(s.LHS, s.RHS, wr, false);
         }
       } else if (stmt is ModifyStmt) {
@@ -3830,7 +3861,7 @@ namespace Microsoft.Dafny {
         }
         for (int i = 0; i < s.Method.Ins.Count; i++) {
           Formal p = s.Method.Ins[i];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             string inTmp = idGenerator.FreshId("_in");
             inTmps.Add(inTmp);
             inTypes.Add(s.Args[i].Expr.Type);
@@ -3853,7 +3884,7 @@ namespace Microsoft.Dafny {
           n++;
         }
         foreach (var p in s.Method.Ins) {
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             EmitAssignment(IdName(p), p.Type, inTmps[n], inTypes[n], wr);
             n++;
           }
@@ -3869,9 +3900,9 @@ namespace Microsoft.Dafny {
         Contract.Assert(s.Lhs.Count == s.Method.Outs.Count);
         for (int i = 0; i < s.Method.Outs.Count; i++) {
           Formal p = s.Method.Outs[i];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             var lhs = s.Lhs[i].Resolved;
-            if (lhs is IdentifierExpr lhsIE && lhsIE.Var.IsGhost) {
+            if (lhs is IdentifierExpr lhsIE && lhsIE.Var.IsReallyGhost) {
               lvalues.Add(null);
             } else if (lhs is MemberSelectExpr lhsMSE && lhsMSE.Member.IsGhost) {
               lvalues.Add(null);
@@ -3886,7 +3917,7 @@ namespace Microsoft.Dafny {
         var outLhsTypes = new List<Type>(); // contains the type as it appears on the LHS (may give types for those parameters)
         for (int i = 0; i < s.Method.Outs.Count; i++) {
           Formal p = s.Method.Original.Outs[i];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             string target = idGenerator.FreshId("_out");
             outTmps.Add(target);
             var instantiatedType = Resolver.SubstType(p.Type, s.MethodSelect.TypeArgumentSubstitutionsWithParents());
@@ -3991,7 +4022,7 @@ namespace Microsoft.Dafny {
         }
         for (int i = 0; i < s.Method.Ins.Count; i++) {
           Formal p = s.Method.Ins[i];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             wr.Write(sep);
             var fromType = s.Args[i].Expr.Type;
             var toType = s.Method.Ins[i].Type;
@@ -4024,7 +4055,7 @@ namespace Microsoft.Dafny {
         // assign to the actual LHSs
         for (int j = 0, l = 0; j < s.Method.Outs.Count; j++) {
           var p = s.Method.Outs[j];
-          if (!p.IsGhost) {
+          if (!p.IsReallyGhost) {
             var lvalue = lvalues[l];
             if (lvalue != null) {
               // The type information here takes care both of implicit upcasts and
@@ -4082,7 +4113,7 @@ namespace Microsoft.Dafny {
 
     void TrLocalVar(IVariable v, bool alwaysInitialize, TargetWriter wr) {
       Contract.Requires(v != null);
-      if (v.IsGhost) {
+      if (v.IsReallyGhost) {
         // only emit non-ghosts (we get here only for local variables introduced implicitly by call statements)
         return;
       }
@@ -4114,7 +4145,7 @@ namespace Microsoft.Dafny {
       int k = 0;  // number of processed non-ghost arguments
       for (int m = 0; m < ctor.Formals.Count; m++) {
         Formal arg = ctor.Formals[m];
-        if (!arg.IsGhost) {
+        if (!arg.IsReallyGhost) {
           BoundVar bv = arguments[m];
           // FormalType f0 = ((Dt_Ctor0)source._D).a0;
           var sw = DeclareLocalVar(IdName(bv), bv.Type, bv.Tok, bv.Usage, w);
@@ -4335,7 +4366,7 @@ namespace Microsoft.Dafny {
         string sep = "";
         for (int i = 0; i < dtv.Arguments.Count; i++) {
           var formal = dtv.Ctor.Formals[i];
-          if (!formal.IsGhost) {
+          if (!formal.IsReallyGhost) {
             wrArgumentList.Write(sep);
             var w = EmitCoercionIfNecessary(from:dtv.Arguments[i].Type, to:dtv.Ctor.Formals[i].Type, tok:dtv.tok, wr:wrArgumentList);
             TrExpr(dtv.Arguments[i], w, inLetExprBody);
@@ -4458,7 +4489,7 @@ namespace Microsoft.Dafny {
           var w = wr;
           for (int i = 0; i < e.LHSs.Count; i++) {
             var lhs = e.LHSs[i];
-            if (Contract.Exists(lhs.Vars, bv => !bv.IsGhost)) {
+            if (Contract.Exists(lhs.Vars, bv => !bv.IsReallyGhost)) {
               var rhsName = string.Format("_pat_let{0}_{1}", GetUniqueAstNumber(e), i);
               w = CreateIIFE_ExprBody(rhsName, e.RHSs[i].Type, e.RHSs[i].tok, e.RHSs[i], inLetExprBody, e.Body.Type, e.Body.tok, w);
               w = TrCasePattern(lhs, rhsName, e.RHSs[i].Type, e.Body.Type, w);
@@ -4795,7 +4826,7 @@ namespace Microsoft.Dafny {
 
       if (pat.Var != null) {
         var bv = pat.Var;
-        if (!bv.IsGhost) {
+        if (!bv.IsReallyGhost) {
           CreateIIFE(IdProtect(bv.CompileName), bv.Type, bv.Tok, bodyType, pat.tok, wr, out var wrRhs, out var wrBody);
           wrRhs = EmitDowncastIfNecessary(rhsType, bv.Type, bv.tok, wrRhs);
           wrRhs.Write(rhsString);
@@ -4811,9 +4842,9 @@ namespace Microsoft.Dafny {
         for (int i = 0; i < pat.Arguments.Count; i++) {
           var arg = pat.Arguments[i];
           var formal = ctor.Formals[i];
-          if (formal.IsGhost) {
+          if (formal.IsReallyGhost) {
             // nothing to compile, but do a sanity check
-            Contract.Assert(!Contract.Exists(arg.Vars, bv => !bv.IsGhost));
+            Contract.Assert(!Contract.Exists(arg.Vars, bv => !bv.IsReallyGhost));
           } else {
             var sw = new TargetWriter(wr.IndentLevel, true);
             EmitDestructor(rhsString, formal, k, ctor, ((DatatypeValue)pat.Expr).InferredTypeArgs, arg.Expr.Type, sw);
@@ -4872,7 +4903,7 @@ namespace Microsoft.Dafny {
         sep = ", ";
       }
       for (int i = 0; i < e.Args.Count; i++) {
-        if (!e.Function.Formals[i].IsGhost) {
+        if (!e.Function.Formals[i].IsReallyGhost) {
           wr.Write(sep);
           var fromType = e.Args[i].Type;
           var w = EmitCoercionIfNecessary(fromType, e.Function.Formals[i].Type, tok: e.tok, wr: wr);

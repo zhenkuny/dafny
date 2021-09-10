@@ -6291,6 +6291,14 @@ namespace Microsoft.Dafny {
     Usage Usage {
       get;
     }
+
+    public bool IsReallyGhost
+    {
+      get
+      {
+        return IsGhost || Usage.realm == LinearRealm.Erased;
+      }
+    }
     void MakeGhost();
     IToken Tok {
       get;
@@ -6492,6 +6500,14 @@ namespace Microsoft.Dafny {
     public bool IsGhost {
       get {
         return Usage.IsGhostKind;
+      }
+    }
+
+    public bool IsReallyGhost
+    {
+      get
+      {
+        return IsGhost || Usage.realm == LinearRealm.Erased;
       }
     }
     public void MakeGhost() {
@@ -8208,6 +8224,14 @@ namespace Microsoft.Dafny {
     void ObjectInvariant() {
       Contract.Invariant(name != null);
       Contract.Invariant(OptionalType != null);
+    }
+    
+    public bool IsReallyGhost
+    {
+      get
+      {
+        return IsGhost || Usage.realm == LinearRealm.Erased;
+      }
     }
 
     public LocalVariable(IToken tok, IToken endTok, string name, Type type, Usage usage) {

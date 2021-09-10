@@ -7,4 +7,5 @@ Atomic1.dfy(87,13): Error: Only ghost statements can be within an atomic block
 Atomic1.dfy(89,30): Error: Only ghost statements can be within an atomic block
 Atomic1.dfy(132,21): Error: Improper atomic statement nesting: non-ghost open within another open
 Atomic1.dfy(132,21): Error: Need to assert that (a2.namespace() != a1.namespace())
-9 resolution/type errors detected in Atomic1.dfy
+Atomic1.dfy(148,4): Error: Only ghost statements can be within an atomic block
+10 resolution/type errors detected in Atomic1.dfy
