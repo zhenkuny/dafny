@@ -205,13 +205,13 @@ are identical.
 ```dafny
 type lseq<A>
 
-function LSeqs<A>(l: lseq<A>): (s: seq<A>) // contents of an lseq, as ghost seq
+function LSeqs<A(00)>(l: lseq<A>): (s: seq<A>) // contents of an lseq, as ghost seq
     ensures rank_is_less_than(s, l)
 
-function LSeqHas<A>(l: lseq<A>): (s: seq<bool>)
+function LSeqHas<A(00)>(l: lseq<A>): (s: seq<bool>)
     ensures |s| == |LSeqs(l)|
 
-lemma LSeqsExtensional<A>(l1: lseq<A>, l2: lseq<A>)
+lemma LSeqsExtensional<A(00)>(l1: lseq<A>, l2: lseq<A>)
     requires LSeqs(l1) == LSeqs(l2)
     requires LSeqHas(l1) == LSeqHas(l2)
     ensures l1 == l2
@@ -223,12 +223,12 @@ the `| |` operator, the `[]` operator, and the `in` operator for `lseq`
 interfere with Dafny's trigger selection for quantifiers):
 
 ```dafny
-function{:inline true} operator(| |)<A>(s: lseq<A>): nat
+function{:inline true} operator(| |)<A(00)>(s: lseq<A>): nat
 {
     |LSeqs(s)|
 }
 
-function{:inline true} operator([])<A>(s: lseq<A>, i: nat): A
+function{:inline true} operator([])<A(00)>(s: lseq<A>, i: nat): A
     requires i < |s|
 {
     LSeqs(s)[i]
@@ -236,7 +236,7 @@ function{:inline true} operator([])<A>(s: lseq<A>, i: nat): A
 
 // Note: it might make more sense to define this as i < |s| && LSeqHas(s)[i],
 // but {:inline true} can't yet handle this.
-function{:inline true} operator(in)<A>(s: lseq<A>, i: nat): bool
+function{:inline true} operator(in)<A(00)>(s: lseq<A>, i: nat): bool
     requires i < |s|
 {
     LSeqHas(s)[i]
@@ -247,11 +247,11 @@ All elements of newly allocated `lseq` values are absent.
 To free an `lseq`, all elements must be absent so that no linear element values are discarded:
 
 ```dafny
-method LSeqAlloc<A>(length: nat) returns(linear s: lseq<A>)
+method LSeqAlloc<A(00)>(length: nat) returns(linear s: lseq<A>)
     ensures |s| == length
     ensures forall i: nat | i < length :: i !in s
 
-method LSeqFree<A>(linear s: lseq<A>)
+method LSeqFree<A(00)>(linear s: lseq<A>)
     requires forall i: nat | i < |LSeqs(s)| :: i !in s
 ```
 
@@ -259,10 +259,10 @@ The following readonly functions can get the length, as an ordinary integer,
 or borrow an element, as a shared value:
 
 ```dafny
-function method LSeqLength<A>(shared s: lseq<A>): (n: nat)
+function method LSeqLength<(00)A>(shared s: lseq<A>): (n: nat)
     ensures n == |s|
 
-function method LSeqGet<A>(shared s: lseq<A>, i: nat): (shared a: A)
+function method LSeqGet<A(00)>(shared s: lseq<A>, i: nat): (shared a: A)
     requires i < |s| && i in s
     ensures a == s[i]
 ```
@@ -272,18 +272,18 @@ Giving an element to the `lseq` sets the corresponding `LSeqHas` to true,
 making the element present, while taking sets it to `false`, making the element absent:
 
 ```dafny
-method LSeqGive<A>(inout linear s: lseq<A>, i: nat, linear a: A)
+method LSeqGive<A(00)>(inout linear s: lseq<A>, i: nat, linear a: A)
     requires i < |old_s| && i !in old_s
     ensures LSeqHas(s) == LSeqHas(old_s)[i := true]
     ensures LSeqs(s) == LSeqs(old_s)[i := a]
 
-method LSeqTake<A>(linear inout s: lseq<A>, i: nat) returns(linear a: A)
+method LSeqTake<A(00)>(linear inout s: lseq<A>, i: nat) returns(linear a: A)
     requires i < |old_s| && i in old_s
     ensures LSeqHas(s) == LSeqHas(old_s)[i := false]
     ensures LSeqs(s) == LSeqs(old_s)
     ensures a == old_s[i]
 
-method LSeqSwap<A>(inout linear s: lseq<A>, i: nat, linear a1: A) returns(linear a2: A)
+method LSeqSwap<A(00)>(inout linear s: lseq<A>, i: nat, linear a1: A) returns(linear a2: A)
     requires i < |old_s| && i in old_s
     ensures a2 == LSeqs(old_s)[i]
     ensures LSeqs(s) == LSeqs(old_s)[i := a1]
@@ -292,7 +292,7 @@ method LSeqSwap<A>(inout linear s: lseq<A>, i: nat, linear a1: A) returns(linear
 The following example shows both mutation and readonly operations on `lseq` values:
 
 ```dafny
-method LSeqExample<A>(linear inout s: lseq<LList<A>>) returns(linear lens: seq<int>)
+method LSeqExample<A(00)>(linear inout s: lseq<LList<A>>) returns(linear lens: seq<int>)
     requires forall i: nat | i < |old_s| :: i in old_s
     ensures s == old_s
     ensures |lens| == |s|
@@ -340,7 +340,7 @@ The linear data in the object is only usable via a Swap method that swaps
 one linear value for another:
 
 ```dafny
-class SwapLinear<A>
+class SwapLinear<A(00)>
 {
     function Read(): A
         reads this
@@ -396,7 +396,7 @@ The following definition adds a `Borrow` function method
 that returns a shared `A`:
 
 ```dafny
-class SwapLinear<A>
+class SwapLinear<A(00)>
 {
     function Inv(): (A) -> bool
         reads this
@@ -455,7 +455,7 @@ hides the `Swap` operation in favor of `Take` and `Give` methods:
 ```dafny
 linear datatype LOption<A> = LNone | LSome(linear a: A)
 
-class BoxedLinear<A>
+class BoxedLinear<A(00)>
 {
     var data: SwapLinear<LOption<A>>;
 

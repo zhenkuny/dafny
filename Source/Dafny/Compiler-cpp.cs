@@ -282,12 +282,23 @@ namespace Microsoft.Dafny {
       var wdef = writer;
       BlockTargetWriter wmethodDecl = null;
 
+      bool supportsEquality;
+      if (dt is IndDatatypeDecl idd) {
+        supportsEquality = (idd.EqualitySupport != IndDatatypeDecl.ES.Never);
+      }
+      else
+      {
+        supportsEquality = false;
+      }
+
       if (IsRecursiveDatatype(dt)) { // Note that if this is true, there must be more than one constructor!
         // Add some forward declarations
         wdecl.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), DtT_protected);
       }
       // Forward decl to cope with linker issues
-      wdecl.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, InstantiateTemplate(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
+      if (supportsEquality) {
+        wdecl.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, InstantiateTemplate(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
+      }
 
       // Optimize a not-uncommon case
       if (dt.Ctors.Count == 1) {
@@ -333,31 +344,33 @@ wmethodDecl = ws;
         ws.WriteLine("{0}* operator->() {{ return this; }}", DtT_protected);
 
         // Overload the comparison operator
-        ws.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right);", DtT_protected, InstantiateTemplate(dt.TypeArgs));
-        var weq = wdef.NewNamedBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right) ", DtT_protected, DeclareTemplate(dt.TypeArgs), InstantiateTemplate(dt.TypeArgs)));
-        weq.Write("\treturn true ");
-        foreach (var arg in argNames) {
-            weq.WriteLine("\t\t&& left.{0} == right.{0}", arg);
-        }
-        weq.WriteLine(";");
-
-        // Overload the not-comparison operator
-        ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
-
-        wdecl.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, InstantiateTemplate(dt.TypeArgs));
-
-        // Define a custom hasher
-        hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
-        var fullName = dt.EnclosingModuleDefinition.CompileName + "::" + DtT_protected + InstantiateTemplate(dt.TypeArgs);
-        var hwr = hashWr.NewBlock(string.Format("struct std::hash<{0}>", fullName), ";");
-        var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
-        owr.WriteLine("size_t seed = 0;");
-        foreach (var arg in ctor.Formals) {
-          if (!arg.IsReallyGhost) {
-            owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
+        if (supportsEquality) {
+          ws.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right);", DtT_protected, InstantiateTemplate(dt.TypeArgs));
+          var weq = wdef.NewNamedBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right) ", DtT_protected, DeclareTemplate(dt.TypeArgs), InstantiateTemplate(dt.TypeArgs)));
+          weq.Write("\treturn true ");
+          foreach (var arg in argNames) {
+              weq.WriteLine("\t\t&& left.{0} == right.{0}", arg);
           }
+          weq.WriteLine(";");
+
+          // Overload the not-comparison operator
+          ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
+
+          wdecl.WriteLine("{0}\ninline bool is_{1}(const struct {2}{3} d) {{ (void) d; return true; }}", DeclareTemplate(dt.TypeArgs), ctor.CompileName, DtT_protected, InstantiateTemplate(dt.TypeArgs));
+
+          // Define a custom hasher
+          hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
+          var fullName = dt.EnclosingModuleDefinition.CompileName + "::" + DtT_protected + InstantiateTemplate(dt.TypeArgs);
+          var hwr = hashWr.NewBlock(string.Format("struct std::hash<{0}>", fullName), ";");
+          var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
+          owr.WriteLine("size_t seed = 0;");
+          foreach (var arg in ctor.Formals) {
+            if (!arg.IsReallyGhost) {
+              owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
+            }
+          }
+          owr.WriteLine("return seed;");
         }
-        owr.WriteLine("return seed;");
       } else {
 
         /*** Create one struct for each constructor ***/
@@ -365,7 +378,9 @@ wmethodDecl = ws;
           string structName = DatatypeSubStructName(ctor);
           // First add a forward declaration of the type and the equality operator to workaround templating issues
           wdecl.WriteLine("{0}\nstruct {1};", DeclareTemplate(dt.TypeArgs), structName);
-          wdecl.WriteLine("{0}\nbool operator==(const {1}{2} &left, const {1}{2} &right); ", DeclareTemplate(dt.TypeArgs), structName, InstantiateTemplate(dt.TypeArgs));
+          if (supportsEquality) {
+            wdecl.WriteLine("{0}\nbool operator==(const {1}{2} &left, const {1}{2} &right); ", DeclareTemplate(dt.TypeArgs), structName, InstantiateTemplate(dt.TypeArgs));
+          }
 
           var wstruct = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), structName), ";");
           // Declare the struct members
@@ -382,51 +397,53 @@ wmethodDecl = ws;
           }
 
           // Overload the comparison operator
-          wstruct.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right); ", structName, InstantiateTemplate(dt.TypeArgs));
-          var weq = wdef.NewBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right)", structName, DeclareTemplate(dt.TypeArgs), InstantiateTemplate(dt.TypeArgs)));
-          var preReturn = weq.Fork();
-          weq.Write("\treturn true ");
-          i = 0;
-          foreach (Formal arg in ctor.Formals) {
-            if (!arg.IsReallyGhost) {
-              if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive destructor needs to use a pointer
-                weq.WriteLine("\t\t&& *(left.{0}) == *(right.{0})", FormalName(arg, i));
-              } else {
-                weq.WriteLine("\t\t&& left.{0} == right.{0}", FormalName(arg, i));
+          if (supportsEquality) {
+            wstruct.WriteLine("friend bool operator=={1}(const {0} &left, const {0} &right); ", structName, InstantiateTemplate(dt.TypeArgs));
+            var weq = wdef.NewBlock(string.Format("{1}\nbool operator==(const {0}{2} &left, const {0}{2} &right)", structName, DeclareTemplate(dt.TypeArgs), InstantiateTemplate(dt.TypeArgs)));
+            var preReturn = weq.Fork();
+            weq.Write("\treturn true ");
+            i = 0;
+            foreach (Formal arg in ctor.Formals) {
+              if (!arg.IsReallyGhost) {
+                if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {  // Recursive destructor needs to use a pointer
+                  weq.WriteLine("\t\t&& *(left.{0}) == *(right.{0})", FormalName(arg, i));
+                } else {
+                  weq.WriteLine("\t\t&& left.{0} == right.{0}", FormalName(arg, i));
+                }
+                i++;
               }
-              i++;
             }
-          }
 
-          if (i == 0) { // Avoid a warning from the C++ compiler
-            preReturn.WriteLine("(void)left; (void) right;");
-          }
-          weq.WriteLine(";");
-          // Overload the not-comparison operator
-          wstruct.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", structName);
+            if (i == 0) { // Avoid a warning from the C++ compiler
+              preReturn.WriteLine("(void)left; (void) right;");
+            }
+            weq.WriteLine(";");
+            // Overload the not-comparison operator
+            wstruct.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", structName);
 
-          // Define a custom hasher
-          hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
-          var fullName = dt.EnclosingModuleDefinition.CompileName + "::" + structName + InstantiateTemplate(dt.TypeArgs);
-          var hwr = hashWr.NewBlock(string.Format("struct std::hash<{0}>", fullName), ";");
-          var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
-          owr.WriteLine("size_t seed = 0;");
-          int argCount = 0;
-          foreach (var arg in ctor.Formals) {
-            if (!arg.IsReallyGhost) {
-              if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
-                // Recursive destructor needs to use a pointer
-                owr.WriteLine("hash_combine<std::shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
-              } else {
-                owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
+            // Define a custom hasher
+            hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
+            var fullName = dt.EnclosingModuleDefinition.CompileName + "::" + structName + InstantiateTemplate(dt.TypeArgs);
+            var hwr = hashWr.NewBlock(string.Format("struct std::hash<{0}>", fullName), ";");
+            var owr = hwr.NewBlock(string.Format("std::size_t operator()(const {0}& x) const", fullName));
+            owr.WriteLine("size_t seed = 0;");
+            int argCount = 0;
+            foreach (var arg in ctor.Formals) {
+              if (!arg.IsReallyGhost) {
+                if (arg.Type is UserDefinedType udt && udt.ResolvedClass == dt) {
+                  // Recursive destructor needs to use a pointer
+                  owr.WriteLine("hash_combine<std::shared_ptr<{0}>>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
+                } else {
+                  owr.WriteLine("hash_combine<{0}>(seed, x.{1});", TypeName(arg.Type, owr, dt.tok, usage:arg.Usage), arg.CompileName);
+                }
+                argCount++;
               }
-              argCount++;
             }
+            if (argCount == 0) {
+              owr.WriteLine("(void)x;");
+            }
+            owr.WriteLine("return seed;");
           }
-          if (argCount == 0) {
-            owr.WriteLine("(void)x;");
-          }
-          owr.WriteLine("return seed;");
         }
 
         /*** Declare the overall tagged union ***/
@@ -502,8 +519,10 @@ wmethodDecl = ws;
         ws.WriteLine("{0}* operator->() {{ return this; }}", DtT_protected);
 
         // Overload the comparison operator
-        ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", DtT_protected);
-        ws.WriteLine("\treturn left.v == right.v;\n}");
+        if (supportsEquality) {
+          ws.WriteLine("friend bool operator==(const {0} &left, const {0} &right) {{ ", DtT_protected);
+          ws.WriteLine("\treturn left.v == right.v;\n}");
+        }
 
         // Create destructors
         foreach (var ctor in dt.Ctors) {
@@ -542,28 +561,33 @@ wmethodDecl = ws;
         }
 
         // Overload the not-comparison operator
-        ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
+        if (supportsEquality) {
+          ws.WriteLine("friend bool operator!=(const {0} &left, const {0} &right) {{ return !(left == right); }} ", DtT_protected);
+        }
+
+        var fullStructName = dt.EnclosingModuleDefinition.CompileName + "::" + DtT_protected;
 
         // Define a custom hasher for the struct as a whole
-        hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
-        var fullStructName = dt.EnclosingModuleDefinition.CompileName + "::" + DtT_protected;
-        var hwr2 = hashWr.NewBlock(string.Format("struct std::hash<{0}{1}>", fullStructName, InstantiateTemplate(dt.TypeArgs)), ";");
-        var owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullStructName, InstantiateTemplate(dt.TypeArgs)));
-        owr2.WriteLine("size_t seed = 0;");
-        var index = 0;
-        foreach (var ctor in dt.Ctors) {
-          var ifwr = owr2.NewBlock(string.Format("if (x.is_{0}())", DatatypeSubStructName(ctor)));
-          ifwr.WriteLine("hash_combine<uint64>(seed, {0});", index);
-          ifwr.WriteLine("hash_combine<struct {0}::{1}>(seed, std::get<{0}::{1}>(x.v));", dt.EnclosingModuleDefinition.CompileName, DatatypeSubStructName(ctor, true));
-          index++;
+        if (supportsEquality) {
+          hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
+          var hwr2 = hashWr.NewBlock(string.Format("struct std::hash<{0}{1}>", fullStructName, InstantiateTemplate(dt.TypeArgs)), ";");
+          var owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const {0}{1}& x) const", fullStructName, InstantiateTemplate(dt.TypeArgs)));
+          owr2.WriteLine("size_t seed = 0;");
+          var index = 0;
+          foreach (var ctor in dt.Ctors) {
+            var ifwr = owr2.NewBlock(string.Format("if (x.is_{0}())", DatatypeSubStructName(ctor)));
+            ifwr.WriteLine("hash_combine<uint64>(seed, {0});", index);
+            ifwr.WriteLine("hash_combine<struct {0}::{1}>(seed, std::get<{0}::{1}>(x.v));", dt.EnclosingModuleDefinition.CompileName, DatatypeSubStructName(ctor, true));
+            index++;
+          }
+          owr2.WriteLine("return seed;");
         }
-        owr2.WriteLine("return seed;");
 
         if (IsRecursiveDatatype(dt)) {
           // Emit a custom hasher for a pointer to this type
           hashWr.WriteLine("template <{0}>", TypeParameters(dt.TypeArgs));
-          hwr2 = hashWr.NewBlock(string.Format("struct std::hash<std::shared_ptr<{0}{1}>>", fullStructName, InstantiateTemplate(dt.TypeArgs)), ";");
-          owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const std::shared_ptr<{0}{1}>& x) const", fullStructName, InstantiateTemplate(dt.TypeArgs)));
+          var hwr2 = hashWr.NewBlock(string.Format("struct std::hash<std::shared_ptr<{0}{1}>>", fullStructName, InstantiateTemplate(dt.TypeArgs)), ";");
+          var owr2 = hwr2.NewBlock(string.Format("std::size_t operator()(const std::shared_ptr<{0}{1}>& x) const", fullStructName, InstantiateTemplate(dt.TypeArgs)));
           owr2.WriteLine("struct std::hash<{0}{1}> hasher;", fullStructName, InstantiateTemplate(dt.TypeArgs));
           owr2.WriteLine("std::size_t h = hasher(*x);");
           owr2.WriteLine("return h;");
