@@ -374,8 +374,10 @@ struct DafnySequence {
 
     // Returns the subsequence of values [lo..hi)
     DafnySequence<T> subsequence(uint64 lo, uint64 hi) const {
-        auto ret = DafnySequence(hi - lo);
-        std::copy(this->ptr() + lo, this->ptr() + hi, ret.ptr());
+        DafnySequence<T> ret;
+        ret.sptr = sptr;
+        ret.start = start + lo;
+        ret.len = hi - lo;
         return ret;
     }
 

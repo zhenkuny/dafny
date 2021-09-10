@@ -1498,9 +1498,15 @@ namespace Microsoft.Dafny
 
     internal override void PreResolve(ModuleDefinition m) {
       foreach (var d in m.TopLevelDecls) {
-        if (d is ClassDecl) {
-          var c = (ClassDecl)d;
-          foreach (MemberDecl member in c.Members)  {
+        List<MemberDecl> members = null;
+        if (d is ClassDecl c) {
+          members = c.Members;
+        } else if (d is IndDatatypeDecl dt) {
+          members = dt.Members;
+        }
+
+        if (members != null) {
+          foreach (MemberDecl member in members)  {
             if (member is Function || member is Method) {
               // Check for the timeLimitMultiplier attribute
               if (Attributes.Contains(member.Attributes, "timeLimitMultiplier")) {
@@ -1511,16 +1517,21 @@ namespace Microsoft.Dafny
                       var arg = attr.Args[0] as LiteralExpr;
                       System.Numerics.BigInteger value = (System.Numerics.BigInteger)arg.Value;
                       if (value.Sign > 0) {
+                        int current_limit = 0;
+                        string name = "";
                         if (DafnyOptions.O.ResourceLimit > 0) {
                           // Interpret this as multiplying the resource limit
-                          int current_limit = DafnyOptions.O.ResourceLimit;
-                          attr.Args[0] = new LiteralExpr(attr.Args[0].tok, value * current_limit);
-                          attr.Name = "rlimit";
+                          current_limit = DafnyOptions.O.ResourceLimit;
+                          name = "rlimit";
                         } else {
                           // Interpret this as multiplying the time limit
-                          int current_limit = DafnyOptions.O.TimeLimit > 0 ? DafnyOptions.O.TimeLimit : 10;  // Default to 10 seconds
-                          attr.Args[0] = new LiteralExpr(attr.Args[0].tok, value * current_limit);
-                          attr.Name = "timeLimit";
+                          current_limit = DafnyOptions.O.TimeLimit > 0 ? DafnyOptions.O.TimeLimit : 10;  // Default to 10 seconds
+                          name = "timeLimit";
+                        }
+                        Expression newArg = new LiteralExpr(attr.Args[0].tok, value * current_limit);
+                        member.Attributes = new Attributes("_" + name, new List<Expression>() { newArg }, attrs);
+                        if (Attributes.Contains(attrs, name)) {
+                          reporter.Warning(MessageSource.Rewriter, member.tok, "timeLimitMultiplier annotation overrides " + name + " annotation");
                         }
                       }
                     }
