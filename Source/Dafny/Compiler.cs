@@ -1178,14 +1178,14 @@ namespace Microsoft.Dafny {
           {
             var dt = (DatatypeDecl)d;
             var isGlinear = false;
-            if (dt is IndDatatypeDecl)
+            /*if (dt is IndDatatypeDecl)
             {
               var idd = dt as IndDatatypeDecl;
               if (idd.Usage.realm == LinearRealm.Erased)
               {
                 isGlinear = true;
               }
-            }
+            }*/
 
             if (!isGlinear)
             {
