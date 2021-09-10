@@ -9758,8 +9758,11 @@ namespace Microsoft.Dafny
         foreach (var ctor in dt.Ctors) {
           foreach (var arg in ctor.Formals) {
             var anotherIndDt = arg.Type.AsIndDatatype;
+            var udt = arg.Type is UserDefinedType ? arg.Type as UserDefinedType : null;
+            var opaque = udt == null ? null : (udt.ResolvedClass is OpaqueTypeDecl ? udt.ResolvedClass as OpaqueTypeDecl : null);
             if (arg.IsGhost ||
                 (anotherIndDt != null && anotherIndDt.EqualitySupport == IndDatatypeDecl.ES.Never) ||
+                (opaque != null && !opaque.SupportsEquality) ||
                 arg.Type.IsCoDatatype ||
                 arg.Type.IsArrowType) {
               // arg.Type is known never to support equality
