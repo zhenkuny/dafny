@@ -15,6 +15,7 @@ using System.Linq;
 using Microsoft.Boogie;
 using System.Diagnostics;
 using System.Reflection.Metadata.Ecma335;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Microsoft.Dafny {
   public class Program {
@@ -4120,10 +4121,16 @@ namespace Microsoft.Dafny {
       return result;
     }
 
+    private string ReplaceParens(string s) {
+      var t = s.Replace("(", "_LEFT_");
+      t = t.Replace(")", "_RIGHT_");
+      return t;
+    }
+
     public string ToUniqueName(uint uniqueId) {
       string result = tok.val + "_" + uniqueId;
       if (moduleParamNames.Count > 0) {
-        result += "_ON_" + Util.Comma("_", moduleParamNames, exp => exp.ToString()) + "_";
+        result += "_ON_" + Util.Comma("_", moduleParamNames, exp => ReplaceParens(exp.ToString())) + "_";
       }
       return result;
     }
