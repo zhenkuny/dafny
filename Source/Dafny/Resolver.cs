@@ -2829,6 +2829,7 @@ namespace Microsoft.Dafny
         Dictionary<ModuleFormal, ModuleQualifiedId> formalActualIdPairs = new Dictionary<ModuleFormal, ModuleQualifiedId>();
         HashSet<TopLevelDecl> fakeAliasDecls = new HashSet<TopLevelDecl>();
         bool allArgumentsConcrete = true;
+        bool shouldCompile = newDef.IsToBeCompiled;
         for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
           ModuleFormal formal = functorApp.functor.Formals[i];
           ModuleActual actual = functorApp.moduleParams[i];
@@ -2852,6 +2853,10 @@ namespace Microsoft.Dafny
           // have to eventually be concretized
           bool isConcrete = (actual is ModuleActualDecl mad && !mad.decl.Signature.IsAbstract) || actual is ModuleActualFormal;
           allArgumentsConcrete &= isConcrete;
+
+          if (actual is ModuleActualFormal) {
+            shouldCompile = false;  // If this functor hasn't been fully instantiated yet, we shouldn't compile it
+          }
 
           LiteralModuleDecl actualLiteral = normalizeDecl(GetDeclFromModuleActual(actual));
 
@@ -2880,6 +2885,7 @@ namespace Microsoft.Dafny
             }
           }
         }
+        newDef.IsToBeCompiled = shouldCompile;
 
         // 3)
         // Update each module import that involves a functor (if any)

@@ -4271,7 +4271,7 @@ namespace Microsoft.Dafny {
     public readonly bool IsFacade; // True iff this module represents a module facade (that is, an abstract interface)
     private readonly bool IsBuiltinName; // true if this is something like _System that shouldn't have it's name mangled.
     public readonly bool IsToBeVerified;
-    public readonly bool IsToBeCompiled;
+    public bool IsToBeCompiled;
 
     public int? ResolvedHash { get; set; }
 
