@@ -22,7 +22,7 @@ method TestLinearRet(linear s:seq<uint64>) returns (linear s':seq<uint64>)
 linear datatype Val0 = Leaf(x:uint64) | Branch(linear v:Val0)
 datatype Val1 = Leaf(x:uint64) | Branch(v:Val1)
 
-method Test(name:string, b:bool) 
+method Test(name:string, b:bool)
   requires b;
 {
   if b {
@@ -32,9 +32,9 @@ method Test(name:string, b:bool)
   }
 }
 
-/*  
+/*
 // Disallowed because operator== expects ordinary arguments
-method LinearMaybeEqualityTest(linear a:maybe<uint64>, linear b:maybe<uint64>) 
+method LinearMaybeEqualityTest(linear a:maybe<uint64>, linear b:maybe<uint64>)
   requires has(a) && !has(b);
 {
   var bar := a == b;
@@ -46,7 +46,7 @@ method LinearMaybeEqualityTest(linear a:maybe<uint64>, linear b:maybe<uint64>)
 }
 
 // Disallowed here because type lseq is not type(==)
-method LinearLSeqEqualityTest() 
+method LinearLSeqEqualityTest()
 {
   var a:lseq<uint64>, b:lseq<uint64>;
   var result := a == b;
@@ -60,7 +60,7 @@ method LinearLSeqEqualityTest()
 //function method {:extern "LinearExtern", "seq_free"} seq_free<A>(linear s:seq<A>):()
 //
 
-method TestLinearSequences() 
+method TestLinearSequences()
 {
   linear var s0 := seq_alloc<uint64>(10);
   var x := seq_get(s0, 0);
@@ -112,12 +112,12 @@ method TestLinearMaybe(linear u:uint64) returns (linear x:uint64)
 }
 
 method {:extern "LinearExtern", "MakeLinearInt"} MakeLinearInt(u:uint64) returns (linear x:uint64)
-method {:extern "LinearExtern", "DiscardLinearInt"} DiscardLinearInt(linear u:uint64) 
+method {:extern "LinearExtern", "DiscardLinearInt"} DiscardLinearInt(linear u:uint64)
 
 lemma {:axiom} falso()
   ensures false;
 
-method AccessShared(shared s:lseq<uint64>) 
+method AccessShared(shared s:lseq<uint64>)
   requires lseq_length_raw(s) > 1
   requires has(lseq_share_raw(s, 0))
 {
@@ -125,7 +125,7 @@ method AccessShared(shared s:lseq<uint64>)
   shared var a := peek(m);
 }
 
-method TestLSeq() 
+method TestLSeq()
 {
   linear var s := lseq_alloc_raw<uint64>(10);
   var len := lseq_length_raw(s);
@@ -135,13 +135,23 @@ method TestLSeq()
   linear var u := MakeLinearInt(24);
   linear var m := give(u);
   linear var (s', m') := lseq_swap_raw_fun(s, 0, m);
-  
+
   AccessShared(s');
 
   linear var (s'', m'') := lseq_swap_raw_fun(s', 0, m');
   falso();    // Skip proofs about has
   var _ := discard(m'');
   var _ := lseq_free_raw(s'');
+}
+
+type {:extern "predefined"} T
+
+method ExpectsSharedT(shared t: T) {
+}
+
+method ProvidesSharedT(linear t: T) returns (linear t': T) {
+  ExpectsSharedT(t);
+  t' := t;
 }
 
 method Main()
