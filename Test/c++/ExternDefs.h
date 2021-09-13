@@ -66,3 +66,8 @@ class __default {
   }
 };*/
 }
+
+namespace _module {
+  typedef int T;
+  T get_T_default() { return 42; }
+}
