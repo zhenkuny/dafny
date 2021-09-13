@@ -1112,7 +1112,7 @@ namespace Microsoft.Dafny {
             if (!instantiatedType.Equals(p.Type)) {
               // var p instantiatedType = p.(instantiatedType)
               var pName = IdName(inParams[i]);
-              DeclareLocalVar(pName, instantiatedType, p.tok, Usage.Ordinary, true, null, w);
+              DeclareLocalVar(pName, instantiatedType, p.tok, Usage.Ordinary, true, null, w, false);
               var wRhs = EmitAssignmentRhs(w);
               wRhs = EmitCoercionIfNecessary(p.Type, instantiatedType, p.tok, wRhs);
               wRhs.Write(pName);
@@ -1677,14 +1677,14 @@ namespace Microsoft.Dafny {
       wr.WriteLine("_ = {0}", variableName);
     }
 
-    protected override void DeclareLocalVar(string name, Type type, Bpl.IToken tok, Usage usage, bool leaveRoomForRhs, string rhs, TargetWriter wr) {
+    protected override void DeclareLocalVar(string name, Type type, Bpl.IToken tok, Usage usage, bool leaveRoomForRhs, string rhs, TargetWriter wr, bool asPointerForShared) {
       var w = DeclareLocalVar(name, type, tok, usage, includeRhs:(rhs != null || leaveRoomForRhs), leaveRoomForRhs:leaveRoomForRhs, wr:wr);
       if (rhs != null) {
         w.Write(rhs);
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr, bool asPointerForShared) {
       return DeclareLocalVar(name, type, tok, usage, includeRhs:true, leaveRoomForRhs:false, wr:wr);
     }
 
@@ -1695,7 +1695,7 @@ namespace Microsoft.Dafny {
     protected override string StmtTerminator => "";
 
     protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, usage, false, rhs, wr);
+      DeclareLocalVar(name, type, tok, usage, false, rhs, wr, false);
     }
 
     protected override void EmitActualTypeArgs(List<Type> typeArgs, Bpl.IToken tok, TextWriter wr) {
@@ -3300,12 +3300,12 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitSetBuilder_New(TargetWriter wr, SetComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr, false);
       wrVarInit.Write("_dafny.NewBuilder()");
     }
 
     protected override void EmitMapBuilder_New(TargetWriter wr, MapComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr, false);
       wrVarInit.Write("_dafny.NewMapBuilder()");
     }
 

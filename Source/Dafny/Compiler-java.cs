@@ -439,11 +439,11 @@ namespace Microsoft.Dafny{
     }
 
     protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, Expression rhs,
-      bool inLetExprBody, TargetWriter wr){
+      bool inLetExprBody, TargetWriter wr, bool asPointerForShared){
       if (type == null){
         type = rhs.Type;
       }
-      var w = DeclareLocalVar(name, type, tok, usage, wr);
+      var w = DeclareLocalVar(name, type, tok, usage, wr, asPointerForShared);
       TrExpr(rhs, w, inLetExprBody);
     }
 
@@ -1104,7 +1104,7 @@ namespace Microsoft.Dafny{
     }
 
     protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs,
-      string /*?*/ rhs, TargetWriter wr){
+      string /*?*/ rhs, TargetWriter wr, bool asPointerForShared){
       if (type != null && type.AsArrayType != null){
         arrays.Add(type.AsArrayType.Dims);
       }
@@ -1127,8 +1127,8 @@ namespace Microsoft.Dafny{
     }
 
     protected override void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs,
-      string /*?*/ rhs, TargetWriter wr, Type t) {
-      DeclareLocalVar(name, t, tok, usage, leaveRoomForRhs, rhs, wr);
+      string /*?*/ rhs, TargetWriter wr, Type t, bool asPointerForShared) {
+      DeclareLocalVar(name, t, tok, usage, leaveRoomForRhs, rhs, wr, asPointerForShared);
     }
 
     protected override void EmitCollectionDisplay(CollectionType ct, Bpl.IToken tok, List<Expression> elements, bool inLetExprBody, TargetWriter wr) {
@@ -3091,7 +3091,7 @@ namespace Microsoft.Dafny{
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type type, Bpl.IToken tok, Usage usage, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type type, Bpl.IToken tok, Usage usage, TargetWriter wr, bool asPointerForShared) {
       wr.Write("{0} {1} = ", type != null ? TypeName(type, wr, tok, false, false, null) : "var", name);
       var w = wr.Fork();
       wr.WriteLine(";");
@@ -3099,7 +3099,7 @@ namespace Microsoft.Dafny{
     }
 
     protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, usage, false, rhs, wr);
+      DeclareLocalVar(name, type, tok, usage, false, rhs, wr, false);
     }
 
     protected override IClassWriter CreateTrait(string name, bool isExtern, List<TypeParameter>/*?*/ typeParameters, List<Type> superClasses, Bpl.IToken tok, TargetWriter wr) {
