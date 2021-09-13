@@ -1147,7 +1147,7 @@ wmethodDecl = ws;
 
     private string DeclareFormalString(string prefix, string name, Type type, Bpl.IToken tok, Usage usage, bool isInParam, bool isInoutParam) {
       if (isInParam) {
-        bool isReference = isInoutParam || usage == Usage.Shared;
+        bool isReference = isInoutParam || usage.IsSharedKind;
         return String.Format("{0}{2}{3} {1}", prefix, name, TypeName(type, null, tok, usage:usage), isReference ? "&" : "");
       } else {
         return null;
