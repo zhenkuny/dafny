@@ -1371,7 +1371,7 @@ namespace Microsoft.Dafny
       return true;
     }
 
-    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
+    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr, bool as_pointer_for_shared) {
       wr.Write("{0} {1}", type != null ? TypeName(type, wr, tok) : "var", name);
       if (leaveRoomForRhs) {
         Contract.Assert(rhs == null);  // follows from precondition
@@ -1382,7 +1382,7 @@ namespace Microsoft.Dafny
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr, bool asPointerForShared) {
       wr.Write("{0} {1} = ", type != null ? TypeName(type, wr, tok) : "var", name);
       var w = wr.Fork();
       wr.WriteLine(";");
@@ -1395,7 +1395,7 @@ namespace Microsoft.Dafny
 
     protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
       if (useReturnStyleOuts) {
-        DeclareLocalVar(name, type, tok, usage, false, rhs, wr);
+        DeclareLocalVar(name, type, tok, usage, false, rhs, wr, false);
       } else {
         EmitAssignment(name, type, rhs, null, wr);
       }
@@ -2248,7 +2248,7 @@ namespace Microsoft.Dafny
 
       var indexType = lengthExpr.Type;
       var lengthVar = FreshId("dim");
-      DeclareLocalVar(lengthVar, indexType, lengthExpr.tok, boundVar.Usage, lengthExpr, inLetExprBody, wrLamBody);
+      DeclareLocalVar(lengthVar, indexType, lengthExpr.tok, boundVar.Usage, lengthExpr, inLetExprBody, wrLamBody, false);
       var arrVar = FreshId("arr");
       wrLamBody.Write("var {0} = ", arrVar);
       var wrDims = EmitNewArray(body.Type, body.tok, dimCount: 1, mustInitialize: false, wr: wrLamBody);
@@ -2699,12 +2699,12 @@ namespace Microsoft.Dafny
     }
 
     protected override void EmitSetBuilder_New(TargetWriter wr, SetComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr, false);
       wrVarInit.Write("new System.Collections.Generic.List<{0}>()", TypeName(e.Type.AsSetType.Arg, wrVarInit, e.tok));
     }
 
     protected override void EmitMapBuilder_New(TargetWriter wr, MapComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr, false);
       var mt = e.Type.AsMapType;
       var domtypeName = TypeName(mt.Domain, wrVarInit, e.tok);
       var rantypeName = TypeName(mt.Range, wrVarInit, e.tok);
