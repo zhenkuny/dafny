@@ -15,6 +15,7 @@ using System.Linq;
 using Microsoft.Boogie;
 using System.Diagnostics;
 using System.Reflection.Metadata.Ecma335;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Microsoft.Dafny {
   public class Program {
@@ -4130,10 +4131,16 @@ namespace Microsoft.Dafny {
       return result;
     }
 
+    private string ReplaceParens(string s) {
+      var t = s.Replace("(", "_LEFT_");
+      t = t.Replace(")", "_RIGHT_");
+      return t;
+    }
+
     public string ToUniqueName(uint uniqueId) {
       string result = tok.val + "_" + uniqueId;
       if (moduleParamNames.Count > 0) {
-        result += "_ON_" + Util.Comma("_", moduleParamNames, exp => exp.ToString()) + "_";
+        result += "_ON_" + Util.Comma("_", moduleParamNames, exp => ReplaceParens(exp.ToString())) + "_";
       }
       return result;
     }
@@ -4274,7 +4281,7 @@ namespace Microsoft.Dafny {
     public readonly bool IsFacade; // True iff this module represents a module facade (that is, an abstract interface)
     private readonly bool IsBuiltinName; // true if this is something like _System that shouldn't have it's name mangled.
     public readonly bool IsToBeVerified;
-    public readonly bool IsToBeCompiled;
+    public bool IsToBeCompiled;
 
     public int? ResolvedHash { get; set; }
 
