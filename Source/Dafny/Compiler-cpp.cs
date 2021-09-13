@@ -175,6 +175,21 @@ namespace Microsoft.Dafny {
         return "";
       }
     }
+    
+    private string InstantiateTemplateFormals(List<Formal> typeArgs) {
+      if (typeArgs != null) {
+        var targs = "";
+        if (typeArgs.Count > 0) {
+          targs = String.Format("<{0}>", Util.Comma(typeArgs, ta =>
+            TypeName(ta.Type, null, null) + (ta.Usage == Usage.Shared ? "*" : "")
+            ));
+        }
+
+        return targs;
+      } else {
+        return "";
+      }
+    }
 
     protected override string GetHelperModuleName() => "_dafny";
 
@@ -727,8 +742,12 @@ wmethodDecl = ws;
       string targetReturnTypeReplacement = null;
       if (nonGhostOuts.Count == 1) {
         targetReturnTypeReplacement = TypeName(nonGhostOuts[0].Type, wr, nonGhostOuts[0].tok, usage:nonGhostOuts[0].Usage);
+        if (nonGhostOuts[0].Usage == Usage.Shared)
+        {
+          targetReturnTypeReplacement += "*";
+        }
       } else if (nonGhostOuts.Count > 1) {
-        targetReturnTypeReplacement = String.Format("struct Tuple{0}", InstantiateTemplate(nonGhostOuts.ConvertAll(n => n.Type)));
+        targetReturnTypeReplacement = String.Format("struct Tuple{0}", InstantiateTemplateFormals(nonGhostOuts));
       }
 
       if (!createBody) {
@@ -803,12 +822,13 @@ wmethodDecl = ws;
         wr.WriteLine(DeclareTemplate(classArgs));
       }
 
+      var typeName = TypeName(resultType, wr, tok, usage: resultUsage) + (resultUsage == Usage.Shared ? "*" : "");
       wdr.Write("{0}{1} {2}",
         isStatic ? "static " : "",
-        TypeName(resultType, wr, tok, usage:resultUsage),
+        typeName,
         name);
       wr.Write("{0} {1}{2}::{3}",
-        TypeName(resultType, wr, tok, usage:resultUsage),
+        typeName,
         className,
         InstantiateTemplate(classArgs),
         name);
@@ -982,6 +1002,10 @@ wmethodDecl = ws;
     }
 
     protected override string TypeInitializationValue(Type type, TextWriter wr, Bpl.IToken tok, Usage usage, bool usePlaceboValue, bool constructTypeParameterDefaultsFromTypeDescriptors) {
+      if (usage == Usage.Shared)
+      {
+        return "nullptr";
+      }
       var xType = type.NormalizeExpandKeepConstraints();
       if (xType is BoolType) {
         return "false";
@@ -1179,11 +1203,13 @@ wmethodDecl = ws;
       return ret;
     }
 
-    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
+    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr, bool as_pointer_for_shared)
+    {
+      bool is_shared = usage == Usage.Shared;
       if (type != null) {
-        wr.Write("{0} ", TypeName(type, wr, tok, usage:usage));
+        wr.Write(is_shared ? (as_pointer_for_shared ? "{0}* " : "{0}& ") : "{0} ", TypeName(type, wr, tok, usage:usage));
       } else {
-        wr.Write("auto ");
+        wr.Write(is_shared ? (as_pointer_for_shared ? "auto* " : "auto& ") : "auto ");
       }
       wr.Write("{0}", name);
       if (leaveRoomForRhs) {
@@ -1195,11 +1221,12 @@ wmethodDecl = ws;
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr, bool as_pointer_for_shared = false) {
+      bool is_shared = usage == Usage.Shared;
       if (type != null) {
-        wr.Write("{0} ", TypeName(type, wr, tok, usage:usage));
+        wr.Write(is_shared ? (as_pointer_for_shared ? "{0}* " : "{0}& ") : "{0} ", TypeName(type, wr, tok, usage:usage));
       } else {
-        wr.Write("auto ");
+        wr.Write(is_shared ? (as_pointer_for_shared ? "{0}* " : "{0}& ") : "auto ");
       }
       wr.Write("{0} = ", name);
       var w = wr.Fork();
@@ -1214,7 +1241,7 @@ wmethodDecl = ws;
     }
 
     protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, usage, false, rhs, wr);
+      DeclareLocalVar(name, type, tok, usage, false, rhs, wr, true);
     }
 
     protected override void EmitOutParameterSplits(string outCollector, List<string> actualOutParamNames, TargetWriter wr) {
@@ -1270,7 +1297,7 @@ wmethodDecl = ws;
       } else if (outParams.Count == 1) {
         wr.WriteLine("return {0};", IdName(outParams[0]));
       } else {
-        wr.WriteLine("return Tuple{0}({1});", InstantiateTemplate(outParams.ConvertAll(o => o.Type)), Util.Comma(outParams, IdName));
+        wr.WriteLine("return Tuple{0}({1});", InstantiateTemplateFormals(outParams), Util.Comma(outParams, IdName));
       }
     }
 

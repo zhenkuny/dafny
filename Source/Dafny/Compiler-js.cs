@@ -986,7 +986,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr) {
+    protected override void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr, bool asPointerForShared) {
       wr.Write("let {0}", name);
       if (leaveRoomForRhs) {
         Contract.Assert(rhs == null);  // follows from precondition
@@ -997,7 +997,7 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr) {
+    protected override TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr, bool asPointerForShared) {
       wr.Write("let {0} = ", name);
       var w = wr.Fork();
       wr.WriteLine(";");
@@ -1011,7 +1011,7 @@ namespace Microsoft.Dafny {
     }
 
     protected override void DeclareLocalOutVar(string name, Type type, Bpl.IToken tok, Usage usage, string rhs, bool useReturnStyleOuts, TargetWriter wr) {
-      DeclareLocalVar(name, type, tok, usage, false, rhs, wr);
+      DeclareLocalVar(name, type, tok, usage, false, rhs, wr, false);
     }
 
     protected override void EmitOutParameterSplits(string outCollector, List<string> actualOutParamNames, TargetWriter wr) {
@@ -2212,12 +2212,12 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitSetBuilder_New(TargetWriter wr, SetComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr, false);
       wrVarInit.Write($"new {DafnySetClass}()");
     }
 
     protected override void EmitMapBuilder_New(TargetWriter wr, MapComprehension e, string collectionName) {
-      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr);
+      var wrVarInit = DeclareLocalVar(collectionName, null, null, Usage.Ordinary, wr, false);
       wrVarInit.Write($"new {DafnyMapClass}()");
     }
 

@@ -287,10 +287,10 @@ namespace Microsoft.Dafny {
     /// In the above, if "type" is null, then it is replaced by "var" or "let".
     /// "tok" is allowed to be null if "type" is.
     /// </summary>
-    protected abstract void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr);
+    protected abstract void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs, string/*?*/ rhs, TargetWriter wr, bool as_pointer_for_shared);
 
-    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs, string /*?*/ rhs, TargetWriter wr, Type t) {
-      DeclareLocalVar(name, type, tok, usage, leaveRoomForRhs, rhs, wr);
+    protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, bool leaveRoomForRhs, string /*?*/ rhs, TargetWriter wr, Type t, bool as_pointer_for_shared) {
+      DeclareLocalVar(name, type, tok, usage, leaveRoomForRhs, rhs, wr, as_pointer_for_shared);
     }
     /// <summary>
     /// Generates:
@@ -298,14 +298,14 @@ namespace Microsoft.Dafny {
     /// In the above, if "type" is null, then it is replaced by "var" or "let".
     /// "tok" is allowed to be null if "type" is.
     /// </summary>
-    protected virtual void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, Expression rhs, bool inLetExprBody, TargetWriter wr) {
-      var w = DeclareLocalVar(name, type, tok, usage, wr);
+    protected virtual void DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, Expression rhs, bool inLetExprBody, TargetWriter wr, bool as_pointer_for_shared) {
+      var w = DeclareLocalVar(name, type, tok, usage, wr, as_pointer_for_shared);
       TrExpr(rhs, w, inLetExprBody);
     }
 
     protected virtual void DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, Expression rhs,
-      bool inLetExprBody, TargetWriter wr, Type t){
-      var w = DeclareLocalVar(name, type, tok, usage, wr);
+      bool inLetExprBody, TargetWriter wr, Type t, bool as_pointer_for_shared){
+      var w = DeclareLocalVar(name, type, tok, usage, wr, as_pointer_for_shared);
       TrExpr(rhs, w, inLetExprBody);
     }
     /// <summary>
@@ -314,7 +314,7 @@ namespace Microsoft.Dafny {
     /// In the above, if "type" is null, then it is replaced by "var" or "let".
     /// "tok" is allowed to be null if "type" is.
     /// </summary>
-    protected abstract TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr);
+    protected abstract TargetWriter DeclareLocalVar(string name, Type/*?*/ type, Bpl.IToken/*?*/ tok, Usage usage, TargetWriter wr, bool as_pointer_for_shared);
     protected virtual void DeclareOutCollector(string collectorVarName, TargetWriter wr) { }  // called only for return-style calls
     protected virtual void DeclareSpecificOutCollector(string collectorVarName, TargetWriter wr, List<Type> formalTypes, List<Type> lhsTypes) { DeclareOutCollector(collectorVarName, wr); } // for languages that don't allow "let" or "var" expressions
     protected virtual bool UseReturnStyleOuts(Method m, int nonGhostOutCount) => false;
@@ -342,8 +342,8 @@ namespace Microsoft.Dafny {
     }
     protected abstract string GenerateLhsDecl(string target, Type/*?*/ type, TextWriter wr, Bpl.IToken tok);
 
-    protected virtual TargetWriter DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, TargetWriter wr, Type t){
-      return DeclareLocalVar(name, type, tok, usage, wr);
+    protected virtual TargetWriter DeclareLocalVar(string name, Type /*?*/ type, Bpl.IToken /*?*/ tok, Usage usage, TargetWriter wr, Type t, bool as_pointer_for_shared){
+      return DeclareLocalVar(name, type, tok, usage, wr, as_pointer_for_shared);
     }
 
     protected virtual TargetWriter EmitAssignment(ILvalue wLhs, Type/*?*/ lhsType, Type/*?*/ rhsType, TargetWriter wr) {
@@ -1916,7 +1916,7 @@ namespace Microsoft.Dafny {
           var target = returnStyleOutCollector != null ? IdName(p) : idGenerator.FreshId("_out");
           outTmps.Add(target);
           outTypes.Add(p.Type);
-          DeclareLocalVar(target, p.Type, p.tok, p.Usage, false, null, wr);
+          DeclareLocalVar(target, p.Type, p.tok, p.Usage, false, null, wr, true);
         }
       }
       Contract.Assert(outTmps.Count == nonGhostOutParameterCount && outTypes.Count == nonGhostOutParameterCount);
@@ -2166,7 +2166,7 @@ namespace Microsoft.Dafny {
               Contract.Assert(false);  // unexpected type
               throw new cce.UnreachableException();
             }
-            DeclareLocalVar(IdName(accVar), accVar.Type, f.tok, accVar.Usage, unit, false, w);
+            DeclareLocalVar(IdName(accVar), accVar.Type, f.tok, accVar.Usage, unit, false, w, true);
           }
           w = EmitTailCallStructure(f, w);
         }
@@ -2222,7 +2222,7 @@ namespace Microsoft.Dafny {
             type = ty
           };
           if (m.EnclosingClass is ClassDecl) {
-            var wRhs = DeclareLocalVar(IdName(receiver), ty, m.tok, Usage.Ordinary, w);
+            var wRhs = DeclareLocalVar(IdName(receiver), ty, m.tok, Usage.Ordinary, w, false);
             EmitNew(ty, m.tok, null, wRhs);
           } else {
             TrLocalVar(receiver, true, w);
@@ -2272,13 +2272,16 @@ namespace Microsoft.Dafny {
         // var x := G;
         var bv = pat.Var;
         if (!bv.IsGhost) {
-          var w = DeclareLocalVar(IdProtect(bv.CompileName), bv.Type, rhsTok, bv.Usage, wr);
+          var w = DeclareLocalVar(IdProtect(bv.CompileName), bv.Type, rhsTok, bv.Usage, wr, true);
+          bool is_shared = (bv.Usage == Usage.Shared);
+          if (is_shared) { w.Write("&( "); } // XXX(travis): C++-specific
           if (rhs != null) {
             w = EmitCoercionIfNecessary(from: rhs.Type, to: bv.Type, tok:rhsTok, wr:w);
             TrExpr(rhs, w, inLetExprBody);
           } else {
             w.Write(rhs_string);
           }
+          if (is_shared) { w.Write(" )"); }
         }
       } else if (pat.Arguments != null) {
         // The Dafny "pattern" expression
@@ -2298,9 +2301,9 @@ namespace Microsoft.Dafny {
         // Create the temporary variable to hold G
         var tmp_name = idGenerator.FreshId("_let_tmp_rhs");
         if (rhs != null) {
-          DeclareLocalVar(tmp_name, rhs.Type, rhs.tok, usage, rhs, inLetExprBody, wr);
+          DeclareLocalVar(tmp_name, rhs.Type, rhs.tok, usage, rhs, inLetExprBody, wr, false);
         } else {
-          DeclareLocalVar(tmp_name, rhsType, rhsTok, usage, false, rhs_string, wr);
+          DeclareLocalVar(tmp_name, rhsType, rhsTok, usage, false, rhs_string, wr, false);
         }
 
         var dtv = (DatatypeValue)pat.Expr;
@@ -2372,7 +2375,7 @@ namespace Microsoft.Dafny {
         //     ...
         //   }
         string source = idGenerator.FreshId("_source");
-        DeclareLocalVar(source, e.Source.Type, e.Source.tok, e.Usage, e.Source, false, wr);
+        DeclareLocalVar(source, e.Source.Type, e.Source.tok, e.Usage, e.Source, false, wr, false);
 
         if (e.Cases.Count == 0) {
           // the verifier would have proved we never get here; still, we need some code that will compile
@@ -2402,7 +2405,7 @@ namespace Microsoft.Dafny {
           string inTmp = idGenerator.FreshId("_in");
           inTmps.Add(inTmp);
           inTypes.Add(null);
-          DeclareLocalVar(inTmp, null, null, Usage.Ordinary, e.Receiver, false, wr);
+          DeclareLocalVar(inTmp, null, null, Usage.Ordinary, e.Receiver, false, wr, false);
         }
         for (int i = 0; i < e.Function.Formals.Count; i++) {
           Formal p = e.Function.Formals[i];
@@ -2410,7 +2413,7 @@ namespace Microsoft.Dafny {
             string inTmp = idGenerator.FreshId("_in");
             inTmps.Add(inTmp);
             inTypes.Add(e.Args[i].Type);
-            DeclareLocalVar(inTmp, e.Args[i].Type, p.tok, p.Usage, e.Args[i], false, wr);
+            DeclareLocalVar(inTmp, e.Args[i].Type, p.tok, p.Usage, e.Args[i], false, wr, false);
           }
         }
         // Now, assign to the formals
@@ -2642,6 +2645,18 @@ namespace Microsoft.Dafny {
       }
     }
 
+    bool is_shared_assignment(AssignStmt stmt)
+    {
+      if (stmt.Lhs is IdentifierExpr ie)
+      {
+        return ie.Var.IsShared;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
     void TrStmt(Statement stmt, TargetWriter wr) {
       Contract.Requires(stmt != null);
       Contract.Requires(wr != null);
@@ -2715,11 +2730,15 @@ namespace Microsoft.Dafny {
           if (DafnyOptions.O.ForbidNondeterminism) {
             Error(s.Rhs.Tok, "nondeterministic assignment forbidden by /definiteAssignment:3 option", wr);
           }
-        } else {
+        } else
+        {
+          bool is_shared = is_shared_assignment(s);
           var lvalue = CreateLvalue(s.Lhs, wr);
           var wStmts = wr.ForkSection();
           var wRhs = EmitAssignment(lvalue, TypeOfLhs(s.Lhs), TypeOfRhs(s.Rhs), wr);
+          if (is_shared) wRhs.Write("&( "); // XXX(travis) this is obviously C++-specific
           TrRhs(s.Rhs, wRhs, wStmts);
+          if (is_shared) wRhs.Write(")");
         }
 
       } else if (stmt is AssignSuchThatStmt) {
@@ -3016,7 +3035,7 @@ namespace Microsoft.Dafny {
         // }
         if (s.Cases.Count != 0) {
           string source = idGenerator.FreshId("_source");
-          DeclareLocalVar(source, s.Source.Type, s.Source.tok, s.Usage, s.Source, false, wr);
+          DeclareLocalVar(source, s.Source.Type, s.Source.tok, s.Usage, s.Source, false, wr, false);
 
           int i = 0;
           var sourceType = (UserDefinedType)s.Source.Type.NormalizeExpand();
@@ -3066,7 +3085,7 @@ namespace Microsoft.Dafny {
 
     protected virtual TargetWriter EmitIngredients(TargetWriter wr, string ingredients, int L, string tupleTypeArgs, ForallStmt s, AssignStmt s0, Expression rhs){
 
-      using (var wrVarInit = DeclareLocalVar(ingredients, null, null, Usage.Ordinary, wr)){   // REVIEW: Linear?
+      using (var wrVarInit = DeclareLocalVar(ingredients, null, null, Usage.Ordinary, wr, false)){   // REVIEW: Linear?
         EmitEmptyTupleList(tupleTypeArgs, wrVarInit);
       }
 
@@ -3472,7 +3491,7 @@ namespace Microsoft.Dafny {
         Contract.Assert((bound.Virtues & ComprehensionExpr.BoundedPool.PoolVirtues.Enumerable) != 0);  // if we have got this far, it must be an enumerable bound
         var bv = lhss[i];
         if (needIterLimit) {
-          DeclareLocalVar(string.Format("{0}_{1}", iterLimit, i), null, null, bv.Usage, false, iterLimit, wr, Type.Int);
+          DeclareLocalVar(string.Format("{0}_{1}", iterLimit, i), null, null, bv.Usage, false, iterLimit, wr, Type.Int, false);
         }
         var tmpVar = idGenerator.FreshId("_assign_such_that_");
         TargetWriter collectionWriter;
@@ -3671,7 +3690,7 @@ namespace Microsoft.Dafny {
         return sw.ToString();
       } else {
         var v = idGenerator.FreshId(prefix);
-        DeclareLocalVar(v, null, null, Usage.Ordinary, e, false, wr);
+        DeclareLocalVar(v, null, null, Usage.Ordinary, e, false, wr, false);
         return v;
       }
     }
@@ -3735,7 +3754,7 @@ namespace Microsoft.Dafny {
         TrExpr(eRhs.Expr, wr, false);
       } else {
         var nw = idGenerator.FreshId("_nw");
-        var wRhs = DeclareLocalVar(nw, tRhs.Type, rhs.Tok, Usage.Ordinary, wStmts);
+        var wRhs = DeclareLocalVar(nw, tRhs.Type, rhs.Tok, Usage.Ordinary, wStmts, false);
         TrTypeRhs(tRhs, wRhs);
 
         // Proceed with initialization
@@ -3749,7 +3768,7 @@ namespace Microsoft.Dafny {
         } else if (tRhs.ElementInit != null) {
           // Compute the array-initializing function once and for all (as required by the language definition)
           string f = idGenerator.FreshId("_arrayinit");
-          DeclareLocalVar(f, tRhs.ElementInit.Type, tRhs.ElementInit.tok, Usage.Ordinary, tRhs.ElementInit, false, wStmts);
+          DeclareLocalVar(f, tRhs.ElementInit.Type, tRhs.ElementInit.tok, Usage.Ordinary, tRhs.ElementInit, false, wStmts, false);
           // Build a loop nest that will call the initializer for all indices
           var indices = Translator.Map(Enumerable.Range(0, tRhs.ArrayDimensions.Count), ii => idGenerator.FreshId("_arrayinit_" + ii));
           var w = wStmts;
@@ -3822,7 +3841,7 @@ namespace Microsoft.Dafny {
           string inTmp = idGenerator.FreshId("_in");
           inTmps.Add(inTmp);
           inTypes.Add(null);
-          DeclareLocalVar(inTmp, null, null, Usage.Ordinary, s.Receiver, false, wr);
+          DeclareLocalVar(inTmp, null, null, Usage.Ordinary, s.Receiver, false, wr, false);
         }
         for (int i = 0; i < s.Method.Ins.Count; i++) {
           Formal p = s.Method.Ins[i];
@@ -3830,7 +3849,7 @@ namespace Microsoft.Dafny {
             string inTmp = idGenerator.FreshId("_in");
             inTmps.Add(inTmp);
             inTypes.Add(s.Args[i].Expr.Type);
-            DeclareLocalVar(inTmp, s.Args[i].Expr.Type, p.tok, p.Usage, s.Args[i].Expr, false, wr);
+            DeclareLocalVar(inTmp, s.Args[i].Expr.Type, p.tok, p.Usage, s.Args[i].Expr, false, wr, false);
           }
         }
         // Now, assign to the formals
@@ -3936,7 +3955,7 @@ namespace Microsoft.Dafny {
             outTypes.Add(type);
             outFormalTypes.Add(p.Type);
             outLhsTypes.Add(s.Lhs[i].Type);
-            DeclareLocalVar(target, type, s.Lhs[i].tok, p.Usage, false, null, wr);
+            DeclareLocalVar(target, type, s.Lhs[i].tok, p.Usage, false, null, wr, true);
           }
         }
         Contract.Assert(lvalues.Count == outTmps.Count);
@@ -4082,7 +4101,7 @@ namespace Microsoft.Dafny {
         // only emit non-ghosts (we get here only for local variables introduced implicitly by call statements)
         return;
       }
-      DeclareLocalVar(IdName(v), v.Type, v.Tok, v.Usage, false, alwaysInitialize ? DefaultValue(v.Type, wr, v.Tok, v.Usage, true) : null, wr);
+      DeclareLocalVar(IdName(v), v.Type, v.Tok, v.Usage, false, alwaysInitialize ? DefaultValue(v.Type, wr, v.Tok, v.Usage, true) : null, wr, true);
     }
 
     TargetWriter MatchCasePrelude(string source, UserDefinedType sourceType, DatatypeCtor ctor, List<BoundVar> arguments, int caseIndex, int caseCount, TargetWriter wr) {
@@ -4113,7 +4132,7 @@ namespace Microsoft.Dafny {
         if (!arg.IsGhost) {
           BoundVar bv = arguments[m];
           // FormalType f0 = ((Dt_Ctor0)source._D).a0;
-          var sw = DeclareLocalVar(IdName(bv), bv.Type, bv.Tok, bv.Usage, w);
+          var sw = DeclareLocalVar(IdName(bv), bv.Type, bv.Tok, bv.Usage, w, false);
           EmitDestructor(source, arg, k, ctor, sourceType.TypeArgs, bv.Type, sw);
           k++;
         }
@@ -4195,9 +4214,18 @@ namespace Microsoft.Dafny {
           // allow out parameters
           var name = string.Format("_pat_let_tv{0}", GetUniqueAstNumber(e));
           wr.Write(name);
-          DeclareLocalVar(name, null, null, e.Var.Usage, false, IdName(e.Var), copyInstrWriters.Peek(), e.Type);
-        } else {
-          wr.Write(IdName(e.Var));
+          DeclareLocalVar(name, null, null, e.Var.Usage, false, IdName(e.Var), copyInstrWriters.Peek(), e.Type, false);
+        } else
+        {
+          var must_deref = (e.Var is LocalVariable && e.Var.Usage == Usage.Shared);
+          if (must_deref)
+          {
+            wr.Write("(*" + IdName(e.Var) + ")"); // XXX(travis): C++-specific
+          }
+          else
+          {
+            wr.Write(IdName(e.Var));
+          }
         }
       } else if (expr is SetDisplayExpr) {
         var e = (SetDisplayExpr)expr;
@@ -4487,7 +4515,7 @@ namespace Microsoft.Dafny {
           } else {
             var w = CreateIIFE1(0, e.Body.Type, e.Body.tok, "_let_dummy_" + GetUniqueAstNumber(e), wr);
             foreach (var bv in e.BoundVars) {
-              DeclareLocalVar(IdName(bv), bv.Type, bv.tok, bv.Usage, false, PlaceboValue(bv.Type, wr, bv.tok, bv.Usage, true), w);
+              DeclareLocalVar(IdName(bv), bv.Type, bv.tok, bv.Usage, false, PlaceboValue(bv.Type, wr, bv.tok, bv.Usage, true), w, false);
             }
             TrAssignSuchThat(new List<IVariable>(e.BoundVars).ConvertAll(bv => (IVariable)bv), e.RHSs[0], e.Constraint_Bounds, e.tok.line, w, inLetExprBody);
             EmitReturnExpr(e.Body, e.Body.Type, true, w);
@@ -4839,9 +4867,13 @@ namespace Microsoft.Dafny {
       Contract.Requires(tr != null);
       Function f = e.Function;
 
+      bool is_shared = f.ResultUsage == Usage.Shared;
+
       var toType = thisContext == null ? e.Type : Resolver.SubstType(e.Type, thisContext.ParentFormalTypeParametersToActuals);
       wr = EmitCoercionIfNecessary(f.Original.ResultType, toType, e.tok, wr);
 
+      if (is_shared) { wr.Write("*("); }
+      
       var customReceiver = !(f.EnclosingClass is TraitDecl) && NeedsCustomReceiver(f);
       string qual = "";
       string compileName = "";
@@ -4879,6 +4911,7 @@ namespace Microsoft.Dafny {
         }
       }
       wr.Write(")");
+      if (is_shared) { wr.Write(")"); }
     }
 
     private bool IsComparisonToZero(BinaryExpr expr, out Expression/*?*/ arg, out int sign, out bool negated) {
