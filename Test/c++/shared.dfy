@@ -54,6 +54,23 @@ requires y.Some?
   fm_get_value_select(x, y, b)
 }
 
+function method identity<V>(shared x: Option<V>) : (shared y: Option<V>)
+{
+  x
+}
+
+function method get_value<V>(shared x: Option<V>) : (shared y: V)
+requires x.Some?
+{
+  x.value
+}
+
+function method get_value2<V>(shared x: Option<V>) : (shared y: V)
+requires x.Some?
+{
+  identity(x).value
+}
+
 method run<V>(shared x: Option<V>, shared y: Option<V>, b: bool)
 returns (shared a': V, shared b': V, shared c': V, shared d': V, shared e': V)
 requires x.Some?
@@ -127,6 +144,14 @@ requires y.Some?
   //    ( shared match x { case Some(foo) => foo } )
   //  );
   //print "y is ", y, "\n";
+
+  shared var gv1 := get_value(x);
+  shared var gv2 := get_value2(x);
+  var gv1_x := gv1.x;
+  var gv2_x := gv2.x;
+  print "gv1, ", gv1_x, "\n";
+  print "gv2, ", gv2_x, "\n";
+
 }
 
 method Main() {
