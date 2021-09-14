@@ -463,21 +463,24 @@ namespace Microsoft.Dafny {
     }
     protected abstract void EmitPrintStmt(TargetWriter wr, Expression arg);
     protected abstract void EmitReturn(List<Formal> outParams, TargetWriter wr);
-    protected virtual void EmitReturnExpr(Expression expr, Type resultType, bool inLetExprBody, TargetWriter wr) {  // emits "return <expr>;" for function bodies
-      var w = EmitReturnExpr(wr);
+    protected virtual void EmitReturnExpr(Expression expr, Type resultType, bool inLetExprBody, TargetWriter wr, bool pointer) {  // emits "return <expr>;" for function bodies
+      var w = EmitReturnExpr(wr, pointer);
       TrExpr(expr, w, inLetExprBody);
     }
-    protected virtual void EmitReturnExpr(string returnExpr, TargetWriter wr) {  // emits "return <returnExpr>;" for function bodies
-      var w = EmitReturnExpr(wr);
+    protected virtual void EmitReturnExpr(string returnExpr, TargetWriter wr, bool pointer) {  // emits "return <returnExpr>;" for function bodies
+      var w = EmitReturnExpr(wr, pointer);
       w.Write(returnExpr);
     }
-    protected virtual TargetWriter EmitReturnExpr(TargetWriter wr) {
+    protected virtual TargetWriter EmitReturnExpr(TargetWriter wr, bool pointer) {
       // emits "return <returnExpr>;" for function bodies
       wr.Write("return ");
+      if (pointer) { wr.Write("&( "); }
       var w = wr.Fork();
+      if (pointer) { wr.Write(" )"); }
       EndStmt(wr);
       return w;
     }
+    
     /// <summary>
     /// Labels the code written to the TargetWriter returned, in such that way that any
     /// emitted break to the label inside that code will abruptly end the execution of the code.
@@ -1589,7 +1592,7 @@ namespace Microsoft.Dafny {
             var w = CreateFunctionOrGetter(cf, IdName(cf), c, false, true, true, classWriter);
             Contract.Assert(w != null);  // since the previous line asked for a body
             if (cf.Rhs == null) {
-              var sw = EmitReturnExpr(w);
+              var sw = EmitReturnExpr(w, false);
               sw = EmitCoercionIfNecessary(cfType, cf.Type, cf.tok, sw);
               // get { return this._{0}; }
               EmitThis(sw);
@@ -1604,7 +1607,7 @@ namespace Microsoft.Dafny {
             TargetWriter wSet;
             var wGet = classWriter.CreateGetterSetter(IdName(f), f.Type, f.tok, false, true, member, out wSet, true);
             {
-              var sw = EmitReturnExpr(wGet);
+              var sw = EmitReturnExpr(wGet, false);
               sw = EmitCoercionIfNecessary(fType, f.Type, f.tok, sw);
               // get { return this._{0}; }
               EmitThis(sw);
@@ -1655,9 +1658,9 @@ namespace Microsoft.Dafny {
               var wBody = classWriter.CreateFunction(IdName(cf), CombineAllTypeArguments(cf), new List<Formal>(), cf.Type, f.Usage, cf.tok, true, true, member, false, false);
               Contract.Assert(wBody != null);  // since the previous line asked for a body
               if (cf.Rhs != null) {
-                CompileReturnBody(cf.Rhs, f.Type, wBody, null);
+                CompileReturnBody(cf.Rhs, f.Type, wBody, null, false);
               } else {
-                EmitReturnExpr(PlaceboValue(cf.Type, wBody, cf.tok, Usage.Ordinary, true), wBody);
+                EmitReturnExpr(PlaceboValue(cf.Type, wBody, cf.tok, Usage.Ordinary, true), wBody, false);
               }
             } else {
               BlockTargetWriter wBody;
@@ -1690,16 +1693,16 @@ namespace Microsoft.Dafny {
               }
               if (wBody != null) {
                 if (cf.Rhs != null) {
-                  CompileReturnBody(cf.Rhs, cf.Type, wBody, null);
+                  CompileReturnBody(cf.Rhs, cf.Type, wBody, null, false);
                 } else if (!cf.IsStatic && c is ClassDecl) {
-                  var sw = EmitReturnExpr(wBody);
+                  var sw = EmitReturnExpr(wBody, false);
                   var typeSubst = new Dictionary<TypeParameter, Type>();
                   cf.EnclosingClass.TypeArgs.ForEach(tp => typeSubst.Add(tp, (Type)new UserDefinedType(tp)));
                   var typeArgs = CombineAllTypeArguments(cf);
                   EmitMemberSelect(EmitThis, UserDefinedType.FromTopLevelDecl(c.tok, c), cf,
                     typeArgs, typeSubst, f.Type, internalAccess: true).EmitRead(sw);
                 } else {
-                  EmitReturnExpr(PlaceboValue(cf.Type, wBody, cf.tok, Usage.Ordinary, true), wBody);
+                  EmitReturnExpr(PlaceboValue(cf.Type, wBody, cf.tok, Usage.Ordinary, true), wBody, false);
                 }
               }
             }
@@ -1829,7 +1832,7 @@ namespace Microsoft.Dafny {
 
       // In a target language that requires type coercions, the function declared in "thisContext" has
       // the same signature as in "fOriginal.EnclosingClass".
-      wr = EmitReturnExpr(wr);
+      wr = EmitReturnExpr(wr, false);
       wr = EmitCoercionIfNecessary(f.Type, fOriginal.Type, f.tok, wr);
 
       var calleeReceiverType = Resolver.SubstType(UserDefinedType.FromTopLevelDecl(f.tok, f.EnclosingClass), thisContext.ParentFormalTypeParametersToActuals);
@@ -1865,7 +1868,7 @@ namespace Microsoft.Dafny {
 
       // In a target language that requires type coercions, the function declared in "thisContext" has
       // the same signature as in "f.Original.EnclosingClass".
-      wr = EmitReturnExpr(wr);
+      wr = EmitReturnExpr(wr, false);
       wr = EmitCoercionIfNecessary(f.ResultType, f.Original.ResultType, f.tok, wr);
 
       var calleeReceiverType = Resolver.SubstType(UserDefinedType.FromTopLevelDecl(f.tok, f.EnclosingClass), thisContext.ParentFormalTypeParametersToActuals);
@@ -1976,7 +1979,7 @@ namespace Microsoft.Dafny {
           }
         }
       } else {
-        var wrReturn = EmitReturnExpr(wr);
+        var wrReturn = EmitReturnExpr(wr, false);
         sep = "";
         for (int j = 0, l = 0; j < method.Outs.Count; j++) {
           var p = method.Outs[j];
@@ -2173,7 +2176,7 @@ namespace Microsoft.Dafny {
         Coverage.Instrument(f.Body.tok, $"entry to function {f.FullName}", w);
         Contract.Assert(enclosingFunction == null);
         enclosingFunction = f;
-        CompileReturnBody(f.Body, f.Original.ResultType, w, accVar);
+        CompileReturnBody(f.Body, f.Original.ResultType, w, accVar, f.ResultUsage == Usage.Shared);
         Contract.Assert(enclosingFunction == f);
         enclosingFunction = null;
       }
@@ -2255,11 +2258,11 @@ namespace Microsoft.Dafny {
     }
 
 
-    void TrCasePatternOpt<VT>(CasePattern<VT> pat, Expression rhs, TargetWriter wr, bool inLetExprBody) where VT: IVariable {
-      TrCasePatternOpt(pat, rhs, null, rhs.Type, rhs.tok, wr, inLetExprBody);
+    void TrCasePatternOpt<VT>(CasePattern<VT> pat, Expression rhs, TargetWriter wr, bool inLetExprBody, bool bindRefs) where VT: IVariable {
+      TrCasePatternOpt(pat, rhs, null, rhs.Type, rhs.tok, wr, inLetExprBody, bindRefs);
     }
 
-    void TrCasePatternOpt<VT>(CasePattern<VT> pat, Expression rhs, string rhs_string, Type rhsType, Bpl.IToken rhsTok, TargetWriter wr, bool inLetExprBody) where VT: IVariable {
+    void TrCasePatternOpt<VT>(CasePattern<VT> pat, Expression rhs, string rhs_string, Type rhsType, Bpl.IToken rhsTok, TargetWriter wr, bool inLetExprBody, bool bindRefs) where VT: IVariable {
       Contract.Requires(pat != null);
       Contract.Requires(pat.Var != null || rhs != null || rhs_string != null);
       Contract.Requires(rhs != null || rhs_string != null);
@@ -2272,16 +2275,15 @@ namespace Microsoft.Dafny {
         // var x := G;
         var bv = pat.Var;
         if (!bv.IsGhost) {
-          var w = DeclareLocalVar(IdProtect(bv.CompileName), bv.Type, rhsTok, bv.Usage, wr, true);
-          bool is_shared = (bv.Usage == Usage.Shared);
-          if (is_shared) { w.Write("&( "); } // XXX(travis): C++-specific
+          var w = DeclareLocalVar(IdProtect(bv.CompileName), bv.Type, rhsTok, bv.Usage, wr, !bindRefs);
+          if (!bindRefs && bv.Usage == Usage.Shared) w.Write("&( ");
           if (rhs != null) {
             w = EmitCoercionIfNecessary(from: rhs.Type, to: bv.Type, tok:rhsTok, wr:w);
             TrExpr(rhs, w, inLetExprBody);
           } else {
             w.Write(rhs_string);
           }
-          if (is_shared) { w.Write(" )"); }
+          if (!bindRefs && bv.Usage == Usage.Shared) w.Write(" )");
         }
       } else if (pat.Arguments != null) {
         // The Dafny "pattern" expression
@@ -2319,14 +2321,14 @@ namespace Microsoft.Dafny {
             var sw = new TargetWriter(wr.IndentLevel, true);
             EmitDestructor(tmp_name, formal, k, ctor, dtv.InferredTypeArgs, arg.Expr.Type, sw);
             Type targetType = Resolver.SubstType(formal.Type, substMap);
-            TrCasePatternOpt(arg, null, sw.ToString(), targetType, pat.Expr.tok, wr, inLetExprBody);
+            TrCasePatternOpt(arg, null, sw.ToString(), targetType, pat.Expr.tok, wr, inLetExprBody, bindRefs);
             k++;
           }
         }
       }
     }
 
-    void TrExprOpt(Expression expr, Type resultType, TargetWriter wr, IVariable/*?*/ accumulatorVar) {
+    void TrExprOpt(Expression expr, Type resultType, TargetWriter wr, IVariable/*?*/ accumulatorVar, bool pointer) {
       Contract.Requires(expr != null);
       Contract.Requires(wr != null);
       Contract.Requires(resultType != null);
@@ -2339,13 +2341,13 @@ namespace Microsoft.Dafny {
           for (int i = 0; i < e.LHSs.Count; i++) {
             var lhs = e.LHSs[i];
             if (Contract.Exists(lhs.Vars, bv => !bv.IsGhost)) {
-              TrCasePatternOpt(lhs, e.RHSs[i], wr, false);
+              TrCasePatternOpt(lhs, e.RHSs[i], wr, false, true);
             }
           }
-          TrExprOpt(e.Body, resultType, wr, accumulatorVar);
+          TrExprOpt(e.Body, resultType, wr, accumulatorVar, pointer);
         } else {
           // We haven't optimized the other cases, so fallback to normal compilation
-          EmitReturnExpr(e, resultType, false, wr);
+          EmitReturnExpr(e, resultType, false, wr, pointer);
         }
 
       } else if (expr is ITEExpr) {
@@ -2354,13 +2356,13 @@ namespace Microsoft.Dafny {
         var thn = EmitIf(out guardWriter, true, wr);
         TrExpr(e.Test, guardWriter, false);
         Coverage.Instrument(e.Thn.tok, "then branch", thn);
-        TrExprOpt(e.Thn, resultType, thn, accumulatorVar);
+        TrExprOpt(e.Thn, resultType, thn, accumulatorVar, pointer);
         TargetWriter els = wr;
         if (!(e.Els is ITEExpr)) {
           els = wr.NewBlock("", null, BlockTargetWriter.BraceStyle.Nothing);
           Coverage.Instrument(e.Thn.tok, "else branch", els);
         }
-        TrExprOpt(e.Els, resultType, els, accumulatorVar);
+        TrExprOpt(e.Els, resultType, els, accumulatorVar, pointer);
 
       } else if (expr is MatchExpr) {
         var e = (MatchExpr)expr;
@@ -2385,14 +2387,14 @@ namespace Microsoft.Dafny {
           var sourceType = (UserDefinedType)e.Source.Type.NormalizeExpand();
           foreach (MatchCaseExpr mc in e.Cases) {
             var w = MatchCasePrelude(source, sourceType, mc.Ctor, mc.Arguments, i, e.Cases.Count, wr);
-            TrExprOpt(mc.Body, resultType, w, accumulatorVar);
+            TrExprOpt(mc.Body, resultType, w, accumulatorVar, pointer);
             i++;
           }
         }
 
       } else if (expr is StmtExpr) {
         var e = (StmtExpr)expr;
-        TrExprOpt(e.E, resultType, wr, accumulatorVar);
+        TrExprOpt(e.E, resultType, wr, accumulatorVar, pointer);
 
       } else if (expr is FunctionCallExpr fce && fce.Function == enclosingFunction && enclosingFunction.IsTailRecursive) {
         var e = fce;
@@ -2472,7 +2474,7 @@ namespace Microsoft.Dafny {
         EmitAssignment(out wLhs, enclosingFunction.ResultType, out wRhs, enclosingFunction.ResultType, wr);
         TrExpr(acc, wLhs, false);
         TrExpr(rhs, wRhs, false);
-        TrExprOpt(tailTerm, resultType, wr, accumulatorVar);
+        TrExprOpt(tailTerm, resultType, wr, accumulatorVar, pointer);
 
       } else {
         // We haven't optimized any other cases, so fallback to normal compilation
@@ -2515,16 +2517,16 @@ namespace Microsoft.Dafny {
         } else {
           Contract.Assert(accumulatorVar == null);
         }
-        EmitReturnExpr(expr, resultType, false, wr);
+        EmitReturnExpr(expr, resultType, false, wr, pointer);
       }
     }
 
-    void CompileReturnBody(Expression body, Type originalResultType, TargetWriter wr, IVariable/*?*/ accumulatorVar) {
+    void CompileReturnBody(Expression body, Type originalResultType, TargetWriter wr, IVariable/*?*/ accumulatorVar, bool pointer) {
       Contract.Requires(body != null);
       Contract.Requires(originalResultType != null);
       Contract.Requires(wr != null);
       Contract.Requires(accumulatorVar == null || (enclosingFunction != null && enclosingFunction.IsAccumulatorTailRecursive));
-      TrExprOpt(body.Resolved, originalResultType, wr, accumulatorVar);
+      TrExprOpt(body.Resolved, originalResultType, wr, accumulatorVar, pointer);
     }
 
     // ----- Type ---------------------------------------------------------------------------------
@@ -3068,7 +3070,7 @@ namespace Microsoft.Dafny {
       } else if (stmt is VarDeclPattern) {
         var s = (VarDeclPattern)stmt;
         if (Contract.Exists(s.LHS.Vars, bv => !bv.IsGhost)) {
-          TrCasePatternOpt(s.LHS, s.RHS, wr, false);
+          TrCasePatternOpt(s.LHS, s.RHS, wr, false, false);
         }
       } else if (stmt is ModifyStmt) {
         var s = (ModifyStmt)stmt;
@@ -4518,7 +4520,7 @@ namespace Microsoft.Dafny {
               DeclareLocalVar(IdName(bv), bv.Type, bv.tok, bv.Usage, false, PlaceboValue(bv.Type, wr, bv.tok, bv.Usage, true), w, false);
             }
             TrAssignSuchThat(new List<IVariable>(e.BoundVars).ConvertAll(bv => (IVariable)bv), e.RHSs[0], e.Constraint_Bounds, e.tok.line, w, inLetExprBody);
-            EmitReturnExpr(e.Body, e.Body.Type, true, w);
+            EmitReturnExpr(e.Body, e.Body.Type, true, w, false);
           }
         }
       } else if (expr is MatchExpr) {
@@ -4546,7 +4548,7 @@ namespace Microsoft.Dafny {
           var sourceType = (UserDefinedType)e.Source.Type.NormalizeExpand();
           foreach (MatchCaseExpr mc in e.Cases) {
             var wCase = MatchCasePrelude(source, sourceType, mc.Ctor, mc.Arguments, i, e.Cases.Count, w);
-            EmitReturnExpr(mc.Body, mc.Body.Type, inLetExprBody, wCase);
+            EmitReturnExpr(mc.Body, mc.Body.Type, inLetExprBody, wCase, false);
             i++;
           }
         }
@@ -4575,7 +4577,7 @@ namespace Microsoft.Dafny {
           wBody.Write(", {0}, ", expr is ForallExpr ? "true" : "false");
           var native = AsNativeType(e.BoundVars[i].Type);
           TargetWriter newWBody = CreateLambda(new List<Type>{ bv.Type }, e.tok, new List<string>{ IdName(bv) }, Type.Bool, wBody, untyped: true);
-          newWBody = EmitReturnExpr(newWBody);
+          newWBody = EmitReturnExpr(newWBody, false);
           wBody.Write(')');
           wBody = newWBody;
         }
@@ -4622,7 +4624,7 @@ namespace Microsoft.Dafny {
         TrExpr(e.Range, guardWriter, inLetExprBody);
         EmitSetBuilder_Add(e.Type.AsSetType, collectionName, e.Term, inLetExprBody, thn);
         var s = GetCollectionBuilder_Build(e.Type.AsSetType, e.tok, collectionName, wr);
-        EmitReturnExpr(s, bwr);
+        EmitReturnExpr(s, bwr, false);
 
       } else if (expr is MapComprehension) {
         var e = (MapComprehension)expr;
@@ -4674,14 +4676,14 @@ namespace Microsoft.Dafny {
         }
 
         var s = GetCollectionBuilder_Build(e.Type.AsMapType, e.tok, collection_name, wr);
-        EmitReturnExpr(s, bwr);
+        EmitReturnExpr(s, bwr, false);
 
       } else if (expr is LambdaExpr) {
         var e = (LambdaExpr)expr;
 
         wr = CaptureFreeVariables(e, false, out var su, inLetExprBody, wr);
         wr = CreateLambda(e.BoundVars.ConvertAll(bv => bv.Type), Bpl.Token.NoToken, e.BoundVars.ConvertAll(IdName), e.Body.Type, wr);
-        wr = EmitReturnExpr(wr);
+        wr = EmitReturnExpr(wr, false);
         TrExpr(su.Substitute(e.Body), wr, inLetExprBody);
 
       } else if (expr is StmtExpr) {
