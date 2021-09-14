@@ -46,8 +46,16 @@ requires y.Some?
   res
 }
 
+function method fm_get_value_select2<V>(shared x: Option<V>, shared y: Option<V>, b: bool)
+ : (shared v: V)
+requires x.Some?
+requires y.Some?
+{
+  fm_get_value_select(x, y, b)
+}
+
 method run<V>(shared x: Option<V>, shared y: Option<V>, b: bool)
-returns (shared a': V, shared b': V, shared c': V, shared d': V)
+returns (shared a': V, shared b': V, shared c': V, shared d': V, shared e': V)
 requires x.Some?
 requires y.Some?
 {
@@ -55,11 +63,13 @@ requires y.Some?
   shared var v1, v2 := get_value_select2(x, y, b);
 
   shared var v3 := fm_get_value_select(x, y, b);
+  shared var v4 := fm_get_value_select2(x, y, b);
 
   a' := v;
   b' := v1;
   c' := v2;
   d' := v3;
+  e' := v4;
 }
 
 newtype uint32 = i:int | 0 <= i < 0x100000000
@@ -76,28 +86,32 @@ method borrow_stuff(shared x: Option<Foo>, shared y: Option<Foo>)
 requires x.Some?
 requires y.Some?
 {
-  shared var a, b, c, d := run(x, y, true);
+  shared var a, b, c, d, e := run(x, y, true);
   var a_x := a.x;
   var b_x := b.x;
   var c_x := c.x;
   var d_x := d.x;
+  var e_x := e.x;
 
   print a_x, "\n";
   print b_x, "\n";
   print c_x, "\n";
   print d_x, "\n";
+  print e_x, "\n";
 
-  a, b, c, d := run(x, y, false);
+  a, b, c, d, e := run(x, y, false);
 
   a_x := a.x;
   b_x := b.x;
   c_x := c.x;
   d_x := d.x;
+  e_x := e.x;
 
   print a_x, "\n";
   print b_x, "\n";
   print c_x, "\n";
   print d_x, "\n";
+  print e_x, "\n";
 
   shared match x {
     case Some(foo) => {

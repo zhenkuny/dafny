@@ -1741,8 +1741,8 @@ namespace Microsoft.Dafny {
       EmitReturnWithCoercions(outParams, null, null, wr);
     }
 
-    protected override void EmitReturnExpr(Expression expr, Type resultType, bool inLetExprBody, TargetWriter wr) {
-      var w = EmitReturnExpr(wr);
+    protected override void EmitReturnExpr(Expression expr, Type resultType, bool inLetExprBody, TargetWriter wr, bool pointer) {
+      var w = EmitReturnExpr(wr, pointer);
       var fromType = thisContext == null ? expr.Type : Resolver.SubstType(expr.Type, thisContext.ParentFormalTypeParametersToActuals);
       w = EmitCoercionIfNecessary(fromType, resultType, expr.tok, w);
       TrExpr(expr, w, inLetExprBody);
@@ -2686,7 +2686,7 @@ namespace Microsoft.Dafny {
 
       wr.Write(") {0}", TypeName(type, wr, tok));
       var wLambdaBody = wr.NewBigExprBlock("", ")");
-      var w = EmitReturnExpr(wLambdaBody);
+      var w = EmitReturnExpr(wLambdaBody, false);
       TrExprList(arguments, wr, inLetExprBody);
       return w;
     }

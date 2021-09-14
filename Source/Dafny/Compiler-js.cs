@@ -440,12 +440,12 @@ namespace Microsoft.Dafny {
       // equals method
       using (var w = wr.NewBlock("equals(other)")) {
         using (var thn = EmitIf("this === other", true, w)) {
-          EmitReturnExpr("true", thn);
+          EmitReturnExpr("true", thn, false);
         }
         i = 0;
         foreach (var ctor in dt.Ctors) {
           var thn = EmitIf(string.Format("this.$tag === {0}", i), true, w);
-          var guard = EmitReturnExpr(thn);
+          var guard = EmitReturnExpr(thn, false);
           guard.Write("other.$tag === {0}", i);
           var k = 0;
           foreach (Formal arg in ctor.Formals) {
@@ -971,7 +971,7 @@ namespace Microsoft.Dafny {
     protected void DeclareField(string name, bool isStatic, bool isConst, Type type, Bpl.IToken tok, string rhs, TargetWriter wr) {
       if (isStatic) {
         var w = wr.NewNamedBlock("static get {0}()", name);
-        EmitReturnExpr(rhs, w);
+        EmitReturnExpr(rhs, w, false);
       } else {
         wr.WriteLine("this.{0} = {1};", name, rhs);
       }
