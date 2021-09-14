@@ -100,8 +100,18 @@ struct get_default<unsigned int> {
 };
 
 template<>
+struct get_default<long> {
+  static long call() { return 0; }
+};
+
+template<>
 struct get_default<unsigned long> {
   static unsigned long call() { return 0; }
+};
+
+template<>
+struct get_default<long long> {
+  static long long call() { return 0; }
 };
 
 template<>
