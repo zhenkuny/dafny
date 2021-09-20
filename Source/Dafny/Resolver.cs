@@ -572,6 +572,21 @@ namespace Microsoft.Dafny
         Linear.OxideCompilationRewriter.Rewrite(nw);
       }
 
+
+            Printer pr = new Printer(System.Console.Out, DafnyOptions.O.PrintMode);
+      foreach (var module in prog.CompileModules)
+      {
+        foreach (var decl in module.TopLevelDecls)
+        {
+            var topLevelDecl = (decl as TopLevelDeclWithMembers);
+            if (topLevelDecl != null)
+            {
+                        pr.PrintMembers(topLevelDecl.Members, 2, System.IO.Path.GetFullPath(prog.FullName));
+            }
+        }
+                //pr.PrintTopLevelDecls(module.TopLevelDecls, 0, null, System.IO.Path.GetFullPath(prog.FullName));
+      }
+
       if (reporter.Count(ErrorLevel.Error) != origErrorCount) {
         // do nothing else
         return;

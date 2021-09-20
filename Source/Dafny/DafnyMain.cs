@@ -99,9 +99,13 @@ namespace Microsoft.Dafny {
                   tw = new System.IO.StreamWriter(filename);
               }
               Printer pr = new Printer(tw, DafnyOptions.O.PrintMode);
-              pr.PrintProgram(program, afterResolver);
-          }
-      }
+              // pr.PrintProgram(program, afterResolver);
+
+
+             
+
+            }
+        }
 
     /// <summary>
     /// Returns null on success, or an error string otherwise.
