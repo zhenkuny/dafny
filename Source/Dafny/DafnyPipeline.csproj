@@ -142,7 +142,7 @@
     <PackageReference Include="Mono.Cecil" Version="0.11.2" />
     <Reference Include="System" />
     <Reference Include="System.Core">
-      <RequiredTargetFramework>4.8</RequiredTargetFramework>
+    <RequiredTargetFramework>4.8</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Numerics" />
   </ItemGroup>
@@ -173,6 +173,7 @@
     <Compile Include="SccGraph.cs" />
     <Compile Include="Translator.cs" />
     <Compile Include="..\version.cs" />
+    <Compile Include="AssertFalseRewriter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="cce.cs" />
