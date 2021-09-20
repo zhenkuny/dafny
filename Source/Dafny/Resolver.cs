@@ -418,6 +418,7 @@ namespace Microsoft.Dafny
       }
 
       rewriters = new List<IRewriter>();
+      rewriters.Add(new AssertFalse.AssertFalseRewriter(reporter));
       rewriters.Add(new Linear.InoutTranslateRewriter(reporter, this.FreshTempVarName));
 
       refinementTransformer = new RefinementTransformer(prog);
