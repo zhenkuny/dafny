@@ -249,6 +249,9 @@ namespace Microsoft.Dafny
       // Several methods and fields rely on 1-argument arrow types
       builtIns.CreateArrowTypeDecl(1, Usage.Ordinary, null);
       builtIns.CreateArrowTypeDecl(1, Usage.Ghost, new List<Usage>{Usage.Ghost});
+      // Atomics glinear_fold feature relies on these
+      builtIns.CreateArrowTypeDecl(1, Usage.Linear(LinearRealm.Erased), new List<Usage>{Usage.Linear(LinearRealm.Erased)});
+      builtIns.CreateArrowTypeDecl(2, Usage.Linear(LinearRealm.Erased), new List<Usage>{Usage.Ordinary, Usage.Linear(LinearRealm.Erased)});
 
       valuetypeDecls = new ValuetypeDecl[] {
         new ValuetypeDecl("bool", builtIns.SystemModule, 0, t => t.IsBoolType, typeArgs => Type.Bool),
