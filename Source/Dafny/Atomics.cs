@@ -43,7 +43,157 @@ namespace Microsoft.Dafny.Linear
                     abt.VisitStatementList(body);
                 }
             }
+
+            DefaultClassDecl defaultClassDecl = null;
+            foreach (var decl in module.TopLevelDecls)
+            {
+                if (decl is DefaultClassDecl dc)
+                {
+                    defaultClassDecl = dc;
+                }
+            }
+            
+            foreach (var decl in module.TopLevelDecls)
+            {
+                if (decl is IndDatatypeDecl datatypeDecl)
+                {
+                    HandleFoldDatatype(datatypeDecl, defaultClassDecl);
+                }
+            }
         }
+
+        private Expression defn_call(IToken tok, string id)
+        {
+            return new ApplySuffix(tok, null, new ExprDotName(
+                tok,
+                new NameSegment(tok, id, null),
+                "defn",
+                null
+            ), new List<ApplySuffixArg>());
+        }
+
+        void HandleFoldDatatype(IndDatatypeDecl decl, DefaultClassDecl defaultClassDecl)
+        {
+            if (!Attributes.Contains(decl.Attributes, "glinear_fold"))
+            {
+                return;
+            }
+
+            var tok = decl.tok;
+
+            if (!decl.Usage.IsOrdinaryKind)
+            {
+                reporter.Error(MessageSource.Rewriter, tok,
+                    "glinear_fold feature may only be used on an ordinary datatype");
+                return;
+            }
+
+            if (decl.TypeArgs.Count > 0)
+            {
+                reporter.Error(MessageSource.Rewriter, tok,
+                    "glinear_fold is currently not supported with type parameters");
+                return;
+            }
+
+            Type aType = new UserDefinedType(tok, decl.Name, null);
+
+            Type bType = null;
+            foreach (MemberDecl member in decl.Members)
+            {
+                if (member is Function f && member.Name == "defn")
+                {
+                    if (f.Formals.Count != 0)
+                    {
+                        reporter.Error(MessageSource.Rewriter, tok,
+                            "defn should take no additional parameters");
+                        return;
+                    }
+
+                    if (f.Req.Count != 0)
+                    {
+                        reporter.Error(MessageSource.Rewriter, tok,
+                            "defn should have no requires clauses");
+                        return;
+                    }
+
+                    bType = f.ResultType;
+                }
+            }
+
+            if (bType == null)
+            {
+                reporter.Error(MessageSource.Rewriter, tok,
+                    "defn function not found");
+                return;
+            }
+
+            var cloner = new Cloner();
+
+            var foldFunc = new Function(
+                tok,
+                decl.Name + "_fold",
+                false,
+                Usage.Ordinary,
+                new List<TypeParameter>(),
+                new List<Formal>()
+                {
+                    new Formal(tok, "a", cloner.CloneType(aType), true, Usage.Ordinary),
+                    new Formal(tok, "b", cloner.CloneType(bType), true, Usage.Linear(LinearRealm.Erased))
+                },
+                new Formal(tok, "a'", cloner.CloneType(aType), false, Usage.Linear(LinearRealm.Erased)),
+                cloner.CloneType(aType),
+                new List<AttributedExpression>() {
+                    new AttributedExpression(new BinaryExpr(tok, BinaryExpr.Opcode.Eq, 
+                        defn_call(tok, "a"),
+                        new NameSegment(tok, "b", null)
+                        ))
+                    },
+                new List<FrameExpression>(),
+                new List<AttributedExpression>() {
+                    new AttributedExpression(new BinaryExpr(tok, BinaryExpr.Opcode.Eq, 
+                        new NameSegment(tok, "a'", null),
+                        new NameSegment(tok, "a", null)
+                    ))
+                },
+                new Specification<Expression>(new List<Expression>(), null),
+                null,
+                new Attributes("extern", new List<Expression>(), null),
+                null
+            );
+            
+            var unfoldFunc = new Function(
+                tok,
+                decl.Name + "_unfold",
+                false,
+                Usage.Ordinary,
+                new List<TypeParameter>(),
+                new List<Formal>()
+                {
+                    new Formal(tok, "a", cloner.CloneType(aType), true, Usage.Linear(LinearRealm.Erased))
+                },
+                new Formal(tok, "b", cloner.CloneType(bType), false, Usage.Linear(LinearRealm.Erased)),
+                cloner.CloneType(bType),
+                new List<AttributedExpression>(),
+                new List<FrameExpression>(),
+                new List<AttributedExpression>() {
+                    new AttributedExpression(new BinaryExpr(tok, BinaryExpr.Opcode.Eq, 
+                        defn_call(tok, "a"),
+                        new NameSegment(tok, "b", null)
+                    ))
+                },
+                new Specification<Expression>(new List<Expression>(), null),
+                null,
+                new Attributes("extern", new List<Expression>(), null),
+                null
+            );
+
+            foldFunc.InheritVisibility(decl, true);
+            unfoldFunc.InheritVisibility(decl, true);
+            
+            defaultClassDecl.Members.Add(foldFunc);
+            defaultClassDecl.Members.Add(unfoldFunc);
+        }
+    
         
         internal override void PostResolve(ModuleDefinition module)
         {
