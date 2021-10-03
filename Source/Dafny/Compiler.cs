@@ -1120,6 +1120,10 @@ namespace Microsoft.Dafny {
           // the purpose of an abstract module is to skip compilation
           continue;
         }
+        if (m is Functor) {
+          // We will only compile the results of functor application, not the functors themselves
+          continue;
+        }
         if (!m.IsToBeCompiled) {
           continue;
         }

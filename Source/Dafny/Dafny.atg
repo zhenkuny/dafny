@@ -987,25 +987,28 @@ ModuleDefinition<DeclModifierData dmod, ModuleDefinition parent, out ModuleDecl 
      IToken/*!*/ id, iderr;
      var prefixIds = new List<IToken>();
      List<MemberDecl/*!*/> namedModuleDefaultClassMembers = new List<MemberDecl>();;
-     List<IToken> idQualified = null;
-     List<IToken> idRefined = null;
+     ModuleQualifiedId idRefined = null;
      ModuleDefinition module;
      submodule = null; // appease compiler
      bool isAbstract = dmod.IsAbstract;
      CheckDeclModifiers(dmod, "module", AllowedDeclModifiers.Abstract);
+     List<ModuleFormal> formals = new List<ModuleFormal>();
    .)
    { Attribute<ref attrs> }
-   ModuleQualifiedName<out idQualified>
-   (. id = idQualified[idQualified.Count-1];
-      prefixIds = idQualified.GetRange(0,idQualified.Count-1);
-   .)
-
+   NoUSIdent<out id>   /* We disallow prefix IDs.  It adds unnecessary complexity. */
+   [ ModuleFormals<formals> ]
    [ "refines" ModuleQualifiedName<out idRefined>
    | Ident<out iderr> (. SemErr(la, $"expected either a '{{' or a 'refines' keyword here, found {iderr.val}"); .)
    ]
-   (. module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false,
-                                        idRefined == null ? null : new ModuleQualifiedId(idRefined), parent, attrs,
-                                        false, theVerifyThisFile, theCompileThisFile);
+   (. if (formals.Count == 0) {
+          module = new ModuleDefinition(id, id.val, prefixIds, isAbstract, false,
+                                            idRefined, parent, attrs,
+                                            false, theVerifyThisFile, theCompileThisFile);
+      } else {
+         module = new Functor(id, id.val, prefixIds, isAbstract, false,
+                                  idRefined, parent, attrs,
+                                  false, theVerifyThisFile, theCompileThisFile, formals);
+      }
    .)
    SYNC
    "{"                                 (. module.BodyStartTok = t; .)
@@ -1031,18 +1034,18 @@ ModuleImport<ModuleDefinition parent, out ModuleDecl submodule>
     ( IF(lookAhead == _singleeq)
       ModuleName<out id>
       "="
-      QualifiedModuleExport<out idPath, out idExports>
-          (. submodule = new AliasModuleDecl(new ModuleQualifiedId(idPath),
+      ModuleQualifiedName<out ModuleQualifiedId qID>
+          (. submodule = new AliasModuleDecl(qID,
                                          id, parent, opened, idExports); .)
     | IF(lookAhead == _colon)
       ModuleName<out id>
       ":"
-      QualifiedModuleExport<out idPath, out idExports>
-          (. submodule = new AbstractModuleDecl(new ModuleQualifiedId(idPath),
+      ModuleQualifiedName<out ModuleQualifiedId qID>
+          (. submodule = new AbstractModuleDecl(qID,
                                          id, parent, opened, idExports); .)
     |
       QualifiedModuleExport<out idPath, out idExports>
-          (. submodule = new AliasModuleDecl(new ModuleQualifiedId(idPath),
+              (. submodule = new AliasModuleDecl(new ModuleQualifiedId(idPath),
                                          idPath[idPath.Count-1], parent, opened, idExports);
           .)
     )
@@ -1109,20 +1112,71 @@ ExportSignature<bool opaque, out ExportSignature exsig>
   .
 
 /*------------------------------------------------------------------------*/
+
+ModuleFormal<.List<ModuleFormal> formals.>
+= (.
+    IToken id;
+    ModuleQualifiedId type;
+  .)
+
+  ( NoUSIdent<out id> ":" ModuleQualifiedName<out type> )
+  (. formals.Add(new ModuleFormal(id, type)); .)
+  .
+
+ModuleFormals<.List<ModuleFormal> formals.>
+= ( "(" ModuleFormal<formals>
+    { "," ModuleFormal<formals>  }
+    ")"
+  ) .
+
+/*------------------------------------------------------------------------*/
+// A(B, C, D)
+FunctorApplication<out FunctorApplication funcapp>
+=   (.
+        IToken id = null;
+        ModuleQualifiedId param = null;
+        List<ModuleQualifiedId> moduleParamNames = new List<ModuleQualifiedId>();
+    .)
+    (
+    NoUSIdent<out id>
+    [ "(" ModuleQualifiedName<out param>  (. moduleParamNames.Add(param); .)
+        { "," ModuleQualifiedName<out param> (. moduleParamNames.Add(param); .) }
+      ")"
+    ]
+    (.  funcapp = new FunctorApplication(id, moduleParamNames); .)
+    ).
+
+/*------------------------------------------------------------------------*/
 ModuleName<out IToken id> = NoUSIdent<out id> .
 
-ModuleQualifiedName<.out List<IToken> ids.>
+ModuleQualifiedName<.out ModuleQualifiedId qID.>
+= (. IToken id; List<IToken> ids = new List<IToken>();
+  .)
+  FunctorApplication<out FunctorApplication funcapp>
+  { "." ModuleName<out id> (. ids.Add(id); .) }
+  (.
+    if (funcapp.moduleParamNames.Count == 0) {
+        // No actual application here
+        ids.Insert(0, funcapp.tok);
+        funcapp = null;
+    }
+    qID = new ModuleQualifiedId(funcapp, ids);
+  .)
+  .
+
+/*------------------------------------------------------------------------*/
+QualifiedModuleId<.out List<IToken> ids.>
 = (. IToken id; ids = new List<IToken>();
   .)
   ModuleName<out id> (. ids.Add(id); .)
   { "." ModuleName<out id> (. ids.Add(id); .) }
   .
 
-/*------------------------------------------------------------------------*/
+
 QualifiedModuleExport<.out List<IToken> idPath, out List<IToken> exports.>
 = (. exports = new List<IToken>();
   .)
-  ModuleQualifiedName<out idPath>
+  QualifiedModuleId<out idPath>
   [ "`" ModuleExportSuffix<exports> ]
   .
 
