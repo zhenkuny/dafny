@@ -4181,6 +4181,14 @@ namespace Microsoft.Dafny {
       }
     }
 
+    public IToken lastToken() {
+      if (Path != null && Path.Count > 0) {
+        return Path[Path.Count - 1];
+      } else {
+        return rootToken();
+      }
+    }
+
     override public string ToString() {
       string s = rootName();
       int i = 1;

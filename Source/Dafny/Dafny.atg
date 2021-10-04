@@ -1034,19 +1034,18 @@ ModuleImport<ModuleDefinition parent, out ModuleDecl submodule>
     ( IF(lookAhead == _singleeq)
       ModuleName<out id>
       "="
-      ModuleQualifiedName<out ModuleQualifiedId qID>
+      QualifiedModuleExport<out ModuleQualifiedId qID, out idExports>
           (. submodule = new AliasModuleDecl(qID,
                                          id, parent, opened, idExports); .)
     | IF(lookAhead == _colon)
       ModuleName<out id>
       ":"
-      ModuleQualifiedName<out ModuleQualifiedId qID>
+      QualifiedModuleExport<out ModuleQualifiedId qID, out idExports>
           (. submodule = new AbstractModuleDecl(qID,
                                          id, parent, opened, idExports); .)
     |
-      QualifiedModuleExport<out idPath, out idExports>
-              (. submodule = new AliasModuleDecl(new ModuleQualifiedId(idPath),
-                                         idPath[idPath.Count-1], parent, opened, idExports);
+      QualifiedModuleExport<out ModuleQualifiedId qID, out idExports>
+              (. submodule = new AliasModuleDecl(qID, qID.lastToken(), parent, opened, idExports);
           .)
     )
     .
@@ -1097,7 +1096,7 @@ ModuleExport<ModuleDefinition parent, out ModuleDecl submodule>
 
 /*------------------------------------------------------------------------*/
 // Note - before the "." only Type names are permitted (no 'digits'), but name resolution sorts that
-// out, since the parser does not know (without adding lookahead) when it has seen the last dot
+// ouft, since the parser does not know (without adding lookahead) when it has seen the last dot
 // matching any permitted member name
 
 ExportSignature<bool opaque, out ExportSignature exsig>
@@ -1164,19 +1163,19 @@ ModuleQualifiedName<.out ModuleQualifiedId qID.>
   .)
   .
 
-/*------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------
 QualifiedModuleId<.out List<IToken> ids.>
 = (. IToken id; ids = new List<IToken>();
   .)
   ModuleName<out id> (. ids.Add(id); .)
   { "." ModuleName<out id> (. ids.Add(id); .) }
   .
+*/
 
-
-QualifiedModuleExport<.out List<IToken> idPath, out List<IToken> exports.>
+QualifiedModuleExport<.out ModuleQualifiedId qID, out List<IToken> exports.>
 = (. exports = new List<IToken>();
   .)
-  QualifiedModuleId<out idPath>
+  ModuleQualifiedName<out qID>
   [ "`" ModuleExportSuffix<exports> ]
   .
 
