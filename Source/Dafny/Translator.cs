@@ -1129,7 +1129,7 @@ namespace Microsoft.Dafny {
     }
 
     private void ComputeFunctionFuel() {
-      foreach (ModuleDefinition m in program.RawModules()) {
+      foreach (ModuleDefinition m in program.ModuleSigs.Keys.ToList().Concat(program.VirtualModules)) {
         foreach (TopLevelDecl d in m.TopLevelDecls) {
           if (d is TopLevelDeclWithMembers) {
             var c = (TopLevelDeclWithMembers)d;

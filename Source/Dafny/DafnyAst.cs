@@ -32,6 +32,9 @@ namespace Microsoft.Dafny {
     public List<ModuleDefinition> CompileModules; // filled in during resolution.
                                                   // Contains the definitions to be used for compilation.
 
+    public List<ModuleDefinition> VirtualModules; // filled in during resolution
+                                                  // Contains the output of module functors
+
     public Method MainMethod; // Method to be used as main if compiled
     public readonly ModuleDecl DefaultModule;
     public readonly ModuleDefinition DefaultModuleDef;
@@ -50,6 +53,7 @@ namespace Microsoft.Dafny {
       this.reporter = reporter;
       ModuleSigs = new Dictionary<ModuleDefinition,ModuleSignature>();
       CompileModules = new List<ModuleDefinition>();
+      VirtualModules = new List<ModuleDefinition>();
     }
 
     //Set appropriate visibilty before presenting module
