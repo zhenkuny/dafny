@@ -186,12 +186,40 @@ namespace Microsoft.Dafny.Linear
                 new Attributes("extern", new List<Expression>(), null),
                 null
             );
+            
+            var unfoldBorrowFunc = new Function(
+                tok,
+                decl.Name + "_unfold_borrow",
+                false,
+                Usage.Ordinary,
+                new List<TypeParameter>(),
+                new List<Formal>()
+                {
+                    new Formal(tok, "a", cloner.CloneType(aType), true, Usage.Shared(LinearRealm.Erased))
+                },
+                new Formal(tok, "b", cloner.CloneType(bType), false, Usage.Shared(LinearRealm.Erased)),
+                cloner.CloneType(bType),
+                new List<AttributedExpression>(),
+                new List<FrameExpression>(),
+                new List<AttributedExpression>() {
+                    new AttributedExpression(new BinaryExpr(tok, BinaryExpr.Opcode.Eq, 
+                        defn_call(tok, "a"),
+                        new NameSegment(tok, "b", null)
+                    ))
+                },
+                new Specification<Expression>(new List<Expression>(), null),
+                null,
+                new Attributes("extern", new List<Expression>(), null),
+                null
+            );
 
             foldFunc.InheritVisibility(decl, true);
             unfoldFunc.InheritVisibility(decl, true);
+            unfoldBorrowFunc.InheritVisibility(decl, true);
             
             defaultClassDecl.Members.Add(foldFunc);
             defaultClassDecl.Members.Add(unfoldFunc);
+            defaultClassDecl.Members.Add(unfoldBorrowFunc);
         }
     
         

@@ -258,6 +258,7 @@ namespace Microsoft.Dafny
       builtIns.CreateArrowTypeDecl(1, Usage.Ghost, new List<Usage>{Usage.Ghost});
       // Atomics glinear_fold feature relies on these
       builtIns.CreateArrowTypeDecl(1, Usage.Linear(LinearRealm.Erased), new List<Usage>{Usage.Linear(LinearRealm.Erased)});
+      builtIns.CreateArrowTypeDecl(1, Usage.Shared(LinearRealm.Erased), new List<Usage>{Usage.Shared(LinearRealm.Erased)});
       builtIns.CreateArrowTypeDecl(2, Usage.Linear(LinearRealm.Erased), new List<Usage>{Usage.Ordinary, Usage.Linear(LinearRealm.Erased)});
 
       valuetypeDecls = new ValuetypeDecl[] {
