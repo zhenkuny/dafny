@@ -14,7 +14,7 @@ module Atomics {
       ghost new_value: int,
       glinear g: G)
 
-  method execute_atomic_noop<G>(ghost a: Atomic<G>)
+  method execute_atomic_noop<G>(gshared a: Atomic<G>)
   returns (
       ghost ret_value: int,
       ghost orig_value: int,
@@ -39,7 +39,7 @@ module Atomics {
     finish_atomic(a1, c1, d1);
   }*/
 
-  method okay(shared a1: Atomic<int>, shared a2: Atomic<int>, shared a3: Atomic<int>)
+  method okay(shared a1: Atomic<int>, gshared a2: Atomic<int>, gshared a3: Atomic<int>)
   {
     atomic_block var ret := execute_atomic_add(a1) {
       ghost_acquire g;
@@ -90,7 +90,7 @@ module Atomics {
   }*/
 
 
-  method okay_without_var(shared a1: Atomic<int>, shared a2: Atomic<int>, shared a3: Atomic<int>)
+  method okay_without_var(shared a1: Atomic<int>, gshared a2: Atomic<int>, gshared a3: Atomic<int>)
   {
     var ret;
     ghost var j1, j2;
