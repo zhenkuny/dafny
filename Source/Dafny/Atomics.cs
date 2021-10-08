@@ -137,7 +137,7 @@ namespace Microsoft.Dafny.Linear
                 new List<TypeParameter>(),
                 new List<Formal>()
                 {
-                    new Formal(tok, "a", cloner.CloneType(aType), true, Usage.Ordinary),
+                    new Formal(tok, "a", cloner.CloneType(aType), true, Usage.Ghost),
                     new Formal(tok, "b", cloner.CloneType(bType), true, Usage.Linear(LinearRealm.Erased))
                 },
                 new Formal(tok, "a'", cloner.CloneType(aType), false, Usage.Linear(LinearRealm.Erased)),

@@ -43,5 +43,6 @@ returns (glinear a: A)
 requires b == B(5)
 ensures a == A(5)
 {
-  a := A_fold(A(5), b);
+  ghost var x := A(5);
+  a := A_fold(x, b);
 }
