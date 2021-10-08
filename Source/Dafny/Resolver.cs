@@ -2931,7 +2931,7 @@ namespace Microsoft.Dafny
         // TODO: Need this?  Tried it an it creates a:
         //   System.ArgumentException: An item with the same key has already been added. Key: PCMExt
         // in Dafny.DafnyDriver.ProcessFiles
-        //this.Prog.ModuleSigs[newDef] = sig;
+        //this.prog.ModuleSigs[newDef] = sig;
 
         // REVIEW: Should isAnExport be true?
         var errCount = reporter.Count(ErrorLevel.Error);
@@ -2947,6 +2947,7 @@ namespace Microsoft.Dafny
         newDecl.Signature = sig;
         newDecl.DefaultExport = sig;
         Resolver.virtualModules[functorApp] = newDecl;
+        this.prog.VirtualModules.Add(newDef);
         return newDecl;
       } else {
         var mod = Resolver.virtualModules[functorApp];
