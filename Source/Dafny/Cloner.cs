@@ -14,10 +14,14 @@ namespace Microsoft.Dafny
   {
 
 
-    public virtual ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
+    public virtual ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name, bool preserveFunctors=true) {
       ModuleDefinition nw;
       if (m is DefaultModuleDecl) {
         nw = new DefaultModuleDecl();
+      } else if (m is Functor f && preserveFunctors) {
+        nw = new Functor(Tok(m.tok), name, m.PrefixIds, m.IsAbstract, m.IsFacade,
+          m.RefinementQId, m.EnclosingModule, CloneAttributes(m.Attributes),
+          true, m.IsToBeVerified, m.IsToBeCompiled, new List<ModuleFormal>(f.Formals));
       } else {
         nw = new ModuleDefinition(Tok(m.tok), name, m.PrefixIds, m.IsAbstract, m.IsFacade,
                                   m.RefinementQId, m.EnclosingModule, CloneAttributes(m.Attributes),
@@ -111,7 +115,9 @@ namespace Microsoft.Dafny
           return new LiteralModuleDecl(((LiteralModuleDecl)d).ModuleDef, m);
         } else if (d is AliasModuleDecl) {
           var a = (AliasModuleDecl)d;
-          return new AliasModuleDecl(a.TargetQId?.Clone(false), a.tok, m, a.Opened, a.Exports);
+          var new_a = new AliasModuleDecl(a.TargetQId?.Clone(false), a.tok, m, a.Opened, a.Exports);
+          new_a.Formal = a.Formal;
+          return new_a;
         } else if (d is AbstractModuleDecl) {
           var a = (AbstractModuleDecl)d;
           return new AbstractModuleDecl(a.QId?.Clone(false), a.tok, m, a.Opened, a.Exports);
@@ -780,7 +786,10 @@ namespace Microsoft.Dafny
       } else if (f is TwoStateFunction) {
         return new TwoStateFunction(Tok(f.tok), newName, f.HasStaticKeyword, tps, formals, f.Result == null ? null : CloneFormal(f.Result), CloneType(f.ResultType),
           req, reads, ens, decreases, body, CloneAttributes(f.Attributes), null);
-      } else {
+      } else if (f is PrefixPredicate p) {
+        return new PrefixPredicate(Tok(f.tok), newName, f.HasStaticKeyword, tps, CloneFormal(p.K), formals, req, reads, ens, decreases,
+          body, CloneAttributes(f.Attributes), p.ExtremePred);
+      }else {
         return new Function(Tok(f.tok), newName, f.HasStaticKeyword, f.Usage, tps, formals, f.Result == null ? null : CloneFormal(f.Result), CloneType(f.ResultType),
           req, reads, ens, decreases, body, CloneAttributes(f.Attributes), null);
       }
@@ -888,8 +897,8 @@ namespace Microsoft.Dafny
       return d.IsVisibleInScope(scope);
     }
 
-    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
-      var basem = base.CloneModuleDefinition(m, name);
+    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name, bool preserveFunctors=true) {
+      var basem = base.CloneModuleDefinition(m, name, preserveFunctors);
 
 
       //Merge signatures for imports which point to the same module
@@ -1009,8 +1018,8 @@ namespace Microsoft.Dafny
       : base(scope) {
     }
 
-    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name) {
-      var basem = base.CloneModuleDefinition(m, name);
+    public override ModuleDefinition CloneModuleDefinition(ModuleDefinition m, string name, bool preserveFunctors=true) {
+      var basem = base.CloneModuleDefinition(m, name, preserveFunctors);
       basem.TopLevelDecls.RemoveAll(t => t is ModuleExportDecl);
       return basem;
     }

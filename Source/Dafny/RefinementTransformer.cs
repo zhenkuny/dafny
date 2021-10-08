@@ -109,6 +109,7 @@ namespace Microsoft.Dafny
         PreResolveWorker(m);
       } else {
         // do this also for non-refining modules
+        RefinedSig = null;    // REVIEW: Why wasn't this done before?  Without it, we assign a stale RefinedSig to later modules
         CheckSuperflousRefiningMarks(m.TopLevelDecls, new List<string>());
       }
     }
