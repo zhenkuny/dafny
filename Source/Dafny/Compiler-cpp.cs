@@ -304,10 +304,33 @@ namespace Microsoft.Dafny {
       // Forward decl to cope with linker issues
       wdecl.WriteLine("{2}\nbool operator==(const {0}{1} &left, const {0}{1} &right); ", DtT_protected, InstantiateTemplate(dt.TypeArgs), DeclareTemplate(dt.TypeArgs));
 
+      string alignment = "";
+      if (Attributes.Contains(dt.Attributes, "alignment"))
+      {
+          Attributes attrs = dt.Attributes;
+          foreach (var attr in attrs.AsEnumerable())
+          {
+            if (attr.Name == "alignment")
+            {
+              if (attr.Args.Count == 1 && attr.Args[0] is LiteralExpr)
+              {
+                var arg = attr.Args[0] as LiteralExpr;
+                System.Numerics.BigInteger value = (System.Numerics.BigInteger)arg.Value;
+                alignment = " __attribute__ ((aligned (" + value.ToString() + "))) ";
+              }
+            }
+          }
+
+          if (alignment == "")
+          {
+            Warn("alignment attribute did not find integer", dt.tok);
+          }
+      }
+
       // Optimize a not-uncommon case
       if (dt.Ctors.Count == 1) {
         var ctor = dt.Ctors[0];
-        var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
+        var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), alignment + ";");
 wmethodDecl = ws;
 
         // Declare the struct members
@@ -445,7 +468,7 @@ wmethodDecl = ws;
         }
 
         /*** Declare the overall tagged union ***/
-        var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), ";");
+        var ws = wdecl.NewBlock(String.Format("{0}\nstruct {1}", DeclareTemplate(dt.TypeArgs), DtT_protected), alignment + ";");
         ws.WriteLine("std::variant<{0}> v;", Util.Comma(dt.Ctors, ctor => DatatypeSubStructName(ctor, true)));
         wmethodDecl = ws;
 
