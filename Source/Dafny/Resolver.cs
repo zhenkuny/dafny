@@ -2861,6 +2861,8 @@ namespace Microsoft.Dafny
 
           if (actual is ModuleActualFormal) {
             shouldCompile = false;  // If this functor hasn't been fully instantiated yet, we shouldn't compile it
+          } else if (actual is ModuleActualDecl actualMad && actualMad.decl is LiteralModuleDecl lmd) {
+            shouldCompile &= lmd.ModuleDef.IsToBeCompiled;  // Only compile this if the argument is going to be compiled too
           }
 
           LiteralModuleDecl actualLiteral = normalizeDecl(GetDeclFromModuleActual(actual));
