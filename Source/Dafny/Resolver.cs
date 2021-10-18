@@ -2814,7 +2814,7 @@ namespace Microsoft.Dafny
         // 1)
         Cloner cloner = new DeepModuleSignatureCloner();
         // literalRoot.Name + FunctorNameCtr
-        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, functorApp.ToUniqueName(FunctorNameCtr), preserveFunctors:false);
+        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, functorApp.CompileName(), preserveFunctors:false);
         FunctorNameCtr += 1;
         // Cloner doesn't propagate the compile signature, so we do so ourselves
         CloneCompileSignatures(literalRoot.ModuleDef, newDef);

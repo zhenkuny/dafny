@@ -4141,10 +4141,12 @@ namespace Microsoft.Dafny {
       return t;
     }
 
-    public string ToUniqueName(uint uniqueId) {
-      string result = tok.val + "_" + uniqueId;
+    //public string ToUniqueName(uint uniqueId) {
+    //  string result = tok.val + "_" + uniqueId;
+    public string CompileName() {
+      string result = tok.val;
       if (moduleParamNames.Count > 0) {
-        result += "_ON_" + Util.Comma("_", moduleParamNames, exp => ReplaceParens(exp.ToString())) + "_";
+        result += "_ON_" + Util.Comma("_", moduleParamNames, exp => ReplaceParens(exp.CompileName())) + "_";
       }
       return result;
     }
@@ -4213,6 +4215,22 @@ namespace Microsoft.Dafny {
         s = s + "." + Path[i].val;
       }
 
+      return s;
+    }
+
+    public string CompileName() {
+      string s = "";
+      int i = 1;
+      if (FunctorApp != null) {
+        s += FunctorApp.CompileName();
+        i = 0;
+      } else {
+        s = Path[0].val;
+      }
+
+      for (; i < Path.Count; ++i) {
+        s += "." + Path[i].val;
+      }
       return s;
     }
 
