@@ -167,7 +167,7 @@ namespace Microsoft.Dafny {
       if (typeArgs != null) {
         var targs = "";
         if (typeArgs.Count > 0) {
-          targs = String.Format("<{0}>", Util.Comma(typeArgs, ta => TypeName(ta, null, null)));
+          targs = String.Format("<{0}>", Util.Comma(typeArgs, ty => TypeName(ty, null, null)));
         }
 
         return targs;
@@ -181,7 +181,7 @@ namespace Microsoft.Dafny {
         var targs = "";
         if (typeArgs.Count > 0) {
           targs = String.Format("<{0}>", Util.Comma(typeArgs, ta =>
-            TypeName(ta.Type, null, null) + (ta.Usage.IsSharedKind ? "*" : "")
+            TypeName(ta.Type, null, null, null, false, ta.Usage) + (ta.Usage.IsSharedKind ? "*" : "")
             ));
         }
 
