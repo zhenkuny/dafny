@@ -1,6 +1,5 @@
 
-Dafny program verifier finished with 8 verified, 0 errors
-moo
+Dafny program verifier finished with 10 verified, 0 errors
 1
 1
 1
@@ -12,6 +11,8 @@ moo
 2
 2
 in case 1
+gv1, 1
+gv2, 1
 ----
 1
 2
