@@ -1,3 +1,6 @@
+// RUN: %dafny /compileTarget:cpp "%s" > "%t"
+// RUN: %diff "%s.expect" "%t"
+
 abstract module NRIfc { }
 
 module ContentsTypeMod {
@@ -18,3 +21,6 @@ module ConcreteNrifc1 refines NRIfc { }
 
 import X = Impl(ConcreteNrifc1)
 import Y = Impl(ConcreteNrifc2)
+
+method Main() {
+}

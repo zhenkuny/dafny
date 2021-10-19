@@ -369,10 +369,7 @@ namespace Microsoft.Dafny
       // Check that none of the modules have the same CompileName.
       Dictionary<string, ModuleDefinition> compileNameMap = new Dictionary<string, ModuleDefinition>();
       foreach (ModuleDefinition m in prog.CompileModules) {
-        if (m.IsAbstract) {
-          // the purpose of an abstract module is to skip compilation
-          continue;
-        }
+        if (!Compiler.ShouldCompileModuleDefinition(m)) { continue; }
         string compileName = m.CompileName;
         ModuleDefinition priorModDef;
         if (compileNameMap.TryGetValue(compileName, out priorModDef)) {
@@ -2779,8 +2776,6 @@ namespace Microsoft.Dafny
       }
     }
 
-    private uint FunctorNameCtr = 0;
-
     public ModuleDecl GetDeclFromModuleFormal(ModuleFormal formal) {
       if (formal.TypeDecl == null) {
         formal.TypeDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
@@ -2851,7 +2846,7 @@ namespace Microsoft.Dafny
           }
 
           LiteralModuleDecl actualLiteral = normalizeDecl(GetDeclFromModuleActual(actual));
-          actualLiterals.Append(actualLiteral);
+          actualLiterals.Add(actualLiteral);
 
           if (actualLiteral.ModuleDef is Functor af && actualFunctor == null) {
             var msg = $"Module {actualLiteral.Name} expects {af.Formals.Count} arguments but didn't receive any!";
@@ -2887,7 +2882,7 @@ namespace Microsoft.Dafny
 
 
         // 2) Find the artificial alias decl we created, and update it with the actual
-        foreach (Formal formal in functorApp.functor.Formals) {
+        foreach (ModuleFormal formal in functorApp.functor.Formals) {
           foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
             if (topLevelDecl is AliasModuleDecl amd && amd.Formal == formal) {
               fakeAliasDecls.Add(topLevelDecl);

@@ -1107,6 +1107,12 @@ namespace Microsoft.Dafny {
       modules = program.CompileModules;
     }
 
+    static public bool ShouldCompileModuleDefinition(ModuleDefinition m) {
+      return !(m.IsAbstract // the purpose of an abstract module is to skip compilation
+               || m is Functor // We will only compile the results of functor application, not the functors themselves
+               || !m.IsToBeCompiled);
+    }
+
     public void Compile(Program program, TargetWriter wrx) {
       Contract.Requires(program != null);
 
@@ -1116,17 +1122,8 @@ namespace Microsoft.Dafny {
       OrganizeModules(program, out temp);
       program.CompileModules = temp;
       foreach (ModuleDefinition m in program.CompileModules) {
-        if (m.IsAbstract) {
-          // the purpose of an abstract module is to skip compilation
-          continue;
-        }
-        if (m is Functor) {
-          // We will only compile the results of functor application, not the functors themselves
-          continue;
-        }
-        if (!m.IsToBeCompiled) {
-          continue;
-        }
+        if (!ShouldCompileModuleDefinition(m)) { continue; }
+
         var moduleIsExtern = false;
         string libraryName = null;
         if (!DafnyOptions.O.DisallowExterns) {
