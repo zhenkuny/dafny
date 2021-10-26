@@ -4135,7 +4135,7 @@ namespace Microsoft.Dafny {
       return result;
     }
 
-    private string ReplaceParens(string s) {
+    static public string ReplaceParens(string s) {
       var t = s.Replace("(", "_LEFT_");
       t = t.Replace(")", "_RIGHT_");
       return t;

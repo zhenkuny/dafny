@@ -373,10 +373,7 @@ namespace Microsoft.Dafny
       // Check that none of the modules have the same CompileName.
       Dictionary<string, ModuleDefinition> compileNameMap = new Dictionary<string, ModuleDefinition>();
       foreach (ModuleDefinition m in prog.CompileModules) {
-        if (m.IsAbstract) {
-          // the purpose of an abstract module is to skip compilation
-          continue;
-        }
+        if (!Compiler.ShouldCompileModuleDefinition(m)) { continue; }
         string compileName = m.CompileName;
         ModuleDefinition priorModDef;
         if (compileNameMap.TryGetValue(compileName, out priorModDef)) {
@@ -2784,8 +2781,6 @@ namespace Microsoft.Dafny
       }
     }
 
-    private uint FunctorNameCtr = 0;
-
     public ModuleDecl GetDeclFromModuleFormal(ModuleFormal formal) {
       if (formal.TypeDecl == null) {
         formal.TypeDecl = ResolveModuleQualifiedId(formal.TypeName.Root, formal.TypeName, reporter);
@@ -2804,6 +2799,7 @@ namespace Microsoft.Dafny
     private ModuleDecl ApplyFunctor(FunctorApplication functorApp, LiteralModuleDecl literalRoot) {
       if (!Resolver.virtualModules.ContainsKey(functorApp)) {
         // Apply the functor
+        // 0) Process the actual arguments, checking them against the declared formal arguments
         // 1) Clone the base module definition
         // 2) For each formal, update the AliasModuleDecl we introduced
         //    to point at the actual module parameter
@@ -2811,30 +2807,19 @@ namespace Microsoft.Dafny
         // 4) Update the functor's refinement target, if needed
         // 5) Compute the signature for our newly created module
 
-        // 1)
-        Cloner cloner = new DeepModuleSignatureCloner();
-        // literalRoot.Name + FunctorNameCtr
-        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, functorApp.CompileName(), preserveFunctors:false);
-        FunctorNameCtr += 1;
-        // Cloner doesn't propagate the compile signature, so we do so ourselves
-        CloneCompileSignatures(literalRoot.ModuleDef, newDef);
-        CloneRecursionInfo(cloner, literalRoot.ModuleDef, newDef);
-        // Should have the same scope, not a clone, as cloning allocates new tokens
-        //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
-
+        // 0) Process the actual arguments, checking them against the declared formal arguments
         if (functorApp.functor.Formals.Count != functorApp.moduleParams.Count) {
           var msg =
             $"Module {literalRoot.Name} expects {functorApp.functor.Formals.Count} parameters, got {functorApp.moduleParams.Count}";
           reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
           return null;
         }
-
-        // 2)
         Dictionary<ModuleFormal, ModuleActual> formalActualPairs = new Dictionary<ModuleFormal, ModuleActual>();
         Dictionary<ModuleFormal, ModuleQualifiedId> formalActualIdPairs = new Dictionary<ModuleFormal, ModuleQualifiedId>();
         HashSet<TopLevelDecl> fakeAliasDecls = new HashSet<TopLevelDecl>();
+        List<LiteralModuleDecl> actualLiterals = new List<LiteralModuleDecl>();
         bool allArgumentsConcrete = true;
-        bool shouldCompile = newDef.IsToBeCompiled;
+        bool shouldCompile = literalRoot.ModuleDef.IsToBeCompiled;
         for (int i = 0; i < functorApp.functor.Formals.Count; i++) {
           ModuleFormal formal = functorApp.functor.Formals[i];
           ModuleActual actual = functorApp.moduleParams[i];
@@ -2866,6 +2851,7 @@ namespace Microsoft.Dafny
           }
 
           LiteralModuleDecl actualLiteral = normalizeDecl(GetDeclFromModuleActual(actual));
+          actualLiterals.Add(actualLiteral);
 
           if (actualLiteral.ModuleDef is Functor af && actualFunctor == null) {
             var msg = $"Module {actualLiteral.Name} expects {af.Formals.Count} arguments but didn't receive any!";
@@ -2878,13 +2864,36 @@ namespace Microsoft.Dafny
             reporter.Error(MessageSource.Resolver, functorApp.tok, msg);
             return null;
           }
+        }
 
-          // Find the artificial alias decl we created, and update it with the actual
+        // 1) Clone the base module definition
+        Cloner cloner = new DeepModuleSignatureCloner();
+
+        // compute the name of the functor's output based on the resolved literal modules
+        string name = functorApp.tok.val;
+        if (actualLiterals.Count > 0) {
+          name += "_ON_" + Util.Comma("_", actualLiterals, exp => FunctorApplication.ReplaceParens(exp.CompileName)) + "_";
+        }
+        // Do the clone
+        ModuleDefinition newDef = cloner.CloneModuleDefinition(literalRoot.ModuleDef, name, preserveFunctors:false);
+
+        // Cloner doesn't propagate the compile signature, so we do so ourselves
+        CloneCompileSignatures(literalRoot.ModuleDef, newDef);
+        CloneRecursionInfo(cloner, literalRoot.ModuleDef, newDef);
+        // Should have the same scope, not a clone, as cloning allocates new tokens
+        //newDef.VisibilityScope = literalRoot.ModuleDef.VisibilityScope;
+
+        newDef.IsToBeCompiled = shouldCompile;
+
+
+        // 2) Find the artificial alias decl we created, and update it with the actual
+        foreach (ModuleFormal formal in functorApp.functor.Formals) {
           foreach (TopLevelDecl topLevelDecl in newDef.TopLevelDecls) {
             if (topLevelDecl is AliasModuleDecl amd && amd.Formal == formal) {
               fakeAliasDecls.Add(topLevelDecl);
-              amd.Signature = GetDeclFromModuleActual(actual).Signature;
-              amd.Signature.IsAbstract = false;    // Functor formals are considered concrete, since they will always eventually be concretely instantiated
+              amd.Signature = GetDeclFromModuleActual(formalActualPairs[formal]).Signature;
+              amd.Signature.IsAbstract =
+                false; // Functor formals are considered concrete, since they will always eventually be concretely instantiated
               // TODO: Need this?
               // amd.Signature.Refines = refinementTransformer.RefinedSig;
               // or this?
@@ -2892,7 +2901,6 @@ namespace Microsoft.Dafny
             }
           }
         }
-        newDef.IsToBeCompiled = shouldCompile;
 
         // 3)
         // Update each module import that involves a functor (if any)
