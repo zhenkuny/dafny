@@ -13,7 +13,7 @@ ${DIR}/Source/boogie/Binaries/Boogie.exe:
 	(cd ${DIR}/../boogie ; dotnet build Source/boogie/Source/Boogie.sln )
 
 parser:
-	make -C ${DIR}/Source/Dafny -f Makefile.linux all
+	make -C ${DIR}/Source/Dafny -f Makefile.Linux all
 
 runtime:
 	(cd ${DIR}/Source/DafnyRuntime/DafnyRuntimeJava; ./gradlew -q clean copyJarToBinaries)
