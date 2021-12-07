@@ -842,7 +842,7 @@ namespace Microsoft.Dafny {
     public void PrintFunction(Function f, int indent, bool printSignatureOnly) {
       Contract.Requires(f != null);
 
-      if (PrintModeSkipFunctionOrMethod(f.IsGhost, f.Attributes, f.Name)) { return; }
+      if (PrintModeSkipFunctionOrMethod(f.IsGhost || f.Usage.realm == LinearRealm.Erased, f.Attributes, f.Name)) { return; }
       var isPredicate = f is Predicate || f is PrefixPredicate;
       Indent(indent);
       string k = isPredicate ? "predicate" : f.WhatKind;
@@ -916,7 +916,7 @@ namespace Microsoft.Dafny {
     public void PrintMethod(Method method, int indent, bool printSignatureOnly) {
       Contract.Requires(method != null);
 
-      if (PrintModeSkipFunctionOrMethod(method.IsGhost, method.Attributes, method.Name)) { return; }
+      if (PrintModeSkipFunctionOrMethod(method.IsGhost || method.Usage.realm == LinearRealm.Erased, method.Attributes, method.Name)) { return; }
       Indent(indent);
       string k = method is Constructor ? "constructor" :
         method is LeastLemma ? "least lemma" :
@@ -1152,7 +1152,7 @@ namespace Microsoft.Dafny {
     public void PrintStatement(Statement stmt, int indent) {
       Contract.Requires(stmt != null);
 
-      if (stmt.IsGhost && printMode == DafnyOptions.PrintModes.NoGhost) { return; }
+      if ((stmt.IsGhost || Linear.AtomicRewriter.IsGlinearStmt(stmt)) && printMode == DafnyOptions.PrintModes.NoGhost) { return; }
       for (LList<Label> label = stmt.Labels; label != null; label = label.Next) {
         if (label.Data.Name != null) {
           wr.WriteLine("label {0}:", label.Data.Name);
@@ -1512,6 +1512,8 @@ namespace Microsoft.Dafny {
 
       } else if (stmt is VarDeclStmt) {
         var s = (VarDeclStmt)stmt;
+        // There is no way to construct a var decl statement in which some decls are glinear, so glinear var decls
+        // are handled corrcectly when in PrintModes.NoGhost.
         if (s.Locals.Exists(v => v.IsGhost) && printMode == DafnyOptions.PrintModes.NoGhost) { return; }
         if (s.Locals.TrueForAll((v => v.IsGhost))) {
           // Emit the "ghost" modifier if all of the variables are ghost. If some are ghost, but not others,
