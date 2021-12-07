@@ -842,7 +842,11 @@ namespace Microsoft.Dafny {
     public void PrintFunction(Function f, int indent, bool printSignatureOnly) {
       Contract.Requires(f != null);
 
-      if (PrintModeSkipFunctionOrMethod(f.IsGhost || f.Usage.realm == LinearRealm.Erased, f.Attributes, f.Name)) { return; }
+      bool functionIsGhost =
+             f.IsGhost
+          || f.Usage.realm == LinearRealm.Erased
+          || f.Result.Usage.realm == LinearRealm.Erased;
+      if (PrintModeSkipFunctionOrMethod(functionIsGhost, f.Attributes, f.Name)) { return; }
       var isPredicate = f is Predicate || f is PrefixPredicate;
       Indent(indent);
       string k = isPredicate ? "predicate" : f.WhatKind;
