@@ -845,7 +845,7 @@ namespace Microsoft.Dafny {
       bool functionIsGhost =
              f.IsGhost
           || f.Usage.realm == LinearRealm.Erased
-          || f.Result.Usage.realm == LinearRealm.Erased;
+          || (f.Result!=null && f.Result.Usage.realm == LinearRealm.Erased);
       if (PrintModeSkipFunctionOrMethod(functionIsGhost, f.Attributes, f.Name)) { return; }
       var isPredicate = f is Predicate || f is PrefixPredicate;
       Indent(indent);
