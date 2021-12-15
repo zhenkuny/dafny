@@ -17,6 +17,7 @@ using Bpl = Microsoft.Boogie;
 namespace Microsoft.Dafny {
   public class Printer {
     TextWriter wr;
+    TextWriter astwr;
     DafnyOptions.PrintModes printMode;
     bool afterResolver;
     bool printingExportSet = false;
@@ -30,6 +31,7 @@ namespace Microsoft.Dafny {
     public Printer(TextWriter wr, DafnyOptions.PrintModes printMode = DafnyOptions.PrintModes.Everything) {
       Contract.Requires(wr != null);
       this.wr = wr;
+      this.astwr = File.CreateText("ast.json");
       this.printMode = printMode;
     }
 
@@ -218,6 +220,7 @@ namespace Microsoft.Dafny {
 
     public void PrintTopLevelDecls(List<TopLevelDecl> decls, int indent, List<Bpl.IToken>/*?*/ prefixIds, string fileBeingPrinted) {
       Contract.Requires(decls != null);
+      // Console.WriteLine("printing top level decls {0}", decls.Count);
       int i = 0;
       foreach (TopLevelDecl d in decls) {
         Contract.Assert(d != null);
@@ -501,6 +504,8 @@ namespace Microsoft.Dafny {
     }
 
     public void PrintModuleDefinition(ModuleDefinition module, VisibilityScope scope, int indent, List<Bpl.IToken>/*?*/ prefixIds, string fileBeingPrinted) {
+        Console.WriteLine("PrintModuleDefinition {0}", module.Name);
+
       Contract.Requires(module != null);
       Contract.Requires(0 <= indent);
       Type.PushScope(scope);
@@ -635,11 +640,20 @@ namespace Microsoft.Dafny {
       Contract.Requires(members != null);
 
       int state = 0;  // 0 - no members yet; 1 - previous member was a field; 2 - previous member was non-field
+
+      // VT: start printing module function/method
+      // astwr.Write("[");
+
+      string sep = "";
       foreach (MemberDecl m in members) {
         if (PrintModeSkipGeneral(m.tok, fileBeingPrinted)) { continue; }
         if (printMode == DafnyOptions.PrintModes.DllEmbed && Attributes.Contains(m.Attributes, "auto_generated")) {
           // omit this declaration
-        } else if (m is Method) {
+          continue;
+        }
+        // astwr.Write(sep);
+        
+        if (m is Method) {
           if (state != 0) { wr.WriteLine(); }
           PrintMethod((Method)m, indent, false);
           var com = m as ExtremeLemma;
@@ -650,6 +664,7 @@ namespace Microsoft.Dafny {
           }
           state = 2;
         } else if (m is Field) {
+          continue;
           if (state == 2) { wr.WriteLine(); }
           PrintField((Field)m, indent);
           state = 1;
@@ -666,7 +681,10 @@ namespace Microsoft.Dafny {
         } else {
           Contract.Assert(false); throw new cce.UnreachableException();  // unexpected member
         }
+        sep = ",";
       }
+      // astwr.WriteLine("]");
+      astwr.Flush();
     }
 
     /// <summary>
@@ -856,6 +874,9 @@ namespace Microsoft.Dafny {
       if (f.HasStaticKeyword) { k = "static " + k; }
       if (!f.IsGhost && f.ByMethodBody == null) { k += " method"; }
       PrintClassMethodHelper(k, f.Attributes, f.Name, f.TypeArgs);
+
+      f.PrintAST(astwr);
+
       if (f.SignatureIsOmitted) {
         wr.Write(" ...");
       } else {
@@ -866,11 +887,14 @@ namespace Microsoft.Dafny {
         if (!isPredicate && !(f is ExtremePredicate) && !(f is TwoStatePredicate)) {
           wr.Write(": ");
           if (f.Result != null) {
+            Contract.Assert(false);
             wr.Write("(");
             PrintFormal(f.Result, false);
             wr.Write(")");
           } else {
+            // // astwr.Write("'return': {");
             PrintType(f.ResultType);
+            // astwr.WriteLine(",");
           }
         }
       }
@@ -883,6 +907,7 @@ namespace Microsoft.Dafny {
       wr.WriteLine();
       if (f.Body != null && !printSignatureOnly) {
         Indent(indent);
+        // astwr.Write("'funcBody':");
         wr.WriteLine("{");
         PrintExtendedExpr(f.Body, ind, true, false);
         Indent(indent);
@@ -899,6 +924,8 @@ namespace Microsoft.Dafny {
         }
         wr.WriteLine();
       }
+
+      // astwr.Write("},");
     }
 
     // ----------------------------- PrintMethod -----------------------------
@@ -921,11 +948,12 @@ namespace Microsoft.Dafny {
 
     private bool PrintModeSkipGeneral(Bpl.IToken tok, string fileBeingPrinted) {
       return (printMode == DafnyOptions.PrintModes.NoIncludes || printMode == DafnyOptions.PrintModes.NoGhost)
-             && tok.filename != null && fileBeingPrinted != null && Path.GetFullPath(tok.filename) != fileBeingPrinted;
+             && (tok.filename != null && fileBeingPrinted != null && Path.GetFullPath(tok.filename) != fileBeingPrinted);
     }
 
     public void PrintMethod(Method method, int indent, bool printSignatureOnly) {
       Contract.Requires(method != null);
+      // astwr.WriteLine("{'ntype':'method',");
 
       if (PrintModeSkipFunctionOrMethod(method.IsGhost, method.Attributes, method.Name)) { return; }
       Indent(indent);
@@ -974,6 +1002,7 @@ namespace Microsoft.Dafny {
         PrintStatement(method.Body, indent);
         wr.WriteLine();
       }
+      // astwr.WriteLine("}, ");
     }
 
     void PrintKTypeIndication(ExtremePredicate.KType kType) {
@@ -1001,6 +1030,7 @@ namespace Microsoft.Dafny {
         ff = new List<Formal>(ff.Skip(1));
       }
       wr.Write("(");
+      
       string sep = "";
       foreach (Formal f in ff) {
         Contract.Assert(f != null);
@@ -1023,10 +1053,20 @@ namespace Microsoft.Dafny {
         Contract.Assert(f.HasName);
         wr.Write("nameonly ");
       }
+      
       if (f.HasName) {
         wr.Write("{0}: ", f.DisplayName);
       }
+
+      Contract.Assert(f.HasName);
+      Contract.Assert(f.DefaultValue == null);
+      // astwr.Write("{'ntype':'Formal','DisplayName':");
+      // astwr.Write("'{0}',", f.DisplayName);
+
       PrintType(f.Type);
+
+      // astwr.Write("}");
+
       if (f.DefaultValue != null) {
         wr.Write(" := ");
         PrintExpression(f.DefaultValue, false);
@@ -1067,6 +1107,8 @@ namespace Microsoft.Dafny {
       Contract.Requires(kind != null);
       Contract.Requires(ee != null);
       if (printMode == DafnyOptions.PrintModes.NoGhost) { return; }
+      // astwr.Write("'{0}':[", kind);
+
       foreach (AttributedExpression e in ee) {
         Contract.Assert(e != null);
         wr.WriteLine();
@@ -1074,6 +1116,7 @@ namespace Microsoft.Dafny {
         wr.Write("{0}", kind);
         PrintAttributedExpression(e);
       }
+      // astwr.WriteLine("],");
     }
 
     void PrintAttributedExpression(AttributedExpression e) {
@@ -1094,6 +1137,7 @@ namespace Microsoft.Dafny {
 
     public void PrintType(Type ty) {
       Contract.Requires(ty != null);
+      // astwr.Write("'Type':'{0}'", ty.TypeName(null, true));
       wr.Write(ty.TypeName(null, true));
     }
 
@@ -1259,6 +1303,7 @@ namespace Microsoft.Dafny {
         wr.Write("}");
 
       } else if (stmt is BlockStmt) {
+        // // astwr.Write("{'ntype': 'block'}");
         wr.WriteLine("{");
         int ind = indent + IndentAmount;
         foreach (Statement s in ((BlockStmt)stmt).Body) {
@@ -1854,7 +1899,12 @@ namespace Microsoft.Dafny {
     /// </summary>
     public void PrintExtendedExpr(Expression expr, int indent, bool isRightmost, bool endWithCloseParen) {
       Contract.Requires(expr != null);
+
+      // // astwr.Write("{'ntype':");
+
       if (expr is ITEExpr) {
+        throw new Exception("NYI");
+        // // astwr.Write("'ITEExpr',");
         Indent(indent);
         while (true) {
           var ite = (ITEExpr)expr;
@@ -1870,11 +1920,11 @@ namespace Microsoft.Dafny {
             Indent(indent + IndentAmount);
             PrintExpression(expr, isRightmost, false);
             wr.WriteLine(endWithCloseParen ? ")" : "");
-            return;
+            break;
           }
         }
-
       } else if (expr is NestedMatchExpr) {
+        throw new Exception("NYI");
         var e = (NestedMatchExpr)expr;
         if (e.ResolvedExpression != null && DafnyOptions.O.DafnyPrintResolvedFile != null) {
           wr.WriteLine();
@@ -1923,6 +1973,7 @@ namespace Microsoft.Dafny {
           }
         }
       } else if (expr is MatchExpr) {
+        throw new Exception("NYI");
         var e = (MatchExpr)expr;
         if (DafnyOptions.O.DafnyPrintResolvedFile == null && e.OrigUnresolved != null) {
           PrintExtendedExpr(e.OrigUnresolved, indent, isRightmost, endWithCloseParen);
@@ -1954,14 +2005,20 @@ namespace Microsoft.Dafny {
         }
 
       } else if (expr is LetExpr) {
+        // astwr.Write("{'ntype':'LetExpr',");
         var e = (LetExpr)expr;
         Indent(indent);
         if (e.LHSs.Exists(lhs => lhs != null && lhs.Var != null && lhs.Var.IsGhost)) { wr.Write("ghost "); }
         wr.Write("var ");
         string sep = "";
+
+        // astwr.Write("'LHSs':");
+        Contract.Requires(e.LHSs.Count == 1);
+
         foreach (var lhs in e.LHSs) {
           wr.Write(sep);
           PrintCasePattern(lhs);
+          // // astwr.Write("'{0}'");
           sep = ", ";
         }
         if (e.Exact) {
@@ -1973,6 +2030,7 @@ namespace Microsoft.Dafny {
         wr.WriteLine(";");
         PrintExtendedExpr(e.Body, indent, isRightmost, endWithCloseParen);
       } else if (expr is StmtExpr && isRightmost) {
+        throw new Exception("NYI");
         var e = (StmtExpr)expr;
         Indent(indent);
         PrintStatement(e.S, indent);
@@ -1980,12 +2038,17 @@ namespace Microsoft.Dafny {
         PrintExtendedExpr(e.E, indent, isRightmost, endWithCloseParen);
 
       } else if (expr is ParensExpression) {
+        throw new Exception("NYI");
         PrintExtendedExpr(((ParensExpression)expr).E, indent, isRightmost, endWithCloseParen);
       } else {
+        // // astwr.WriteLine("'flat',");
+        // // astwr.Write("'body':");
+
         Indent(indent);
         PrintExpression(expr, false, indent);
         wr.WriteLine(endWithCloseParen ? ")" : "");
       }
+      // astwr.WriteLine("}");
     }
 
     public void PrintMatchCaseArgument(MatchCase mc) {
@@ -2038,6 +2101,7 @@ namespace Microsoft.Dafny {
     void PrintExpr(Expression expr, int contextBindingStrength, bool fragileContext, bool isRightmost, bool isFollowedBySemicolon, int indent, string keyword = null, int resolv_count = 2) {
       Contract.Requires(-1 <= indent);
       Contract.Requires(expr != null);
+      // // astwr.WriteLine("'flat',");
 
       /* When debugging:
       if (resolv_count > 0 && expr.Resolved != null) {
@@ -2045,21 +2109,24 @@ namespace Microsoft.Dafny {
         return;
       }
       */
+      // Console.WriteLine(expr);
 
       if (expr is StaticReceiverExpr) {
         StaticReceiverExpr e = (StaticReceiverExpr)expr;
         wr.Write(e.Type);
       } else if (expr is LiteralExpr) {
+        // astwr.Write("{'ntype':'LiteralExpr',");
         LiteralExpr e = (LiteralExpr)expr;
         if (e.Value == null) {
           wr.Write("null");
         } else if (e.Value is bool) {
           wr.Write((bool)e.Value ? "true" : "false");
+          // astwr.Write("'value':'{0}'", (bool)e.Value ? "true" : "false");
         } else if (e is CharLiteralExpr) {
           wr.Write("'{0}'", (string)e.Value);
         } else if (e is StringLiteralExpr) {
           var str = (StringLiteralExpr)e;
-          wr.Write("{0}\"{1}\"", str.IsVerbatim ? "@" : "", (string)e.Value);
+          wr.Write("{0}'{1}'", str.IsVerbatim ? "@" : "", (string)e.Value);
         } else if (e.Value is BaseTypes.BigDec) {
           BaseTypes.BigDec dec = (BaseTypes.BigDec)e.Value;
           wr.Write((dec.Mantissa >= 0) ? "" : "-");
@@ -2079,21 +2146,25 @@ namespace Microsoft.Dafny {
             }
           }
         } else {
+          // astwr.Write("'value':'{0}'", (BigInteger)e.Value);
           wr.Write((BigInteger)e.Value);
         }
+        // astwr.Write("}");
 
       } else if (expr is ThisExpr) {
         wr.Write("this");
 
       } else if (expr is IdentifierExpr) {
         wr.Write(((IdentifierExpr)expr).Name);
-
+        // astwr.Write("{'ntype':'IdentifierExpr','value':'{0}'}", ((IdentifierExpr)expr).Name);
       } else if (expr is DatatypeValue) {
+        // astwr.Write("{'ntype':'DatatypeValue',");
         var dtv = (DatatypeValue)expr;
         bool printParens;
         if (dtv.MemberName.StartsWith(BuiltIns.TupleTypeCtorNamePrefix)) {
           // we're looking at a tuple, whose printed constructor name is essentially the empty string
           printParens = true;
+          // astwr.Write("'value':'Tuple',");
         } else {
           wr.Write("{0}.{1}", dtv.DatatypeName, dtv.MemberName);
           printParens = dtv.Arguments.Count != 0;
@@ -2123,6 +2194,7 @@ namespace Microsoft.Dafny {
       } else if (expr is NameSegment) {
         var e = (NameSegment)expr;
         wr.Write(e.Name);
+
         if (e.OptTypeArguments != null) {
           PrintTypeInstantiation(e.OptTypeArguments);
         }
@@ -2154,6 +2226,7 @@ namespace Microsoft.Dafny {
         if (parensNeeded) { wr.Write(")"); }
 
       } else if (expr is ApplySuffix) {
+        // astwr.Write("{'ntype':'ApplySuffix','value':'");
         var e = (ApplySuffix)expr;
         // determine if parens are needed
         int opBindingStrength = 0x90;
@@ -2188,6 +2261,7 @@ namespace Microsoft.Dafny {
         if (parensNeeded) { wr.Write(")"); }
 
       } else if (expr is SeqSelectExpr) {
+        throw new Exception("NYI");
         SeqSelectExpr e = (SeqSelectExpr)expr;
         // determine if parens are needed
         int opBindingStrength = 0x90;
@@ -2406,6 +2480,11 @@ namespace Microsoft.Dafny {
 
       } else if (expr is BinaryExpr) {
         var e = (BinaryExpr)expr;
+
+        // astwr.Write("{'ntype':'BinaryExpr',");
+        // astwr.Write("'op':{0},", e.Op);
+        // astwr.Write("'left':");
+
         // determine if parens are needed
         int opBindingStrength;
         bool fragileLeftContext = false;  // false means "allow same binding power on left without parens"
@@ -2470,27 +2549,33 @@ namespace Microsoft.Dafny {
         var sem = !parensNeeded && isFollowedBySemicolon;
         if (0 <= indent && e.Op == BinaryExpr.Opcode.And) {
           PrintExpr(e.E0, opBindingStrength, fragileLeftContext, false, sem, indent, keyword);
+          // astwr.Write(",'right':");
           wr.WriteLine(" {0}", op);
           Indent(indent);
           PrintExpr(e.E1, opBindingStrength, fragileRightContext, parensNeeded || isRightmost, sem, indent, keyword);
+          // astwr.Write("}");
         } else if (0 <= indent && e.Op == BinaryExpr.Opcode.Imp) {
           PrintExpr(e.E0, opBindingStrength, fragileLeftContext, false, sem, indent, keyword);
+          // astwr.Write(",'right':");
           wr.WriteLine(" {0}", op);
           int ind = indent + IndentAmount;
           Indent(ind);
           PrintExpr(e.E1, opBindingStrength, fragileRightContext, parensNeeded || isRightmost, sem, ind, keyword);
         } else if (0 <= indent && e.Op == BinaryExpr.Opcode.Exp) {
           PrintExpr(e.E1, opBindingStrength, fragileLeftContext, false, sem, indent, keyword);
+          // astwr.Write(",'right':");
           wr.WriteLine(" {0}", op);
           int ind = indent + IndentAmount;
           Indent(ind);
           PrintExpr(e.E0, opBindingStrength, fragileRightContext, parensNeeded || isRightmost, sem, ind, keyword);
         } else if (e.Op == BinaryExpr.Opcode.Exp) {
           PrintExpr(e.E1, opBindingStrength, fragileLeftContext, false, sem, -1, keyword);
+          // astwr.Write(",'right':");
           wr.Write(" {0} ", op);
           PrintExpr(e.E0, opBindingStrength, fragileRightContext, parensNeeded || isRightmost, sem, -1, keyword);
         } else {
           PrintExpr(e.E0, opBindingStrength, fragileLeftContext, false, sem, -1, keyword);
+          // astwr.Write(",'right':");
           wr.Write(" {0} ", op);
           PrintExpr(e.E1, opBindingStrength, fragileRightContext, parensNeeded || isRightmost, sem, -1, keyword);
         }
@@ -2863,7 +2948,6 @@ namespace Microsoft.Dafny {
       }
     }
 
-
     private void PrintQuantifierDomain(List<BoundVar> boundVars, Attributes attrs, Expression range) {
       Contract.Requires(boundVars != null);
       string sep = "";
@@ -2943,6 +3027,7 @@ namespace Microsoft.Dafny {
         PrintExpression(e, isFollowedBySemicolon);
       }
     }
+
     void PrintExpressionPairList(List<ExpressionPair> exprs) {
       Contract.Requires(exprs != null);
       string sep = "";

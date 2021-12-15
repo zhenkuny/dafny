@@ -7,6 +7,7 @@
 //
 //-----------------------------------------------------------------------------
 using System;
+using System.IO;
 using System.Text;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
@@ -6081,6 +6082,10 @@ namespace Microsoft.Dafny {
         return compileName;
       }
     }
+
+    public void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'ntype':'Formal','name':'{0}','type':'{1}'}}", DisplayName, Type.TypeName(null, true));
+    }
   }
 
   /// <summary>
@@ -6217,6 +6222,36 @@ namespace Microsoft.Dafny {
       AccumulateRight_MultiSetDifference,
       AccumulateLeft_Concat,
       AccumulateRight_Concat,
+    }
+
+    public void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'ntype':'Function',\n'name':'{0}',\n", Name);
+
+      astwr.Write("'formals':[");
+      string sep = "";
+      foreach (Formal f in Formals) {
+        Contract.Assert(f != null);
+        astwr.Write(sep);
+        sep = ", ";
+        f.PrintAST(astwr);
+      }
+      astwr.WriteLine("],");
+
+      astwr.Write("'requires':[");
+      foreach (AttributedExpression e in Req) {
+        Contract.Assert(e != null);
+        e.PrintAST(astwr);
+      }
+      astwr.WriteLine("],");
+
+      astwr.Write("'ensures':[");
+      foreach (AttributedExpression e in Ens) {
+        Contract.Assert(e != null);
+        e.PrintAST(astwr);
+      }
+      astwr.WriteLine("]");
+
+      astwr.Write("}");
     }
 
     public override IEnumerable<Expression> SubExpressions {
@@ -8932,6 +8967,9 @@ namespace Microsoft.Dafny {
       this.tok = tok;
     }
 
+    public virtual void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'unhandled':'{0}'}}", this.GetType());
+    }
     /// <summary>
     /// Returns the non-null subexpressions of the Expression.  To be called after the expression has been resolved; this
     /// means, for example, that any concrete syntax that resolves to some other expression will return the subexpressions
@@ -9760,6 +9798,10 @@ namespace Microsoft.Dafny {
       Contract.Requires(tok != null);
       Contract.Requires(s != null);
       this.Value = s;
+    }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'nytpe':'LiteralExpr','value':'{0}'}}", Value);
     }
   }
 
@@ -11075,6 +11117,15 @@ namespace Microsoft.Dafny {
         yield return E0;
         yield return E1;
       }
+    }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'ntype':'BinaryExpr','op':'{0}',", Op);
+      astwr.Write("'left':");
+      E0.PrintAST(astwr);
+      astwr.Write(",'right':");
+      E1.PrintAST(astwr);
+      astwr.Write("}");
     }
   }
 
@@ -12490,6 +12541,10 @@ namespace Microsoft.Dafny {
       IToken closeBrace = new Token(tok.line, tok.col + 7 + s.Length + 1); // where 7 = length(":error ")
       this.Attributes = new UserSuppliedAttributes(tok, openBrace, closeBrace, args, this.Attributes);
     }
+
+    public void PrintAST(TextWriter astwr) {
+      E.PrintAST(astwr);
+    }
   }
 
   public class FrameExpression {
@@ -12815,6 +12870,10 @@ namespace Microsoft.Dafny {
       Contract.Requires(optTypeArguments == null || optTypeArguments.Count > 0);
       Name = name;
       OptTypeArguments = optTypeArguments;
+    }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'ntype':'NameSegment', 'value':'{0}'}}", Name);
     }
   }
 
