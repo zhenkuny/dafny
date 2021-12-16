@@ -6142,6 +6142,12 @@ namespace Microsoft.Dafny {
       Actual = actual;
       IsGhost = isGhost;
     }
+
+    public void PrintAST(TextWriter astwr) {
+      astwr.Write("{'ntype':'ActualBinding','vaule':");
+      Actual.PrintAST(astwr);
+      astwr.Write("}");
+    }
   }
 
   public class ActualBindings {
@@ -6172,6 +6178,17 @@ namespace Microsoft.Dafny {
       Contract.Requires(!WasResolved); // this operation should be done at most once
       Contract.Assume(ArgumentBindings.TrueForAll(arg => arg.Actual.WasResolved()));
       arguments = args ?? ArgumentBindings.ConvertAll(binding => binding.Actual);
+    }
+
+    public void PrintAST(TextWriter astwr) {
+      astwr.Write("[");
+      string sep = "";
+      foreach (ActualBinding arg in ArgumentBindings) {
+        astwr.Write(sep);
+        sep = ", ";
+        arg.PrintAST(astwr);
+      }
+      astwr.Write("]");
     }
   }
 
@@ -6237,20 +6254,30 @@ namespace Microsoft.Dafny {
       }
       astwr.WriteLine("],");
 
+      sep = "";
       astwr.Write("'requires':[");
       foreach (AttributedExpression e in Req) {
         Contract.Assert(e != null);
+        astwr.Write(sep);
+        sep = ", ";
         e.PrintAST(astwr);
       }
       astwr.WriteLine("],");
 
+      sep = "";
       astwr.Write("'ensures':[");
       foreach (AttributedExpression e in Ens) {
         Contract.Assert(e != null);
+        astwr.Write(sep);
+        sep = ", ";
         e.PrintAST(astwr);
       }
-      astwr.WriteLine("]");
+      astwr.WriteLine("],");
 
+      astwr.Write("'fBody':");
+      Body.PrintAST(astwr);
+
+      astwr.WriteLine("");
       astwr.Write("}");
     }
 
@@ -9861,6 +9888,12 @@ namespace Microsoft.Dafny {
     public override IEnumerable<Expression> SubExpressions {
       get { return Arguments; }
     }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'ntype':'DatatypeValue','DatatypeName':'{0}','MemberName':'{1}','Bindings':", DatatypeName, MemberName);
+      Bindings.PrintAST(astwr);
+      astwr.Write("}");
+    }
   }
 
   public class ThisExpr : Expression {
@@ -11212,6 +11245,27 @@ namespace Microsoft.Dafny {
         }
       }
     }
+
+    public override void  PrintAST(TextWriter astwr) {
+      astwr.Write("{'ntype':'LetExpr'");
+      astwr.Write(",'LHSs':[");
+      string sep = "";
+      foreach (var lhs in LHSs) {
+        astwr.Write(sep);
+        sep = ", ";
+        lhs.PrintAST(astwr);
+      }
+      astwr.Write("],'RHSs':[");
+      sep = "";
+      foreach (var rhs in RHSs) {
+        astwr.Write(sep);
+        sep = ", ";
+        rhs.PrintAST(astwr);
+      }
+      astwr.Write("],'Body':");
+      Body.PrintAST(astwr);
+      astwr.Write("}");
+    }
   }
 
   public class LetOrFailExpr : ConcreteSyntaxExpression {
@@ -11911,6 +11965,16 @@ namespace Microsoft.Dafny {
         yield return Els;
       }
     }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{'ntype':'ITEExpr', 'cond':");
+      Test.PrintAST(astwr);
+      astwr.Write(",'thn':");
+      Thn.PrintAST(astwr);
+      astwr.Write(",'else':");
+      Els.PrintAST(astwr);
+      astwr.Write("}");
+    }
   }
 
   public class MatchExpr : Expression {  // a MatchExpr is an "extended expression" and is only allowed in certain places
@@ -12048,6 +12112,13 @@ namespace Microsoft.Dafny {
           }
         }
       }
+    }
+
+    public void PrintAST(TextWriter astwr) {
+      Contract.Assert(Var != null);
+      astwr.Write("{'ntype':'CasePattern','vaule':");
+      astwr.Write("'{0}'", Id);
+      astwr.Write("}");
     }
   }
 
@@ -12919,6 +12990,12 @@ namespace Microsoft.Dafny {
       Contract.Requires(cce.NonNullElements(args));
       AtTok = atLabel;
       Bindings = new ActualBindings(args);
+    }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{'ntype':'ApplySuffix','args':");
+      Bindings.PrintAST(astwr);
+      astwr.Write("}");
     }
   }
 

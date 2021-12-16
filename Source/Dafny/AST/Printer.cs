@@ -641,17 +641,12 @@ namespace Microsoft.Dafny {
 
       int state = 0;  // 0 - no members yet; 1 - previous member was a field; 2 - previous member was non-field
 
-      // VT: start printing module function/method
-      // astwr.Write("[");
-
-      string sep = "";
       foreach (MemberDecl m in members) {
         if (PrintModeSkipGeneral(m.tok, fileBeingPrinted)) { continue; }
         if (printMode == DafnyOptions.PrintModes.DllEmbed && Attributes.Contains(m.Attributes, "auto_generated")) {
           // omit this declaration
           continue;
         }
-        // astwr.Write(sep);
         
         if (m is Method) {
           if (state != 0) { wr.WriteLine(); }
@@ -664,7 +659,6 @@ namespace Microsoft.Dafny {
           }
           state = 2;
         } else if (m is Field) {
-          continue;
           if (state == 2) { wr.WriteLine(); }
           PrintField((Field)m, indent);
           state = 1;
@@ -681,9 +675,7 @@ namespace Microsoft.Dafny {
         } else {
           Contract.Assert(false); throw new cce.UnreachableException();  // unexpected member
         }
-        sep = ",";
       }
-      // astwr.WriteLine("]");
       astwr.Flush();
     }
 
@@ -1903,7 +1895,6 @@ namespace Microsoft.Dafny {
       // // astwr.Write("{'ntype':");
 
       if (expr is ITEExpr) {
-        throw new Exception("NYI");
         // // astwr.Write("'ITEExpr',");
         Indent(indent);
         while (true) {
@@ -2261,7 +2252,6 @@ namespace Microsoft.Dafny {
         if (parensNeeded) { wr.Write(")"); }
 
       } else if (expr is SeqSelectExpr) {
-        throw new Exception("NYI");
         SeqSelectExpr e = (SeqSelectExpr)expr;
         // determine if parens are needed
         int opBindingStrength = 0x90;
