@@ -791,8 +791,12 @@ wmethodDecl = ws;
         wr.WriteLine(DeclareTemplate(m.EnclosingClass.TypeArgs));
       }
 
-      wr.Write("{0} {1}{2}::{3}",
+      var inlineAttr = Attributes.Contains(m.Attributes, "cpp_inline")
+          ? "__attribute__((always_inline)) " : "";
+
+      wr.Write("{0} {1}{2}{3}::{4}",
         targetReturnTypeReplacement ?? "void",
+        inlineAttr,
         m.EnclosingClass.CompileName,
         InstantiateTemplate(m.EnclosingClass.TypeArgs),
         IdName(m));
