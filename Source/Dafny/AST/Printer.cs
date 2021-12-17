@@ -945,9 +945,10 @@ namespace Microsoft.Dafny {
 
     public void PrintMethod(Method method, int indent, bool printSignatureOnly) {
       Contract.Requires(method != null);
-      // astwr.WriteLine("{'ntype':'method',");
 
       if (PrintModeSkipFunctionOrMethod(method.IsGhost, method.Attributes, method.Name)) { return; }
+      method.PrintAST(astwr);
+
       Indent(indent);
       string k = method is Constructor ? "constructor" :
         method is LeastLemma ? "least lemma" :

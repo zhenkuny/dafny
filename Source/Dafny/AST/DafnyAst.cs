@@ -17,6 +17,35 @@ using Microsoft.Boogie;
 using System.Diagnostics;
 
 namespace Microsoft.Dafny {
+  public class ASTPrintUtil
+  {
+    public static void PrintFormals(TextWriter astwr, List<Formal> Formals)
+    {
+      astwr.Write("[");
+      string sep = "";
+      foreach (Formal f in Formals) {
+        Contract.Assert(f != null);
+        astwr.Write(sep);
+        sep = ", ";
+        f.PrintAST(astwr);
+      }
+      astwr.WriteLine("],");
+    }
+
+    public static void PrintSpecs(TextWriter astwr, List<AttributedExpression> specs, string kind)
+    {
+      string sep = "";
+      astwr.Write("'{0}':[", kind);
+      foreach (AttributedExpression e in specs) {
+        Contract.Assert(e != null);
+        astwr.Write(sep);
+        sep = ", ";
+        e.PrintAST(astwr);
+      }
+      astwr.WriteLine("],");
+    }
+  }
+
   public class Program {
     [ContractInvariantMethod]
     void ObjectInvariant() {
@@ -6242,42 +6271,15 @@ namespace Microsoft.Dafny {
     }
 
     public void PrintAST(TextWriter astwr) {
-      astwr.Write("{{'ntype':'Function',\n'name':'{0}',\n", Name);
+      astwr.Write("{{'ntype':'Function','name':'{0}','formals':", Name);
 
-      astwr.Write("'formals':[");
-      string sep = "";
-      foreach (Formal f in Formals) {
-        Contract.Assert(f != null);
-        astwr.Write(sep);
-        sep = ", ";
-        f.PrintAST(astwr);
-      }
-      astwr.WriteLine("],");
-
-      sep = "";
-      astwr.Write("'requires':[");
-      foreach (AttributedExpression e in Req) {
-        Contract.Assert(e != null);
-        astwr.Write(sep);
-        sep = ", ";
-        e.PrintAST(astwr);
-      }
-      astwr.WriteLine("],");
-
-      sep = "";
-      astwr.Write("'ensures':[");
-      foreach (AttributedExpression e in Ens) {
-        Contract.Assert(e != null);
-        astwr.Write(sep);
-        sep = ", ";
-        e.PrintAST(astwr);
-      }
-      astwr.WriteLine("],");
-
+      ASTPrintUtil.PrintFormals(astwr, Formals);
+      ASTPrintUtil.PrintSpecs(astwr, Req, "requires");
+      ASTPrintUtil.PrintSpecs(astwr, Ens, "ensures");
+  
       astwr.Write("'fBody':");
       Body.PrintAST(astwr);
 
-      astwr.WriteLine("");
       astwr.Write("}");
     }
 
@@ -6724,6 +6726,18 @@ namespace Microsoft.Dafny {
         return methodBody;
       }
     }
+
+    public void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'ntype':'{0}','name':'{1}','Ins':", WhatKind, Name);
+      ASTPrintUtil.PrintFormals(astwr, Ins);
+      astwr.Write("'Outs':");
+      ASTPrintUtil.PrintFormals(astwr, Outs);
+      ASTPrintUtil.PrintSpecs(astwr, Req, "requires");
+      ASTPrintUtil.PrintSpecs(astwr, Ens, "ensures");
+      astwr.Write("'mBody':");
+      Body.PrintAST(astwr);
+      astwr.Write("}");
+    }
   }
 
   public class Lemma : Method {
@@ -6982,6 +6996,10 @@ namespace Microsoft.Dafny {
           yield return e;
         }
       }
+    }
+
+    public virtual void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'unhandled':'{0}'}}", this.GetType());
     }
   }
 
@@ -7297,6 +7315,10 @@ namespace Microsoft.Dafny {
     public virtual IEnumerable<Statement> SubStatements {
       get { yield break; }
     }
+
+    public virtual void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'unhandled':'{0}'}}", this.GetType());
+    }
   }
 
   public class ExprRhs : AssignmentRhs {
@@ -7316,6 +7338,12 @@ namespace Microsoft.Dafny {
       get {
         yield return Expr;
       }
+    }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{'ntype':'ExprRhs','Expr':");
+      Expr.PrintAST(astwr);
+      astwr.Write("}");
     }
   }
 
@@ -7498,6 +7526,20 @@ namespace Microsoft.Dafny {
         }
       }
     }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{'ntype':'VarDeclStmt','Locals':[");
+      string sep = "";
+      foreach (var e in Locals) {
+        Contract.Assert(e != null);
+        astwr.Write(sep);
+        sep = ", ";
+        e.PrintAST(astwr);
+      }
+      astwr.WriteLine("],'Update':");
+      Update.PrintAST(astwr);
+      astwr.Write("}");
+    }
   }
 
   public class VarDeclPattern : Statement {
@@ -7618,6 +7660,19 @@ namespace Microsoft.Dafny {
       Contract.Requires(lhss.Count != 0 || rhss.Count == 1);
       Rhss = rhss;
       CanMutateKnownState = mutate;
+    }
+
+    public override void PrintAST(TextWriter astwr) {
+      // Lhss doesn't seem to be doing much?
+      astwr.Write("{'ntype':'UpdateStmt','Rhss':[");
+      string sep = "";
+      foreach (var e in Rhss) {
+        Contract.Assert(e != null);
+        astwr.Write(sep);
+        sep = ", ";
+        e.PrintAST(astwr);
+      }
+      astwr.Write("]}");
     }
   }
 
@@ -7847,6 +7902,10 @@ namespace Microsoft.Dafny {
         return Tok;
       }
     }
+
+    public void PrintAST(TextWriter astwr) {
+      astwr.Write("{{'ntype':'LocalVariable','name':'{0}'}}", DisplayName);
+    }
   }
 
   /// <summary>
@@ -7923,6 +7982,18 @@ namespace Microsoft.Dafny {
     public virtual void AppendStmt(Statement s) {
       Contract.Requires(s != null);
       Body.Add(s);
+    }
+
+    public override void PrintAST(TextWriter astwr) {
+      string sep = "";
+      astwr.Write("[");
+      foreach (var e in Body) {
+        Contract.Assert(e != null);
+        astwr.Write(sep);
+        sep = ", ";
+        e.PrintAST(astwr);
+      }
+      astwr.WriteLine("],");
     }
   }
 
@@ -12968,6 +13039,12 @@ namespace Microsoft.Dafny {
       this.SuffixName = suffixName;
       OptTypeArguments = optTypeArguments;
     }
+
+    public override void PrintAST(TextWriter astwr) {
+      astwr.Write("{'ntype':'ExprDotName','Lhs':");
+      Lhs.PrintAST(astwr);
+      astwr.Write(",'SuffixName':'{0}'}}", SuffixName);
+    }
   }
 
   /// <summary>
@@ -12993,8 +13070,10 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{'ntype':'ApplySuffix','args':");
+      astwr.Write("{'ntype':'ApplySuffix','Bindings':");
       Bindings.PrintAST(astwr);
+      astwr.Write(",'Lhs':");
+      Lhs.PrintAST(astwr);
       astwr.Write("}");
     }
   }
