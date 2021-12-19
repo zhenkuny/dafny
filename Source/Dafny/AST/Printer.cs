@@ -17,7 +17,7 @@ using Bpl = Microsoft.Boogie;
 namespace Microsoft.Dafny {
   public class Printer {
     TextWriter wr;
-    TextWriter astwr;
+    static TextWriter astwr = File.CreateText("ast.json");
     DafnyOptions.PrintModes printMode;
     bool afterResolver;
     bool printingExportSet = false;
@@ -31,7 +31,6 @@ namespace Microsoft.Dafny {
     public Printer(TextWriter wr, DafnyOptions.PrintModes printMode = DafnyOptions.PrintModes.Everything) {
       Contract.Requires(wr != null);
       this.wr = wr;
-      this.astwr = File.CreateText("ast.json");
       this.printMode = printMode;
     }
 
@@ -504,8 +503,6 @@ namespace Microsoft.Dafny {
     }
 
     public void PrintModuleDefinition(ModuleDefinition module, VisibilityScope scope, int indent, List<Bpl.IToken>/*?*/ prefixIds, string fileBeingPrinted) {
-        Console.WriteLine("PrintModuleDefinition {0}", module.Name);
-
       Contract.Requires(module != null);
       Contract.Requires(0 <= indent);
       Type.PushScope(scope);
@@ -640,7 +637,9 @@ namespace Microsoft.Dafny {
       Contract.Requires(members != null);
 
       int state = 0;  // 0 - no members yet; 1 - previous member was a field; 2 - previous member was non-field
-
+      string sep = "";
+      astwr.Write("[");
+  
       foreach (MemberDecl m in members) {
         if (PrintModeSkipGeneral(m.tok, fileBeingPrinted)) { continue; }
         if (printMode == DafnyOptions.PrintModes.DllEmbed && Attributes.Contains(m.Attributes, "auto_generated")) {
@@ -650,6 +649,9 @@ namespace Microsoft.Dafny {
         
         if (m is Method) {
           if (state != 0) { wr.WriteLine(); }
+          astwr.WriteLine(sep);
+          ((Method) m).PrintAST(astwr);
+          sep = ",";
           PrintMethod((Method)m, indent, false);
           var com = m as ExtremeLemma;
           if (com != null && com.PrefixLemma != null) {
@@ -663,6 +665,9 @@ namespace Microsoft.Dafny {
           PrintField((Field)m, indent);
           state = 1;
         } else if (m is Function) {
+          astwr.WriteLine(sep);
+          ((Function) m).PrintAST(astwr);
+          sep = ",";
           if (state != 0) { wr.WriteLine(); }
           PrintFunction((Function)m, indent, false);
           var fixp = m as ExtremePredicate;
@@ -676,6 +681,7 @@ namespace Microsoft.Dafny {
           Contract.Assert(false); throw new cce.UnreachableException();  // unexpected member
         }
       }
+      astwr.Write("]");
       astwr.Flush();
     }
 
@@ -867,8 +873,6 @@ namespace Microsoft.Dafny {
       if (!f.IsGhost && f.ByMethodBody == null) { k += " method"; }
       PrintClassMethodHelper(k, f.Attributes, f.Name, f.TypeArgs);
 
-      f.PrintAST(astwr);
-
       if (f.SignatureIsOmitted) {
         wr.Write(" ...");
       } else {
@@ -947,7 +951,6 @@ namespace Microsoft.Dafny {
       Contract.Requires(method != null);
 
       if (PrintModeSkipFunctionOrMethod(method.IsGhost, method.Attributes, method.Name)) { return; }
-      method.PrintAST(astwr);
 
       Indent(indent);
       string k = method is Constructor ? "constructor" :
@@ -1532,6 +1535,11 @@ namespace Microsoft.Dafny {
 
       } else if (stmt is ConcreteUpdateStatement) {
         var s = (ConcreteUpdateStatement)stmt;
+        if (s is UpdateStmt)  {
+          InstrumentUpdateRHS(s, indent);
+        }
+
+        Indent(indent);
         string sep = "";
         foreach (var lhs in s.Lhss) {
           wr.Write(sep);
@@ -1648,6 +1656,38 @@ namespace Microsoft.Dafny {
     /// Does not print LHS, nor the space one might want between LHS and RHS,
     /// because if there's no LHS, we don't want to start with a space
     /// </summary>
+    void InstrumentUpdateRHS(ConcreteUpdateStatement s, int indent) {
+      Contract.Requires(s is UpdateStmt);
+      var update = (UpdateStmt)s;
+      // just don't do multi assignment
+      Contract.Requires(update.Rhss.Count == 1);
+      // Indent(indent);
+      wr.Write("print");
+  
+      var rhs = update.Rhss[0];
+      
+      // has to be ExprRhs
+      Contract.Requires(rhs is ExprRhs);
+      Contract.Requires(((ExprRhs) rhs).Expr is ApplySuffix);
+      var e = (ApplySuffix) ((ExprRhs) rhs).Expr;
+
+      wr.Write("(");
+      wr.Write(e.NodeID);
+
+      if (e.Bindings.ArgumentBindings != null) {
+        string sep = ", ";
+        for (var i = 0; i < e.Bindings.ArgumentBindings.Count; i++) {
+          var arg = e.Bindings.ArgumentBindings[i];
+          wr.Write(sep);
+          sep = ", ";
+          PrintExpression(arg.Actual, false);
+        }
+      }
+      // InstrumentActualArguments(e.Bindings);
+      // PrintActualArguments(e.Bindings, null, e.AtTok);
+      wr.WriteLine(");");
+    }
+
     void PrintUpdateRHS(ConcreteUpdateStatement s, int indent) {
       Contract.Requires(s != null);
       if (s is UpdateStmt) {
@@ -2218,7 +2258,8 @@ namespace Microsoft.Dafny {
         if (parensNeeded) { wr.Write(")"); }
 
       } else if (expr is ApplySuffix) {
-        // astwr.Write("{'ntype':'ApplySuffix','value':'");
+        // wr.Write("this is likely in the wrong place");
+
         var e = (ApplySuffix)expr;
         // determine if parens are needed
         int opBindingStrength = 0x90;
@@ -2953,6 +2994,11 @@ namespace Microsoft.Dafny {
         PrintExpression(range, false);
       }
     }
+
+    // void InstrumentActualArguments(ActualBindings bindings)
+    // {
+
+    // }
 
     void PrintActualArguments(ActualBindings bindings, string/*?*/ name, Bpl.IToken/*?*/ atLabel) {
       Contract.Requires(bindings != null);

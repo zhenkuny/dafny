@@ -19,6 +19,13 @@ using System.Diagnostics;
 namespace Microsoft.Dafny {
   public class ASTPrintUtil
   {
+    public static int nodeCounter;
+
+    public static int GetFreshNodeID()
+    {
+        return ++nodeCounter;
+    }
+
     public static void PrintFormals(TextWriter astwr, List<Formal> Formals)
     {
       astwr.Write("[");
@@ -29,7 +36,7 @@ namespace Microsoft.Dafny {
         sep = ", ";
         f.PrintAST(astwr);
       }
-      astwr.WriteLine("],");
+      astwr.Write("],");
     }
 
     public static void PrintSpecs(TextWriter astwr, List<AttributedExpression> specs, string kind)
@@ -42,7 +49,7 @@ namespace Microsoft.Dafny {
         sep = ", ";
         e.PrintAST(astwr);
       }
-      astwr.WriteLine("],");
+      astwr.Write("],");
     }
   }
 
@@ -1854,7 +1861,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(builtIns != null);
       var j = JoinX(a, b, builtIns);
       if (DafnyOptions.O.TypeInferenceDebug) {
-        Console.WriteLine("DEBUG: Meet( {0}, {1} ) = {2}", a, b, j);
+        Console.Write("DEBUG: Meet( {0}, {1} ) = {2}", a, b, j);
       }
       return j;
     }
@@ -2077,7 +2084,7 @@ namespace Microsoft.Dafny {
         }
       }
       if (DafnyOptions.O.TypeInferenceDebug) {
-        Console.WriteLine("DEBUG: Meet( {0}, {1} ) = {2}", a, b, j);
+        Console.Write("DEBUG: Meet( {0}, {1} ) = {2}", a, b, j);
       }
       return j;
     }
@@ -6735,7 +6742,11 @@ namespace Microsoft.Dafny {
       ASTPrintUtil.PrintSpecs(astwr, Req, "requires");
       ASTPrintUtil.PrintSpecs(astwr, Ens, "ensures");
       astwr.Write("'mBody':");
-      Body.PrintAST(astwr);
+      if (Body != null) {
+        Body.PrintAST(astwr);
+      } else {
+        astwr.Write("''");
+      }
       astwr.Write("}");
     }
   }
@@ -7536,7 +7547,7 @@ namespace Microsoft.Dafny {
         sep = ", ";
         e.PrintAST(astwr);
       }
-      astwr.WriteLine("],'Update':");
+      astwr.Write("],'Update':");
       Update.PrintAST(astwr);
       astwr.Write("}");
     }
@@ -7993,7 +8004,7 @@ namespace Microsoft.Dafny {
         sep = ", ";
         e.PrintAST(astwr);
       }
-      astwr.WriteLine("],");
+      astwr.Write("],");
     }
   }
 
@@ -9899,7 +9910,7 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{{'nytpe':'LiteralExpr','value':'{0}'}}", Value);
+      astwr.Write("{{'nytpe':'LiteralExpr','term':'{0}'}}", Value);
     }
   }
 
@@ -13015,7 +13026,7 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{{'ntype':'NameSegment', 'value':'{0}'}}", Name);
+      astwr.Write("{{'ntype':'NameSegment', 'Name':'{0}'}}", Name);
     }
   }
 
@@ -13053,6 +13064,7 @@ namespace Microsoft.Dafny {
   public class ApplySuffix : SuffixExpr {
     public readonly IToken/*?*/ AtTok;
     public readonly ActualBindings Bindings;
+    public int NodeID;
     public List<Expression> Args => Bindings.Arguments;
 
     [ContractInvariantMethod]
@@ -13066,11 +13078,14 @@ namespace Microsoft.Dafny {
       Contract.Requires(lhs != null);
       Contract.Requires(cce.NonNullElements(args));
       AtTok = atLabel;
+      NodeID = -1;
       Bindings = new ActualBindings(args);
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{'ntype':'ApplySuffix','Bindings':");
+      Contract.Assert(NodeID == -1);
+      this.NodeID = ASTPrintUtil.GetFreshNodeID();
+      astwr.Write("{{'ntype':'ApplySuffix','nid':'{0}','Bindings':", NodeID);
       Bindings.PrintAST(astwr);
       astwr.Write(",'Lhs':");
       Lhs.PrintAST(astwr);
