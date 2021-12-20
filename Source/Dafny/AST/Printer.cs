@@ -1539,7 +1539,6 @@ namespace Microsoft.Dafny {
           InstrumentUpdateRHS(s, indent);
         }
 
-        Indent(indent);
         string sep = "";
         foreach (var lhs in s.Lhss) {
           wr.Write(sep);
@@ -1567,6 +1566,11 @@ namespace Microsoft.Dafny {
           // then some of these ghosts are auto-converted to ghost, so we should not emit the "ghost" keyword.
           wr.Write("ghost ");
         }
+
+        if (s.Update != null)  {
+          InstrumentUpdateRHS(s.Update, indent);
+        }
+
         wr.Write("var");
         string sep = "";
         foreach (var local in s.Locals) {
@@ -1685,7 +1689,8 @@ namespace Microsoft.Dafny {
       }
       // InstrumentActualArguments(e.Bindings);
       // PrintActualArguments(e.Bindings, null, e.AtTok);
-      wr.WriteLine(");");
+      wr.WriteLine(");print(\"\\n\");");
+      Indent(indent);
     }
 
     void PrintUpdateRHS(ConcreteUpdateStatement s, int indent) {
