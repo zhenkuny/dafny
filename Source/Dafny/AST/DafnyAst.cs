@@ -6278,13 +6278,13 @@ namespace Microsoft.Dafny {
     }
 
     public void PrintAST(TextWriter astwr) {
-      astwr.Write("{{'ntype':'Function','name':'{0}','formals':", Name);
+      astwr.Write("{{'ntype':'function','name':'{0}','formals':", Name);
 
       ASTPrintUtil.PrintFormals(astwr, Formals);
       ASTPrintUtil.PrintSpecs(astwr, Req, "requires");
       ASTPrintUtil.PrintSpecs(astwr, Ens, "ensures");
   
-      astwr.Write("'fBody':");
+      astwr.Write("'body':");
       Body.PrintAST(astwr);
 
       astwr.Write("}");
@@ -6735,13 +6735,13 @@ namespace Microsoft.Dafny {
     }
 
     public void PrintAST(TextWriter astwr) {
-      astwr.Write("{{'ntype':'{0}','name':'{1}','Ins':", WhatKind, Name);
+      astwr.Write("{{'ntype':'{0}','name':'{1}','ins':", WhatKind, Name);
       ASTPrintUtil.PrintFormals(astwr, Ins);
-      astwr.Write("'Outs':");
+      astwr.Write("'outs':");
       ASTPrintUtil.PrintFormals(astwr, Outs);
       ASTPrintUtil.PrintSpecs(astwr, Req, "requires");
       ASTPrintUtil.PrintSpecs(astwr, Ens, "ensures");
-      astwr.Write("'mBody':");
+      astwr.Write("'body':");
       if (Body != null) {
         Body.PrintAST(astwr);
       } else {
@@ -7352,7 +7352,7 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{'ntype':'ExprRhs','Expr':");
+      astwr.Write("{'ntype':'ExprRhs','expr':");
       Expr.PrintAST(astwr);
       astwr.Write("}");
     }
@@ -7539,7 +7539,7 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{'ntype':'VarDeclStmt','Locals':[");
+      astwr.Write("{'ntype':'VarDeclStmt','locals':[");
       string sep = "";
       foreach (var e in Locals) {
         Contract.Assert(e != null);
@@ -7547,7 +7547,7 @@ namespace Microsoft.Dafny {
         sep = ", ";
         e.PrintAST(astwr);
       }
-      astwr.Write("],'Update':");
+      astwr.Write("],'update':");
       Update.PrintAST(astwr);
       astwr.Write("}");
     }
@@ -7675,7 +7675,7 @@ namespace Microsoft.Dafny {
 
     public override void PrintAST(TextWriter astwr) {
       // Lhss doesn't seem to be doing much?
-      astwr.Write("{'ntype':'UpdateStmt','Rhss':[");
+      astwr.Write("{'ntype':'UpdateStmt','rhss':[");
       string sep = "";
       foreach (var e in Rhss) {
         Contract.Assert(e != null);
@@ -9972,7 +9972,7 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{{'ntype':'DatatypeValue','DatatypeName':'{0}','MemberName':'{1}','Bindings':", DatatypeName, MemberName);
+      astwr.Write("{{'ntype':'DatatypeValue','datatypename':'{0}','membername':'{1}','bindings':", DatatypeName, MemberName);
       Bindings.PrintAST(astwr);
       astwr.Write("}");
     }
@@ -11330,21 +11330,21 @@ namespace Microsoft.Dafny {
 
     public override void  PrintAST(TextWriter astwr) {
       astwr.Write("{'ntype':'LetExpr'");
-      astwr.Write(",'LHSs':[");
+      astwr.Write(",'lhss':[");
       string sep = "";
       foreach (var lhs in LHSs) {
         astwr.Write(sep);
         sep = ", ";
         lhs.PrintAST(astwr);
       }
-      astwr.Write("],'RHSs':[");
+      astwr.Write("],'rhss':[");
       sep = "";
       foreach (var rhs in RHSs) {
         astwr.Write(sep);
         sep = ", ";
         rhs.PrintAST(astwr);
       }
-      astwr.Write("],'Body':");
+      astwr.Write("],'body':");
       Body.PrintAST(astwr);
       astwr.Write("}");
     }
@@ -13026,7 +13026,7 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{{'ntype':'NameSegment', 'Name':'{0}'}}", Name);
+      astwr.Write("{{'ntype':'NameSegment', 'name':'{0}'}}", Name);
     }
   }
 
@@ -13052,9 +13052,9 @@ namespace Microsoft.Dafny {
     }
 
     public override void PrintAST(TextWriter astwr) {
-      astwr.Write("{'ntype':'ExprDotName','Lhs':");
+      astwr.Write("{'ntype':'ExprDotName','lhs':");
       Lhs.PrintAST(astwr);
-      astwr.Write(",'SuffixName':'{0}'}}", SuffixName);
+      astwr.Write(",'suffixname':'{0}'}}", SuffixName);
     }
   }
 
@@ -13085,9 +13085,9 @@ namespace Microsoft.Dafny {
     public override void PrintAST(TextWriter astwr) {
       Contract.Assert(NodeID == -1);
       this.NodeID = ASTPrintUtil.GetFreshNodeID();
-      astwr.Write("{{'ntype':'ApplySuffix','nid':'{0}','Bindings':", NodeID);
+      astwr.Write("{{'ntype':'ApplySuffix','nid':'{0}','bindings':", NodeID);
       Bindings.PrintAST(astwr);
-      astwr.Write(",'Lhs':");
+      astwr.Write(",'lhs':");
       Lhs.PrintAST(astwr);
       astwr.Write("}");
     }
