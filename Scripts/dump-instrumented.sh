@@ -1,0 +1,1 @@
+./Binaries/Dafny Experiment/Test.dfy /compile:0 /dprint Experiment/Instrumented.dfy /printMode:NoIncludes
