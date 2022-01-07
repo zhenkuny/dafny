@@ -23,12 +23,11 @@ class Lemma(Callable):
     def __init__(self, member):
         Callable.__init__(self, member)
 
-
 class Function(Callable):
     def __init__(self, member):
         Callable.__init__(self, member)
 
-class Parser:
+class DafnyParser:
     def _parse_main(self):
         main_method = self.methods[MAIN_NAME]
         stmts = main_method.body
@@ -112,5 +111,5 @@ class Parser:
             print(method.calls)
 
 if __name__ == "__main__":
-    p = Parser("dw_add")
+    p = DafnyParser("dw_add")
     p.load_trace("Generated/out.trace")
