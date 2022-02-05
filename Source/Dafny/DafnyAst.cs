@@ -6971,13 +6971,15 @@ namespace Microsoft.Dafny {
   public class AssertStmt : PredicateStmt {
     public readonly BlockStmt Proof;
     public readonly AssertLabel Label;
-    public AssertStmt(IToken tok, IToken endTok, Expression expr, BlockStmt/*?*/ proof, AssertLabel/*?*/ label, Attributes attrs)
+    public readonly bool Grobner;
+    public AssertStmt(IToken tok, IToken endTok, Expression expr, BlockStmt/*?*/ proof, AssertLabel/*?*/ label, Attributes attrs, bool grobner=false)
       : base(tok, endTok, expr, attrs) {
       Contract.Requires(tok != null);
       Contract.Requires(endTok != null);
       Contract.Requires(expr != null);
       Proof = proof;
       Label = label;
+      Grobner = grobner;
     }
     public override IEnumerable<Statement> SubStatements {
       get {

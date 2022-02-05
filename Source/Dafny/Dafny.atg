@@ -2333,6 +2333,7 @@ OneStmt<out Statement/*!*/ s>
   | IfStmt<out s>
   | WhileStmt<out s>
   | AssertStmt<out s, false>
+  | GBAssertStmt<out s, false>
   | AssumeStmt<out s>
   | BreakStmt<out s>
   | CalcStmt<out s>
@@ -2931,12 +2932,42 @@ AssertStmt<out Statement/*!*/ s, bool inExprContext>
     ";"
   )
   (. if (dotdotdot != null) {
-       s = new SkeletonStatement(new AssertStmt(x, t, new LiteralExpr(x, true), null, null, attrs), dotdotdot, null);
+       s = new SkeletonStatement(new AssertStmt(x, t, new LiteralExpr(x, true), null, null, attrs, false), dotdotdot, null);
      } else {
-       s = new AssertStmt(x, t, e, proof, lbl == null ? null : new AssertLabel(lbl, lbl.val), attrs);
+       s = new AssertStmt(x, t, e, proof, lbl == null ? null : new AssertLabel(lbl, lbl.val), attrs, false);
      }
   .)
   .
+
+GBAssertStmt<out Statement/*!*/ s, bool inExprContext>
+= (. Contract.Ensures(Contract.ValueAtReturn(out s) != null); IToken/*!*/ x;
+     Expression e = dummyExpr; Attributes attrs = null;
+     IToken dotdotdot = null;
+     BlockStmt proof = null;
+     IToken proofStart, proofEnd;
+     IToken lbl = null;
+  .)
+  "gbassert"                                     (. x = t; .)
+  { Attribute<ref attrs> }
+  ( [ IF(IsLabel(!inExprContext))
+      LabelName<out lbl> ":"
+    ]
+    Expression<out e, false, true>
+    ( "by"
+      BlockStmt<out proof, out proofStart, out proofEnd>
+    | ";"
+    )
+  | ellipsis                                   (. dotdotdot = t; .)
+    ";"
+  )
+  (. if (dotdotdot != null) {
+       s = new SkeletonStatement(new AssertStmt(x, t, new LiteralExpr(x, true), null, null, attrs, true), dotdotdot, null);
+     } else {
+       s = new AssertStmt(x, t, e, proof, lbl == null ? null : new AssertLabel(lbl, lbl.val), attrs, true);
+     }
+  .)
+  .
+
 
 /*------------------------------------------------------------------------*/
 ExpectStmt<out Statement/*!*/ s>
@@ -3865,6 +3896,7 @@ IfExpression<out Expression e, bool allowLemma, bool allowLambda, bool allowBitw
 StmtInExpr<out Statement s>
 = (. s = dummyStmt; .)
   ( AssertStmt<out s, true>
+  | GBAssertStmt<out s, true>
   | ExpectStmt<out s>
   | AssumeStmt<out s>
   | RevealStmt<out s>
