@@ -257,10 +257,8 @@ namespace Microsoft.Dafny {
       {
           StartInfo = new ProcessStartInfo
           {
-              FileName = "bash",
-              Arguments = "/home/yizhou7/dafny/Scripts/singular.sh test.sv",
-              // FileName = "Singular",
-              // Arguments = "--quiet test.sv",
+              FileName = "timeout",
+              Arguments = "5 Singular --quiet test.sv",
               UseShellExecute = false,
               RedirectStandardOutput = true,
               CreateNoWindow = true
@@ -268,8 +266,8 @@ namespace Microsoft.Dafny {
       };
 
       proc.Start();
-      string output = proc.StandardOutput.ReadToEnd();
       proc.WaitForExit();
+      string output = proc.StandardOutput.ReadToEnd();
 
       if (output != "0\n") {
         Console.WriteLine("Error: Grobner assert failed with: {0}", output);
