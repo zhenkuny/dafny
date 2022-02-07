@@ -135,7 +135,10 @@ namespace Microsoft.Dafny {
         this.variables.Add(name);
         return name;
       } else if (expr is LiteralExpr) {
-        return String.Format("({0})", (expr as LiteralExpr).Value) ;
+        return String.Format("({0})", (expr as LiteralExpr).Value);
+      } else if (expr is NegationExpression) {
+        var sub = this.EncodeSubExpr((expr as NegationExpression).E);
+        return String.Format("(-{0})", sub);
       } else {
         Console.WriteLine("unhandled expr: {0}", expr);
         throw new cce.UnreachableException();
@@ -254,24 +257,22 @@ namespace Microsoft.Dafny {
       {
           StartInfo = new ProcessStartInfo
           {
-              FileName = "Singular",
-              Arguments = "--quiet test.sv",
+              FileName = "bash",
+              Arguments = "/home/yizhou7/dafny/Scripts/singular.sh test.sv",
+              // FileName = "Singular",
+              // Arguments = "--quiet test.sv",
               UseShellExecute = false,
               RedirectStandardOutput = true,
               CreateNoWindow = true
           }
       };
 
-      var outputBuilder = new StringBuilder();
-      proc.OutputDataReceived += new DataReceivedEventHandler((sender, e) => 
-                                  { outputBuilder.Append(e.Data); });
-
       proc.Start();
-      proc.BeginOutputReadLine();
-      proc.WaitForExit(1000);
+      string output = proc.StandardOutput.ReadToEnd();
+      proc.WaitForExit();
 
-      if (outputBuilder.ToString() != "0") {
-        Console.WriteLine("Error: Grobner assert failed");
+      if (output != "0\n") {
+        Console.WriteLine("Error: Grobner assert failed with: {0}", output);
         throw new cce.UnreachableException();
       } else {
         Console.WriteLine("Grobner assert succeeded");
