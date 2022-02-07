@@ -103,6 +103,7 @@ namespace Microsoft.Dafny {
 
     List<string> polys;
     HashSet<string> variables;
+    Dictionary<string, string> opaqueExprs;
 
     TextWriter writer;
 
@@ -111,6 +112,28 @@ namespace Microsoft.Dafny {
       this.tempVarCount += 1;
       this.variables.Add(name);
       return name;
+    }
+
+    string OpacifySubExpr(Expression expr) {
+      if (expr is SeqSelectExpr) {
+        var seqSelExpr = expr as SeqSelectExpr;
+        if (!seqSelExpr.SelectOne) {
+          Console.WriteLine("unhandled seqSelExpr");
+          throw new cce.UnreachableException();
+        }
+        var seq = this.OpacifySubExpr(seqSelExpr.Seq);
+        var index = this.OpacifySubExpr(seqSelExpr.E0);
+        return String.Format("{0}[{1}]", seq, index);
+      } else if (expr is NameSegment) {
+        // do not add to the variable set
+        var name = (expr as NameSegment).Name;
+        return name;
+      } else if (expr is LiteralExpr) {
+        return String.Format("{0}", (expr as LiteralExpr).Value);
+      } else {
+        Console.WriteLine("unhandled OpacifySubExpr: {0}", expr);
+        throw new cce.UnreachableException();
+      }
     }
 
     string EncodeSubExpr(Expression expr) {
@@ -139,9 +162,18 @@ namespace Microsoft.Dafny {
       } else if (expr is NegationExpression) {
         var sub = this.EncodeSubExpr((expr as NegationExpression).E);
         return String.Format("(-{0})", sub);
+      } else if (expr is ParensExpression) {
+        var sub = this.EncodeSubExpr((expr as ParensExpression).E);
+        return String.Format("({0})", sub);
       } else {
-        Console.WriteLine("unhandled expr: {0}", expr);
-        throw new cce.UnreachableException();
+        // other expressions are treated as opaque
+        // we offer limited support to create temp variables that represent their values
+        var sub = this.OpacifySubExpr(expr);
+        if (!this.opaqueExprs.ContainsKey(sub)) {
+          var temp = this.AllocateFreshTemp();
+          this.opaqueExprs.Add(sub, temp);
+        }
+        return this.opaqueExprs[sub];
       }
     }
 
@@ -251,14 +283,15 @@ namespace Microsoft.Dafny {
       // this.writer = new StreamWriter(Console.OpenStandardOutput());
       this.writer = new StreamWriter("test.sv");
       this.polys = new List<string>();
+      this.opaqueExprs = new Dictionary<string, string>();
       this.EncodeQuery(stmt as AssertStmt);
 
       var proc = new Process 
       {
           StartInfo = new ProcessStartInfo
           {
-              FileName = "timeout",
-              Arguments = "5 Singular --quiet test.sv",
+              FileName = "Singular",
+              Arguments = "--quiet test.sv",
               UseShellExecute = false,
               RedirectStandardOutput = true,
               CreateNoWindow = true
@@ -266,7 +299,8 @@ namespace Microsoft.Dafny {
       };
 
       proc.Start();
-      proc.WaitForExit();
+      // set timeout
+      proc.WaitForExit(5000);
       string output = proc.StandardOutput.ReadToEnd();
 
       if (output != "0\n") {
