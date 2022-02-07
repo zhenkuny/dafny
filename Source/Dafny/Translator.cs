@@ -6,6 +6,7 @@
 //
 //-----------------------------------------------------------------------------
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -10289,6 +10290,68 @@ namespace Microsoft.Dafny {
         return null;
       }
     }
+    
+    class SingularDriver
+    {
+      public HashSet<string> varibles;
+      static uint tempVarCount = 0;
+      TextWriter writer;
+
+      void ParseSubExpr(Expression expr)
+      {
+        if (expr is BinaryExpr) {
+          var binExpr = expr as BinaryExpr;
+          this.ParseSubExpr(binExpr.E0);
+          this.ParseSubExpr(binExpr.E1);
+        } else if (expr is NameSegment) {
+          this.varibles.Add((expr as NameSegment).Name);
+          // Console.WriteLine("name: {0}", );
+        } else if (expr is LiteralExpr) {
+          Console.WriteLine("value: {0}", (expr as LiteralExpr).Value);
+          Console.WriteLine("value: {0}", (expr as LiteralExpr).tok);
+          // Console.WriteLine("value: {0}", (expr as LiteralExpr).Type);
+        } else {
+          Console.WriteLine("unhandled expr: {0}", expr);
+        }
+      }
+
+      void ParseGeneratorExpr(Expression expr) {
+        if (expr is BinaryExpr) {
+          var binExpr = expr as BinaryExpr;
+          if (binExpr.Op != BinaryExpr.Opcode.Eq) {
+            Console.WriteLine("Error: Grobner generator expression should be an equality or congruence");
+            throw new cce.UnreachableException();
+          }
+          this.ParseSubExpr(binExpr.E0);
+          this.ParseSubExpr(binExpr.E1);
+        } else {
+          Console.WriteLine("unhandled generator expr: {0}", expr);
+        }
+      }
+
+      public SingularDriver(Statement stmt) {
+        if (stmt == null || !(stmt is AssertStmt)) {
+          Console.WriteLine("Error: Grobner Assert is not an AssertStmt");
+          throw new cce.UnreachableException();
+        }
+        this.varibles = new HashSet<string>();
+        this.writer = new StreamWriter(Console.OpenStandardOutput());
+        var assertStmt = stmt as AssertStmt;
+        var proof = assertStmt.Proof;
+        // this.ParseExpr(assertStmt);
+
+        foreach (Statement ss in proof.Body) {
+          if (ss is AssertStmt) {
+            this.ParseGeneratorExpr((ss as AssertStmt).Expr);
+          } else if (ss is AssumeStmt) {
+            this.ParseGeneratorExpr((ss as AssumeStmt).Expr);
+          } else {
+            Console.WriteLine("Error: Unexpected Grobner Poorf Body Statement {0}", ss);
+            throw new cce.UnreachableException();
+          }
+        }
+      }
+    }
 
     void TrStmt(Statement stmt, BoogieStmtListBuilder builder, List<Variable> locals, ExpressionTranslator etran)
     {
@@ -10321,7 +10384,16 @@ namespace Microsoft.Dafny {
           if (assertStmt != null && assertStmt.Proof != null) {
             proofBuilder = new BoogieStmtListBuilder(this);
             AddComment(proofBuilder, stmt, "assert statement proof");
-            TrStmt(((AssertStmt)stmt).Proof, proofBuilder, locals, etran);
+            if (assertStmt.Grobner) {
+              AddComment(proofBuilder, stmt, "assert by Grobner");
+              var singularDriver = new SingularDriver(stmt);
+              // append assume false, the toks are messed up?
+              var falseBody = new LiteralExpr(stmt.Tok, false);
+              falseBody.Type = new BoolType();
+              var assumeFalse = new AssumeStmt(stmt.Tok, stmt.EndTok, falseBody, null);
+              assertStmt.Proof.Body.Add(assumeFalse);
+            }
+            TrStmt(assertStmt.Proof, proofBuilder, locals, etran);
           } else if (assertStmt != null && assertStmt.Label != null) {
             proofBuilder = new BoogieStmtListBuilder(this);
             AddComment(proofBuilder, stmt, "assert statement proof");
