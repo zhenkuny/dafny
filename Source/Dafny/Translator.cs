@@ -10293,63 +10293,154 @@ namespace Microsoft.Dafny {
     
     class SingularDriver
     {
-      public HashSet<string> varibles;
-      static uint tempVarCount = 0;
+      // Dictionary<string, string> ufMap;
+      HashSet<string> variables;
+      List<string> polys;
+      uint tempVarCount = 0;
       TextWriter writer;
 
-      void ParseSubExpr(Expression expr)
-      {
+      string AllocateFreshTemp() {
+        var name = String.Format("tpv_{0}", this.tempVarCount);
+        this.tempVarCount += 1;
+        this.variables.Add(name);
+        return name;
+      }
+
+      string EncodeSubExpr(Expression expr) {
         if (expr is BinaryExpr) {
           var binExpr = expr as BinaryExpr;
-          this.ParseSubExpr(binExpr.E0);
-          this.ParseSubExpr(binExpr.E1);
+          var op = binExpr.Op;
+          var left = this.EncodeSubExpr(binExpr.E0);
+          var right = this.EncodeSubExpr(binExpr.E1);
+
+          if (op == BinaryExpr.Opcode.Add) {
+            return String.Format("({0} + {1})", left, right);
+          } else if (op == BinaryExpr.Opcode.Sub) {
+            return String.Format("({0} - {1})", left, right);
+          } else if (op == BinaryExpr.Opcode.Mul) {
+            return String.Format("({0} * {1})", left, right);
+          } else {
+            Console.WriteLine("unhandled expr: {0}", expr);
+            throw new cce.UnreachableException();
+          }
         } else if (expr is NameSegment) {
-          this.varibles.Add((expr as NameSegment).Name);
-          // Console.WriteLine("name: {0}", );
+          var name = (expr as NameSegment).Name;
+          this.variables.Add(name);
+          return name;
         } else if (expr is LiteralExpr) {
-          Console.WriteLine("value: {0}", (expr as LiteralExpr).Value);
-          Console.WriteLine("value: {0}", (expr as LiteralExpr).tok);
-          // Console.WriteLine("value: {0}", (expr as LiteralExpr).Type);
+          return String.Format("({0})", (expr as LiteralExpr).Value) ;
         } else {
           Console.WriteLine("unhandled expr: {0}", expr);
+          throw new cce.UnreachableException();
         }
       }
 
-      void ParseGeneratorExpr(Expression expr) {
+      string EncodeEqualityPoly(Expression e0, Expression e1) {
+        var left = this.EncodeSubExpr(e0);
+        var right = this.EncodeSubExpr(e1);
+        var poly = String.Format("{0} - {1}", left, right);
+        return poly;
+      }
+
+      void EncodeGeneratorPoly(Expression expr) {
         if (expr is BinaryExpr) {
           var binExpr = expr as BinaryExpr;
           if (binExpr.Op != BinaryExpr.Opcode.Eq) {
-            Console.WriteLine("Error: Grobner generator expression should be an equality or congruence");
+            Console.WriteLine("Error: Grobner generator expression should be an Equality or IsModEquivalent");
             throw new cce.UnreachableException();
           }
-          this.ParseSubExpr(binExpr.E0);
-          this.ParseSubExpr(binExpr.E1);
+          polys.Add(this.EncodeEqualityPoly(binExpr.E0, binExpr.E1));
+        } else if (expr is ApplySuffix) {
+          var appplyExpr = expr as ApplySuffix;
+          if (!(appplyExpr.Lhs is NameSegment) || !(appplyExpr.Lhs as NameSegment).Name.Equals("IsModEquivalent")) {
+            Console.WriteLine("Error: Grobner generator expression should be an Equality or IsModEquivalent");
+            throw new cce.UnreachableException();
+          }
+          var left = this.EncodeSubExpr(appplyExpr.Args[0]);
+          var right = this.EncodeSubExpr(appplyExpr.Args[1]);
+          var mod = this.EncodeSubExpr(appplyExpr.Args[2]);
+          var temp = this.AllocateFreshTemp();
+          var poly = String.Format("{0} - {1} - {2} * {3}", left, right, mod, temp);
+          polys.Add(poly);
         } else {
           Console.WriteLine("unhandled generator expr: {0}", expr);
+          throw new cce.UnreachableException();
         }
       }
 
-      public SingularDriver(Statement stmt) {
-        if (stmt == null || !(stmt is AssertStmt)) {
-          Console.WriteLine("Error: Grobner Assert is not an AssertStmt");
+      string EncodeQueryPoly(Expression expr) {
+        if (expr is BinaryExpr) {
+          var binExpr = expr as BinaryExpr;
+          if (binExpr.Op != BinaryExpr.Opcode.Eq) {
+            Console.WriteLine("Error: Grobner generator expression should be an Equality or IsModEquivalent");
+            throw new cce.UnreachableException();
+          }
+          return this.EncodeEqualityPoly(binExpr.E0, binExpr.E1);
+        } else if (expr is ApplySuffix) {
+          var appplyExpr = expr as ApplySuffix;
+          if (!(appplyExpr.Lhs is NameSegment) || !(appplyExpr.Lhs as NameSegment).Name.Equals("IsModEquivalent")) {
+            Console.WriteLine("Error: Grobner generator expression should be an Equality or IsModEquivalent");
+            throw new cce.UnreachableException();
+          }
+          var mod = this.EncodeSubExpr(appplyExpr.Args[2]);
+          // add the mod to the generators
+          polys.Add(mod); 
+          return this.EncodeEqualityPoly(appplyExpr.Args[0], appplyExpr.Args[1]);
+        } else {
+          Console.WriteLine("unhandled generator expr: {0}", expr);
           throw new cce.UnreachableException();
         }
-        this.varibles = new HashSet<string>();
+      }
+
+      
+
+      public SingularDriver(Statement stmt) {
+        if (stmt == null || !(stmt is AssertStmt)) {
+          Console.WriteLine("Error: Grobner assert should be an AssertStmt");
+          throw new cce.UnreachableException();
+        }
+        // this.ufMap = new Dictionary<string, string>();
+        this.variables = new HashSet<string>();
         this.writer = new StreamWriter(Console.OpenStandardOutput());
+        this.polys = new List<string>();
         var assertStmt = stmt as AssertStmt;
         var proof = assertStmt.Proof;
-        // this.ParseExpr(assertStmt);
 
         foreach (Statement ss in proof.Body) {
           if (ss is AssertStmt) {
-            this.ParseGeneratorExpr((ss as AssertStmt).Expr);
+            this.EncodeGeneratorPoly((ss as AssertStmt).Expr);
           } else if (ss is AssumeStmt) {
-            this.ParseGeneratorExpr((ss as AssumeStmt).Expr);
+            this.EncodeGeneratorPoly((ss as AssumeStmt).Expr);
           } else {
             Console.WriteLine("Error: Unexpected Grobner Poorf Body Statement {0}", ss);
             throw new cce.UnreachableException();
           }
         }
+
+        var poly = EncodeQueryPoly(assertStmt.Expr);
+
+        this.writer.Write("ring r=integer,(");
+
+        string separator = ""; 
+        foreach (string v in this.variables) {
+          this.writer.Write(separator);
+          this.writer.Write(v);
+          separator = ",";
+        }
+        this.writer.Write("),dp;\n");
+
+        separator = ""; 
+        this.writer.WriteLine("ideal I = ");
+        foreach (string s in this.polys) {
+          this.writer.Write(separator);
+          this.writer.Write(s);
+          separator = ",\n";
+        }
+        this.writer.Write(";\n");
+		    this.writer.WriteLine("ideal G = groebner(I);");
+        this.writer.WriteLine("reduce({0}, G);", poly);
+        this.writer.WriteLine("quit;");
+        this.writer.Flush();
       }
     }
 
