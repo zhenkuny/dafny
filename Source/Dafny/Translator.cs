@@ -98,6 +98,8 @@ namespace Microsoft.Dafny {
 
   class SingularDriver
   {
+    static uint queryCount = 0;
+
     uint tempVarCount = 0;
     static string tempVarPrefix = "tpv_";
 
@@ -281,7 +283,10 @@ namespace Microsoft.Dafny {
       }
       this.variables = new HashSet<string>();
       // this.writer = new StreamWriter(Console.OpenStandardOutput());
-      this.writer = new StreamWriter("test.sv");
+      var queryFileName = String.Format("test{0}.sv", queryCount);
+      SingularDriver.queryCount += 1;
+
+      this.writer = new StreamWriter(queryFileName);
       this.polys = new List<string>();
       this.opaqueExprs = new Dictionary<string, string>();
       this.EncodeQuery(stmt as AssertStmt);
@@ -291,7 +296,7 @@ namespace Microsoft.Dafny {
           StartInfo = new ProcessStartInfo
           {
               FileName = "Singular",
-              Arguments = "--quiet test.sv",
+              Arguments = String.Format("--quiet {0}", queryFileName),
               UseShellExecute = false,
               RedirectStandardOutput = true,
               CreateNoWindow = true
@@ -309,6 +314,8 @@ namespace Microsoft.Dafny {
       } else {
         Console.WriteLine("Grobner assert succeeded");
       }
+
+      // File.Delete(queryFileName);
     }
   }
 
