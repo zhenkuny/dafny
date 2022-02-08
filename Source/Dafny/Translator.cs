@@ -99,15 +99,19 @@ namespace Microsoft.Dafny {
   class SingularDriver
   {
     static uint queryCount = 0;
-
-    uint tempVarCount = 0;
     static string tempVarPrefix = "tpv_";
 
+    uint tempVarCount = 0;
     List<string> polys;
     HashSet<string> variables;
     Dictionary<string, string> opaqueExprs;
 
     TextWriter writer;
+
+    enum AssertType {
+      Equality,
+      Congruence
+    }
 
     string AllocateFreshTemp() {
       var name = String.Format("{0}{1}", SingularDriver.tempVarPrefix, this.tempVarCount);
@@ -117,8 +121,7 @@ namespace Microsoft.Dafny {
     }
 
     string OpacifySubExpr(Expression expr) {
-      if (expr is SeqSelectExpr) {
-        var seqSelExpr = expr as SeqSelectExpr;
+      if (expr is SeqSelectExpr seqSelExpr) {
         if (!seqSelExpr.SelectOne) {
           Console.WriteLine("unhandled seqSelExpr");
           throw new cce.UnreachableException();
@@ -139,8 +142,7 @@ namespace Microsoft.Dafny {
     }
 
     string EncodeSubExpr(Expression expr) {
-      if (expr is BinaryExpr) {
-        var binExpr = expr as BinaryExpr;
+      if (expr is BinaryExpr binExpr) {
         var op = binExpr.Op;
         var left = this.EncodeSubExpr(binExpr.E0);
         var right = this.EncodeSubExpr(binExpr.E1);
@@ -186,26 +188,37 @@ namespace Microsoft.Dafny {
       return poly;
     }
 
-    void EncodeGeneratorPoly(Expression expr) {
-      if (expr is BinaryExpr) {
-        var binExpr = expr as BinaryExpr;
+    AssertType CheckAssertType(Expression expr) {
+      if (expr is BinaryExpr binExpr) {
         if (binExpr.Op != BinaryExpr.Opcode.Eq) {
           Console.WriteLine("Error: Grobner generator expression should be an Equality or IsModEquivalent");
           throw new cce.UnreachableException();
         }
-        polys.Add(this.EncodeEqualityPoly(binExpr.E0, binExpr.E1));
-      } else if (expr is ApplySuffix) {
-        var appplyExpr = expr as ApplySuffix;
+        return AssertType.Equality;
+      } else if (expr is ApplySuffix appplyExpr) {
         if (!(appplyExpr.Lhs is NameSegment) || !(appplyExpr.Lhs as NameSegment).Name.Equals("IsModEquivalent")) {
-          Console.WriteLine("Error: Grobner generator expression should be an Equality or IsModEquivalent");
+          Console.WriteLine("Error: Grobner query expression should be an Equality or IsModEquivalent");
           throw new cce.UnreachableException();
         }
-        var left = this.EncodeSubExpr(appplyExpr.Args[0]);
-        var right = this.EncodeSubExpr(appplyExpr.Args[1]);
+        return AssertType.Congruence;
+      }
+      Console.WriteLine("unhandled generator expr: {0}", expr);
+      throw new cce.UnreachableException();
+    }
+
+    void EncodeGeneratorPoly(Expression expr) {
+      var type = CheckAssertType(expr);
+      if (type is AssertType.Equality) {
+        var binExpr = expr as BinaryExpr;
+        var poly = this.EncodeEqualityPoly(binExpr.E0, binExpr.E1);
+        this.polys.Add(poly);
+      } else if (type is AssertType.Congruence) {
+        var appplyExpr = expr as ApplySuffix;
+        var diff = this.EncodeEqualityPoly(appplyExpr.Args[0], appplyExpr.Args[1]);
         var mod = this.EncodeSubExpr(appplyExpr.Args[2]);
         var temp = this.AllocateFreshTemp();
-        var poly = String.Format("{0} - {1} - {2} * {3}", left, right, mod, temp);
-        polys.Add(poly);
+        var poly = String.Format("{0} - {1} * {2}", diff, mod, temp);
+        this.polys.Add(poly);
       } else {
         Console.WriteLine("unhandled generator expr: {0}", expr);
         throw new cce.UnreachableException();
@@ -213,22 +226,15 @@ namespace Microsoft.Dafny {
     }
 
     string EncodeQueryPoly(Expression expr) {
-      if (expr is BinaryExpr) {
+      var type = CheckAssertType(expr);
+      if (type is AssertType.Equality) {
         var binExpr = expr as BinaryExpr;
-        if (binExpr.Op != BinaryExpr.Opcode.Eq) {
-          Console.WriteLine("Error: Grobner query expression should be an Equality or IsModEquivalent");
-          throw new cce.UnreachableException();
-        }
         return this.EncodeEqualityPoly(binExpr.E0, binExpr.E1);
-      } else if (expr is ApplySuffix) {
+      } else if (type is AssertType.Congruence) {
         var appplyExpr = expr as ApplySuffix;
-        if (!(appplyExpr.Lhs is NameSegment) || !(appplyExpr.Lhs as NameSegment).Name.Equals("IsModEquivalent")) {
-          Console.WriteLine("Error: Grobner query expression should be an Equality or IsModEquivalent");
-          throw new cce.UnreachableException();
-        }
         var mod = this.EncodeSubExpr(appplyExpr.Args[2]);
         // add the mod to the generators
-        polys.Add(mod); 
+        this.polys.Add(mod); 
         return this.EncodeEqualityPoly(appplyExpr.Args[0], appplyExpr.Args[1]);
       } else {
         Console.WriteLine("unhandled generator expr: {0}", expr);
@@ -245,12 +251,10 @@ namespace Microsoft.Dafny {
         } else if (ss is AssumeStmt) {
           this.EncodeGeneratorPoly((ss as AssumeStmt).Expr);
         } else {
-          Console.WriteLine("Error: Unexpected Grobner poorf body statement {0}", ss);
+          Console.WriteLine("Error: Unexpected Grobner proof body statement {0}", ss);
           throw new cce.UnreachableException();
         }
       }
-
-      var poly = EncodeQueryPoly(assertStmt.Expr);
 
       this.writer.Write("ring r=integer,(");
 
@@ -271,7 +275,7 @@ namespace Microsoft.Dafny {
       }
       this.writer.Write(";\n");
       this.writer.WriteLine("ideal G = groebner(I);");
-      this.writer.WriteLine("reduce({0}, G);", poly);
+      this.writer.WriteLine("reduce({0}, G);", EncodeQueryPoly(assertStmt.Expr));
       this.writer.WriteLine("quit;");
       this.writer.Flush();
     }
@@ -293,14 +297,14 @@ namespace Microsoft.Dafny {
 
       var proc = new Process 
       {
-          StartInfo = new ProcessStartInfo
-          {
-              FileName = "Singular",
-              Arguments = String.Format("--quiet {0}", queryFileName),
-              UseShellExecute = false,
-              RedirectStandardOutput = true,
-              CreateNoWindow = true
-          }
+        StartInfo = new ProcessStartInfo
+        {
+          FileName = "Singular",
+          Arguments = String.Format("--quiet {0}", queryFileName),
+          UseShellExecute = false,
+          RedirectStandardOutput = true,
+          CreateNoWindow = true
+        }
       };
 
       proc.Start();
@@ -10549,7 +10553,9 @@ namespace Microsoft.Dafny {
             if (assertStmt.Grobner) {
               AddComment(proofBuilder, stmt, "assert by Grobner");
               var singularDriver = new SingularDriver(stmt);
-              // append assume false, the toks are messed up?
+              // append an assume false statement at the end of the proof body (although the tokens are not well-aligned)
+              // all the original assertions are still checked by Dafny/z3
+              // the assert body => assert goal part is checked by Singular  
               var falseBody = new LiteralExpr(stmt.Tok, false);
               falseBody.Type = new BoolType();
               var assumeFalse = new AssumeStmt(stmt.Tok, stmt.EndTok, falseBody, null);
