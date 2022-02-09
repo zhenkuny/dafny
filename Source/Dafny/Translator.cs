@@ -122,13 +122,16 @@ namespace Microsoft.Dafny {
 
     string OpacifySubExpr(Expression expr) {
       if (expr is SeqSelectExpr seqSelExpr) {
-        if (!seqSelExpr.SelectOne) {
-          Console.WriteLine("unhandled seqSelExpr");
-          throw new cce.UnreachableException();
+        if (seqSelExpr.SelectOne) {
+          var seq = this.OpacifySubExpr(seqSelExpr.Seq);
+          var index = this.OpacifySubExpr(seqSelExpr.E0);
+          return String.Format("{0}[{1}]", seq, index);
+        } else {
+          var seq = this.OpacifySubExpr(seqSelExpr.Seq);
+          var start = this.OpacifySubExpr(seqSelExpr.E0);
+          var end = this.OpacifySubExpr(seqSelExpr.E1);
+          return String.Format("{0}[{1}..{2}]", seq, start, end);
         }
-        var seq = this.OpacifySubExpr(seqSelExpr.Seq);
-        var index = this.OpacifySubExpr(seqSelExpr.E0);
-        return String.Format("{0}[{1}]", seq, index);
       } else if (expr is NameSegment) {
         // do not add to the variable set
         var name = (expr as NameSegment).Name;
@@ -150,7 +153,9 @@ namespace Microsoft.Dafny {
         var op = binExpr.Op;
         var left = this.OpacifySubExpr(binExpr.E0);
         var right = this.OpacifySubExpr(binExpr.E1);
-          return String.Format("{0}{1}{2}", left, op, right);
+        return String.Format("{0}{1}{2}", left, op, right);
+      } else if (expr ==  null) {
+        return "";
       } else {
         Console.WriteLine("unhandled OpacifySubExpr: {0}", expr);
         throw new cce.UnreachableException();
