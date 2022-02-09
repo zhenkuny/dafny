@@ -255,7 +255,8 @@ namespace Microsoft.Dafny {
           throw new cce.UnreachableException();
         }
       }
-
+      // encode qury to add vars before creating ring
+      var query = this.EncodeQueryPoly(assertStmt.Expr);
       this.writer.Write("ring r=integer,(");
 
       string separator = ""; 
@@ -275,7 +276,7 @@ namespace Microsoft.Dafny {
       }
       this.writer.Write(";\n");
       this.writer.WriteLine("ideal G = groebner(I);");
-      this.writer.WriteLine("reduce({0}, G);", EncodeQueryPoly(assertStmt.Expr));
+      this.writer.WriteLine("reduce({0}, G);", query);
       this.writer.WriteLine("quit;");
       this.writer.Flush();
     }
@@ -290,7 +291,8 @@ namespace Microsoft.Dafny {
       var queryFileName = String.Format("test{0}.sv", queryCount);
       SingularDriver.queryCount += 1;
 
-      this.writer = new StreamWriter(queryFileName);
+      var queryFile = new FileStream(queryFileName, FileMode.Create);
+      this.writer = new StreamWriter(queryFile);
       this.polys = new List<string>();
       this.opaqueExprs = new Dictionary<string, string>();
       this.EncodeQuery(stmt as AssertStmt);
@@ -319,7 +321,7 @@ namespace Microsoft.Dafny {
         Console.WriteLine("Grobner assert succeeded");
       }
 
-      // File.Delete(queryFileName);
+      File.Delete(queryFileName);
     }
   }
 
