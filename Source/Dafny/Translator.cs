@@ -146,6 +146,11 @@ namespace Microsoft.Dafny {
           args.Concat(this.OpacifySubExpr(arg));
         }
         return String.Format("{0}({1})", lhs, args);
+      } else if (expr is BinaryExpr binExpr) {
+        var op = binExpr.Op;
+        var left = this.OpacifySubExpr(binExpr.E0);
+        var right = this.OpacifySubExpr(binExpr.E1);
+          return String.Format("{0}{1}{2}", left, op, right);
       } else {
         Console.WriteLine("unhandled OpacifySubExpr: {0}", expr);
         throw new cce.UnreachableException();
