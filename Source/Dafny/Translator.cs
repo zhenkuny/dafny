@@ -135,6 +135,17 @@ namespace Microsoft.Dafny {
         return name;
       } else if (expr is LiteralExpr) {
         return String.Format("{0}", (expr as LiteralExpr).Value);
+      } else if (expr is ExprDotName dotNotNameExpr) {
+        var lhs = this.OpacifySubExpr(dotNotNameExpr.Lhs);
+        return String.Format("{0}.{1}", lhs, dotNotNameExpr.SuffixName);
+      } else if (expr is ApplySuffix applyExpr) {
+        var lhs = this.OpacifySubExpr(applyExpr.Lhs);
+        var args = "";
+        foreach (Expression arg in applyExpr.Args) {
+          args.Concat(",");
+          args.Concat(this.OpacifySubExpr(arg));
+        }
+        return String.Format("{0}({1})", lhs, args);
       } else {
         Console.WriteLine("unhandled OpacifySubExpr: {0}", expr);
         throw new cce.UnreachableException();
