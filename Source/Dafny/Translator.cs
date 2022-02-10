@@ -145,8 +145,7 @@ namespace Microsoft.Dafny {
         var lhs = this.OpacifySubExpr(applyExpr.Lhs);
         var args = "";
         foreach (Expression arg in applyExpr.Args) {
-          args.Concat(",");
-          args.Concat(this.OpacifySubExpr(arg));
+          args = args + this.OpacifySubExpr(arg) + ",";
         }
         return String.Format("{0}({1})", lhs, args);
       } else if (expr is BinaryExpr binExpr) {
@@ -299,6 +298,10 @@ namespace Microsoft.Dafny {
       this.writer.WriteLine("ideal G = groebner(I);");
       this.writer.WriteLine("reduce({0}, G);", query);
       this.writer.WriteLine("quit;");
+  
+      foreach (KeyValuePair<string, string> e in this.opaqueExprs) {
+        this.writer.WriteLine("// {0} = {1};", e.Value, e.Key);
+      }
       this.writer.Flush();
     }
 
