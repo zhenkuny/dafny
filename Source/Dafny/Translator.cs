@@ -102,11 +102,9 @@ namespace Microsoft.Dafny {
     static string tempVarPrefix = "tpv_";
 
     uint tempVarCount = 0;
-    List<string> polys;
-    HashSet<string> variables;
-    Dictionary<string, string> opaqueExprs;
-
-    TextWriter writer;
+    List<string> polys = new List<string>();
+    HashSet<string> variables = new HashSet<string>();
+    Dictionary<string, string> opaqueExprs = new Dictionary<string, string>();
 
     enum AssertType {
       Equality,
@@ -260,52 +258,43 @@ namespace Microsoft.Dafny {
       }
     }
 
-    void EncodeQuery(Method m) {
-      foreach (AttributedExpression ae in m.Req) {
-        this.EncodeGeneratorPoly(ae.E);
-      }
+    string WriteQueryFile(string query) {
+      var queryFileName = String.Format("test{0}.sv", queryCount);
+      SingularDriver.queryCount += 1;
+      var queryFile = new FileStream(queryFileName, FileMode.Create);
+      TextWriter writer = new StreamWriter(queryFile);
 
-      // encode qury to add vars before creating ring
-      var query = this.EncodeQueryPoly(m.Ens[0].E);
-      this.writer.Write("ring r=integer,(");
+      writer.Write("ring r=integer,(");
 
       string separator = ""; 
       foreach (string v in this.variables) {
-        this.writer.Write(separator);
-        this.writer.Write(v);
+        writer.Write(separator);
+        writer.Write(v);
         separator = ",";
       }
-      this.writer.Write("),dp;\n");
+      writer.Write("),dp;\n");
 
       separator = ""; 
-      this.writer.WriteLine("ideal I = ");
+      writer.WriteLine("ideal I = ");
       foreach (string s in this.polys) {
-        this.writer.Write(separator);
-        this.writer.Write(s);
+        writer.Write(separator);
+        writer.Write(s);
         separator = ",\n";
       }
-      this.writer.Write(";\n");
-      this.writer.WriteLine("ideal G = groebner(I);");
-      this.writer.WriteLine("reduce({0}, G);", query);
-      this.writer.WriteLine("quit;");
+      writer.Write(";\n");
+      writer.WriteLine("ideal G = groebner(I);");
+      writer.WriteLine("reduce({0}, G);", query);
+      writer.WriteLine("quit;");
   
       foreach (KeyValuePair<string, string> e in this.opaqueExprs) {
-        this.writer.WriteLine("// {0} = {1};", e.Value, e.Key);
+        writer.WriteLine("// {0} = {1};", e.Value, e.Key);
       }
-      this.writer.Flush();
+      writer.Flush();
+      return queryFileName;
     }
 
-    public SingularDriver(Method m) {
-      this.variables = new HashSet<string>();
-      // this.writer = new StreamWriter(Console.OpenStandardOutput());
-      var queryFileName = String.Format("test{0}.sv", queryCount);
-      SingularDriver.queryCount += 1;
-
-      var queryFile = new FileStream(queryFileName, FileMode.Create);
-      this.writer = new StreamWriter(queryFile);
-      this.polys = new List<string>();
-      this.opaqueExprs = new Dictionary<string, string>();
-      this.EncodeQuery(m);
+    void RunSingular(string query) {
+      var queryFileName = WriteQueryFile(query);
 
       var proc = new Process 
       {
@@ -332,6 +321,39 @@ namespace Microsoft.Dafny {
       }
 
       File.Delete(queryFileName);
+    }
+
+    public SingularDriver(Statement stmt) {
+      if (stmt == null || !(stmt is AssertStmt)) {
+        Console.WriteLine("Error: Grobner assert should be an AssertStmt");
+        throw new cce.UnreachableException();
+      }
+      var assertStmt = stmt as AssertStmt;
+      var proof = assertStmt.Proof;
+
+      foreach (Statement ss in proof.Body) {
+        if (ss is AssertStmt) {
+          this.EncodeGeneratorPoly((ss as AssertStmt).Expr);
+        } else if (ss is AssumeStmt) {
+          this.EncodeGeneratorPoly((ss as AssumeStmt).Expr);
+        } else {
+          Console.WriteLine("Error: Unexpected Grobner proof body statement {0}", ss);
+          throw new cce.UnreachableException();
+        }
+      }
+
+      var query = this.EncodeQueryPoly(assertStmt.Expr);
+      this.RunSingular(query);
+    }
+
+    public SingularDriver(Method m) {
+      foreach (AttributedExpression ae in m.Req) {
+        this.EncodeGeneratorPoly(ae.E);
+      }
+
+      // encode qury to add vars before creating ring
+      var query = this.EncodeQueryPoly(m.Ens[0].E);
+      this.RunSingular(query);
     }
   }
 
@@ -10579,6 +10601,18 @@ namespace Microsoft.Dafny {
           if (assertStmt != null && assertStmt.Proof != null) {
             proofBuilder = new BoogieStmtListBuilder(this);
             AddComment(proofBuilder, stmt, "assert statement proof");
+            if (assertStmt.Grobner) {
+              AddComment(proofBuilder, stmt, "assert by Grobner");
+              var singularDriver = new SingularDriver(stmt);
+              // append an assume false statement at the end of the proof body (although the tokens are not well-aligned)
+              // all the original assertions are still checked by Dafny/z3
+              // the assert body => assert goal part is checked by Singular  
+              var falseBody = new LiteralExpr(stmt.Tok, false);
+              falseBody.Type = new BoolType();
+              var assumeFalse = new AssumeStmt(stmt.Tok, stmt.EndTok, falseBody, null);
+              assertStmt.Proof.Body.Add(assumeFalse);
+            }
+
             TrStmt(assertStmt.Proof, proofBuilder, locals, etran);
           } else if (assertStmt != null && assertStmt.Label != null) {
             proofBuilder = new BoogieStmtListBuilder(this);
