@@ -9476,6 +9476,8 @@ namespace Microsoft.Dafny
           return host is Function;
         case "abstemious":
           return host is Function;
+        case "groebner":
+          return host is Lemma;
         default:
           return false;
       }

@@ -110,7 +110,8 @@ namespace Microsoft.Dafny {
 
     enum AssertType {
       Equality,
-      Congruence
+      Congruence,
+      Unknown,
     }
 
     string AllocateFreshTemp() {
@@ -210,20 +211,18 @@ namespace Microsoft.Dafny {
 
     AssertType CheckAssertType(Expression expr) {
       if (expr is BinaryExpr binExpr) {
-        if (binExpr.Op != BinaryExpr.Opcode.Eq) {
-          Console.WriteLine("Error: Grobner generator expression should be an Equality or IsModEquivalent");
-          throw new cce.UnreachableException();
+        if (binExpr.Op == BinaryExpr.Opcode.Eq) {
+          return AssertType.Equality;
         }
-        return AssertType.Equality;
-      } else if (expr is ApplySuffix appplyExpr) {
-        if (!(appplyExpr.Lhs is NameSegment) || !(appplyExpr.Lhs as NameSegment).Name.Equals("IsModEquivalent")) {
-          Console.WriteLine("Error: Grobner query expression should be an Equality or IsModEquivalent");
-          throw new cce.UnreachableException();
-        }
-        return AssertType.Congruence;
       }
-      Console.WriteLine("unhandled generator expr: {0}", expr);
-      throw new cce.UnreachableException();
+
+      if (expr is ApplySuffix appplyExpr) {
+        if (appplyExpr.Lhs is NameSegment && (appplyExpr.Lhs as NameSegment).Name.Equals("IsModEquivalent")) {
+          return AssertType.Congruence;
+        }
+      }
+
+      return AssertType.Unknown;
     }
 
     void EncodeGeneratorPoly(Expression expr) {
@@ -240,8 +239,7 @@ namespace Microsoft.Dafny {
         var poly = String.Format("{0} - {1} * {2}", diff, mod, temp);
         this.polys.Add(poly);
       } else {
-        Console.WriteLine("unhandled generator expr: {0}", expr);
-        throw new cce.UnreachableException();
+        Console.WriteLine("ignored unhandled Grobner assertion: {0}", expr);
       }
     }
 
@@ -257,26 +255,18 @@ namespace Microsoft.Dafny {
         this.polys.Add(mod); 
         return this.EncodeEqualityPoly(appplyExpr.Args[0], appplyExpr.Args[1]);
       } else {
-        Console.WriteLine("unhandled generator expr: {0}", expr);
+        Console.WriteLine("unhandled Grobner query assertion: {0}", expr);
         throw new cce.UnreachableException();
       }
     }
 
-    void EncodeQuery(AssertStmt assertStmt) {
-      var proof = assertStmt.Proof;
-
-      foreach (Statement ss in proof.Body) {
-        if (ss is AssertStmt) {
-          this.EncodeGeneratorPoly((ss as AssertStmt).Expr);
-        } else if (ss is AssumeStmt) {
-          this.EncodeGeneratorPoly((ss as AssumeStmt).Expr);
-        } else {
-          Console.WriteLine("Error: Unexpected Grobner proof body statement {0}", ss);
-          throw new cce.UnreachableException();
-        }
+    void EncodeQuery(Method m) {
+      foreach (AttributedExpression ae in m.Req) {
+        this.EncodeGeneratorPoly(ae.E);
       }
+
       // encode qury to add vars before creating ring
-      var query = this.EncodeQueryPoly(assertStmt.Expr);
+      var query = this.EncodeQueryPoly(m.Ens[0].E);
       this.writer.Write("ring r=integer,(");
 
       string separator = ""; 
@@ -305,11 +295,7 @@ namespace Microsoft.Dafny {
       this.writer.Flush();
     }
 
-    public SingularDriver(Statement stmt) {
-      if (stmt == null || !(stmt is AssertStmt)) {
-        Console.WriteLine("Error: Grobner assert should be an AssertStmt");
-        throw new cce.UnreachableException();
-      }
+    public SingularDriver(Method m) {
       this.variables = new HashSet<string>();
       // this.writer = new StreamWriter(Console.OpenStandardOutput());
       var queryFileName = String.Format("test{0}.sv", queryCount);
@@ -319,7 +305,7 @@ namespace Microsoft.Dafny {
       this.writer = new StreamWriter(queryFile);
       this.polys = new List<string>();
       this.opaqueExprs = new Dictionary<string, string>();
-      this.EncodeQuery(stmt as AssertStmt);
+      this.EncodeQuery(m);
 
       var proc = new Process 
       {
@@ -2635,6 +2621,23 @@ namespace Microsoft.Dafny {
           AddMethodOverrideCheckImpl(m, procOverrideChk);
         }
       }
+     // if (assertStmt.Grobner) {
+      //   AddComment(proofBuilder, stmt, "assert by Grobner");
+      //   var singularDriver = new SingularDriver(stmt);
+      //   // append an assume false statement at the end of the proof body (although the tokens are not well-aligned)
+      //   // all the original assertions are still checked by Dafny/z3
+      //   // the assert body => assert goal part is checked by Singular  
+      //   var falseBody = new LiteralExpr(stmt.Tok, false);
+      //   falseBody.Type = new BoolType();
+      //   var assumeFalse = new AssumeStmt(stmt.Tok, stmt.EndTok, falseBody, null);
+      //   assertStmt.Proof.Body.Add(assumeFalse);
+      // }
+      if (Attributes.Contains(m.Attributes, "groebner")) {
+        var singularDriver = new SingularDriver(m);
+        // Console.WriteLine("enabled groebner");
+        // Console.WriteLine("{0}", m.Name);
+      }
+
       // the method spec itself
       sink.AddTopLevelDeclaration(AddMethod(m, MethodTranslationKind.Call));
       if (m is ExtremeLemma) {
@@ -10576,17 +10579,6 @@ namespace Microsoft.Dafny {
           if (assertStmt != null && assertStmt.Proof != null) {
             proofBuilder = new BoogieStmtListBuilder(this);
             AddComment(proofBuilder, stmt, "assert statement proof");
-            if (assertStmt.Grobner) {
-              AddComment(proofBuilder, stmt, "assert by Grobner");
-              var singularDriver = new SingularDriver(stmt);
-              // append an assume false statement at the end of the proof body (although the tokens are not well-aligned)
-              // all the original assertions are still checked by Dafny/z3
-              // the assert body => assert goal part is checked by Singular  
-              var falseBody = new LiteralExpr(stmt.Tok, false);
-              falseBody.Type = new BoolType();
-              var assumeFalse = new AssumeStmt(stmt.Tok, stmt.EndTok, falseBody, null);
-              assertStmt.Proof.Body.Add(assumeFalse);
-            }
             TrStmt(assertStmt.Proof, proofBuilder, locals, etran);
           } else if (assertStmt != null && assertStmt.Label != null) {
             proofBuilder = new BoogieStmtListBuilder(this);
