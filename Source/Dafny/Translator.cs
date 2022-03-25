@@ -290,6 +290,7 @@ namespace Microsoft.Dafny {
         writer.WriteLine("// {0} = {1};", e.Value, e.Key);
       }
       writer.Flush();
+      writer.Close();
       return queryFileName;
     }
 
